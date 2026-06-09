@@ -1,0 +1,93 @@
+/* ============================================================
+   Theme system. Light is the default (app.css). Dark overrides
+   the palette variables AND the surfaces that app.css hardcoded
+   as white/light. Toggled via <html data-theme="light|dark">.
+   ============================================================ */
+
+/* New semantic vars (light defaults) used by dark overrides + theme picker. */
+:root {
+    --surface: #ffffff;     /* cards, sheets, popups */
+    --input-bg: #ffffff;    /* inputs, editor, textareas */
+    --border: #e7e5f7;      /* hairlines */
+    --hover: #f7f6ff;       /* row hover/active */
+}
+
+/* ── Dark palette ──────────────────────────────────────── */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --primary: #8B92FF;
+    --primary-end: #A99CFF;
+    --accent: #2FD3B6;
+    --accent-end: #5DE0C8;
+    --light: #2B2842;       /* subtle chip/badge surface */
+    --dark: #E9E7F7;        /* primary text */
+    --muted: #A8A4CC;
+    --success: #2BC48A;
+    --danger: #F0666E;
+    --shadow: 0 6px 18px rgba(0, 0, 0, .45);
+
+    --surface: #221E34;
+    --input-bg: #17141F;
+    --border: #342F4B;
+    --hover: rgba(255, 255, 255, .05);
+}
+
+/* ── Dark surface overrides ────────────────────────────── */
+[data-theme="dark"] body {
+    background: linear-gradient(160deg, #131019 0%, #171327 45%, #1b1426 100%);
+}
+
+[data-theme="dark"] .auth-card,
+[data-theme="dark"] .v-card { background: rgba(34, 30, 52, .94); }
+
+[data-theme="dark"] .note-card,
+[data-theme="dark"] .settings-card,
+[data-theme="dark"] .doc-toolbar,
+[data-theme="dark"] .popup { background: var(--surface); border-color: var(--border); }
+
+[data-theme="dark"] .field-input,
+[data-theme="dark"] .search-bar,
+[data-theme="dark"] .mini-select,
+[data-theme="dark"] .day-textarea,
+[data-theme="dark"] .doc-editor,
+[data-theme="dark"] .schedule-row,
+[data-theme="dark"] .week-day,
+[data-theme="dark"] .day-tab,
+[data-theme="dark"] .share-link-input {
+    background: var(--input-bg);
+    border-color: var(--border);
+    color: var(--dark);
+}
+[data-theme="dark"] .search-bar input { color: var(--dark); }
+[data-theme="dark"] .doc-check-item::before { background: var(--input-bg); }
+
+[data-theme="dark"] .bottom-nav { background: rgba(25, 21, 38, .96); border-top-color: var(--border); }
+[data-theme="dark"] .sheet { background: linear-gradient(160deg, #16131f 0%, #1b1426 100%); }
+
+[data-theme="dark"] .settings-row { border-bottom-color: var(--border); }
+[data-theme="dark"] .settings-row:active { background: var(--hover); }
+
+[data-theme="dark"] .auth-divider::before,
+[data-theme="dark"] .auth-divider::after { background: var(--border); }
+
+[data-theme="dark"] .empty-state i { color: #3a3556; }
+[data-theme="dark"] .note-preview-empty { color: #6f6a90; }
+[data-theme="dark"] .loader { background: rgba(19, 16, 25, .85); }
+
+[data-theme="dark"] .ref-note { background: var(--input-bg); border-color: var(--border); }
+[data-theme="dark"] .btn-google { background: #2a2640; color: #e9e7f7; border-color: var(--border); }
+
+/* ── Theme picker (segmented control in Settings) ──────── */
+.theme-seg { display: flex; gap: 8px; padding: 14px 16px; }
+.theme-seg button {
+    flex: 1; cursor: pointer; border: 1.5px solid var(--border); background: var(--input-bg);
+    color: var(--muted); border-radius: 12px; padding: 12px 6px; font-size: 13px; font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; transition: all .15s ease;
+}
+.theme-seg button i { font-size: 18px; }
+.theme-seg button.active { background: var(--grad-primary); color: #fff; border-color: transparent; }
+.theme-seg button:not(.active):active { background: var(--hover); }
+.settings-section-label {
+    padding: 14px 16px 0; font-size: 12.5px; font-weight: 700; letter-spacing: .3px;
+    text-transform: uppercase; color: var(--muted);
+}

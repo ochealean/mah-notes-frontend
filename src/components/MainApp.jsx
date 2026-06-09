@@ -4,6 +4,7 @@
 // ============================================================
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { api } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import Loader from './Loader.jsx';
@@ -18,6 +19,7 @@ const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', settings: 'Settin
 
 export default function MainApp() {
   const { user, logout } = useAuth();
+  const { effective, setTheme } = useTheme();
   const [tab, setTab] = useState('docs');
   const [notes, setNotes] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -83,6 +85,10 @@ export default function MainApp() {
           <span className="appbar-title">{TAB_TITLES[tab]}</span>
         </div>
         <div className="appbar-actions">
+          <button className="icon-btn" title={effective === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label="Toggle theme" onClick={() => setTheme(effective === 'dark' ? 'light' : 'dark')}>
+            <i className={`fas ${effective === 'dark' ? 'fa-sun' : 'fa-moon'}`} />
+          </button>
           {tab !== 'settings' && (
             <button className={`icon-btn${allHidden ? ' active' : ''}`} title={allHidden ? 'Show all content' : 'Hide all content'}
               onClick={togglePrivacyAll}>

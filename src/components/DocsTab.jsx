@@ -75,7 +75,7 @@ export default function DocsTab({ notes, onOpen, onShare, onToggleHidden, onChan
         <i className="fas fa-search" />
         <input type="text" placeholder="Search documents…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      <div className="list">
+      <div className="list" id="docs-list">
         {notes.length === 0 ? (
           <div className="empty-state">
             <i className="fas fa-feather-pointed" />

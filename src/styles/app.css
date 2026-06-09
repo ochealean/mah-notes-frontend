@@ -143,6 +143,20 @@ a { color: var(--primary); }
 .note-preview.short { -webkit-mask-image: none; mask-image: none; }
 .note-preview-empty { color: #b9b6d0; font-style: italic; }
 
+/* Uniform document cards — every card in the Docs list is the same size,
+   with the preview clipped and the action row pinned to the bottom. */
+#docs-list .note-card {
+    height: 232px;
+    display: flex;
+    flex-direction: column;
+}
+#docs-list .note-preview {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+}
+#docs-list .card-actions { margin-top: auto; }
+
 /* Privacy: blur hidden content */
 .note-card.content-hidden .note-preview,
 .note-card.content-hidden .plan-today { filter: blur(7px); pointer-events: none; user-select: none; }
