@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext.jsx';
+import { isNative, initNativeGoogle, nativeGoogleSignIn } from '../lib/nativeAuth.js';
 
 const ERROR_MAP = {
   'Incorrect email or password.': 'Incorrect email or password.',
@@ -15,6 +16,32 @@ export default function AuthScreen() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [googleSetupNeeded, setGoogleSetupNeeded] = useState(false);
+
+  // On a device, warm up the native Google plugin so the first tap is instant.
+  useEffect(() => { if (isNative) initNativeGoogle().catch(() => {}); }, []);
+
+  async function onNativeGoogle() {
+    setError('');
+    setBusy(true);
+    try {
+      const idToken = await nativeGoogleSignIn();
+      await loginWithGoogle(idToken);
+    } catch (err) {
+      const msg = String(err?.message || '');
+      if (/cancel|dismiss|closed/i.test(msg)) {
+        // User backed out of the account picker — not an error.
+      } else if (/developer|credential|10:|16:|unregistered|sha|audience|client|configuration|not.*config/i.test(msg)) {
+        // Android OAuth client / SHA-1 not registered yet (or still propagating).
+        setGoogleSetupNeeded(true);
+        setError('Google sign-in isn’t set up for this build yet.');
+      } else {
+        setError(msg || 'Google sign-in failed.');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -67,15 +94,31 @@ export default function AuthScreen() {
         <div className="auth-divider"><span>or</span></div>
 
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <GoogleLogin
-            onSuccess={async (cred) => {
-              setError('');
-              try { await loginWithGoogle(cred.credential); }
-              catch (err) { setError(err.message); }
-            }}
-            onError={() => setError('Google sign-in failed.')}
-            useOneTap={false}
-          />
+          {isNative ? (
+            // Native Android: web GIS popups are blocked in a WebView, so use
+            // the native Google account picker instead.
+            <div style={{ width: '100%' }}>
+              <button type="button" className="btn btn-google btn-block" onClick={onNativeGoogle}
+                disabled={busy || googleSetupNeeded}>
+                Continue with Google
+              </button>
+              {googleSetupNeeded && (
+                <p className="auth-hint">
+                  Needs one-time Android OAuth setup (package + SHA-1). Sign in with email &amp; password for now.
+                </p>
+              )}
+            </div>
+          ) : (
+            <GoogleLogin
+              onSuccess={async (cred) => {
+                setError('');
+                try { await loginWithGoogle(cred.credential); }
+                catch (err) { setError(err.message); }
+              }}
+              onError={() => setError('Google sign-in failed.')}
+              useOneTap={false}
+            />
+          )}
         </div>
 
         <p className="auth-toggle">
