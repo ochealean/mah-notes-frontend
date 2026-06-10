@@ -8,9 +8,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "android:sync": "vite build && cap sync android",
-    "android:open": "cap open android",
-    "android:build": "vite build && cap sync android && cap open android"
+    "cap": "C:\\PROGRA~1\\nodejs\\node node_modules/@capacitor/cli/bin/capacitor",
+    "android:sync": "vite build && npm run cap -- sync android",
+    "android:open": "npm run cap -- open android",
+    "android:build": "vite build && npm run cap -- sync android && npm run cap -- open android"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",

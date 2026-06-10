@@ -5,7 +5,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
-import { api } from '../lib/api.js';
+import { repo } from '../lib/repo.js';
+import { isNative } from '../lib/nativeAuth.js';
+import { initSync, setOnMerged } from '../lib/sync.js';
 import { notify } from '../lib/notify.js';
 import Loader from './Loader.jsx';
 import DocsTab from './DocsTab.jsx';
@@ -31,7 +33,7 @@ export default function MainApp() {
 
   const reload = useCallback(async () => {
     try {
-      const [n, p] = await Promise.all([api.get('/api/notes'), api.get('/api/plans')]);
+      const [n, p] = await Promise.all([repo.listNotes(), repo.listPlans()]);
       setNotes(n);
       setPlans(p);
     } catch (err) {
@@ -43,6 +45,14 @@ export default function MainApp() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Native: start the sync engine and refresh the lists whenever a sync
+  // pull merges in new data from the account.
+  useEffect(() => {
+    if (!isNative) return;
+    setOnMerged(reload);
+    initSync();
+  }, [reload]);
+
   // ── Privacy: hide/show every item on the active content tab ──
   const items = tab === 'plans' ? plans : notes;
   const allHidden = items.length > 0 && items.every((i) => i.hidden);
@@ -51,20 +61,20 @@ export default function MainApp() {
     const list = tab === 'plans' ? plans : notes;
     if (!list.length) { notify('Nothing to hide yet', 'info'); return; }
     const shouldHide = !list.every((i) => i.hidden);
-    const path = tab === 'plans' ? '/api/plans' : '/api/notes';
+    const updateFn = tab === 'plans' ? repo.updatePlan : repo.updateNote;
     const setter = tab === 'plans' ? setPlans : setNotes;
     setter((arr) => arr.map((i) => ({ ...i, hidden: shouldHide })));
     try {
-      await Promise.all(list.map((i) => api.put(`${path}/${i.id}`, { hidden: shouldHide })));
+      await Promise.all(list.map((i) => updateFn(i.id, { hidden: shouldHide })));
       notify(shouldHide ? 'Content hidden' : 'Content shown', 'info');
     } catch (err) { notify(err.message, 'error'); reload(); }
   }
 
   async function toggleHidden(kind, id, hidden) {
-    const path = kind === 'plan' ? '/api/plans' : '/api/notes';
+    const updateFn = kind === 'plan' ? repo.updatePlan : repo.updateNote;
     const setter = kind === 'plan' ? setPlans : setNotes;
     setter((arr) => arr.map((i) => (i.id === id ? { ...i, hidden } : i)));
-    try { await api.put(`${path}/${id}`, { hidden }); }
+    try { await updateFn(id, { hidden }); }
     catch (err) { notify(err.message, 'error'); reload(); }
   }
 

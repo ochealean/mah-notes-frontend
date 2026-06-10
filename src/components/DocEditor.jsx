@@ -4,7 +4,7 @@
 //  original app's editor.
 // ============================================================
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../lib/api.js';
+import { repo } from '../lib/repo.js';
 import { notify } from '../lib/notify.js';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext.js';
 
@@ -145,10 +145,10 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     setSaving(true);
     try {
       if (initial?.id) {
-        await api.put(`/api/notes/${initial.id}`, payload);
+        await repo.updateNote(initial.id, payload);
         notify('Document updated', 'success');
       } else {
-        await api.post('/api/notes', payload);
+        await repo.createNote(payload);
         notify('Document saved', 'success');
       }
       onSaved();

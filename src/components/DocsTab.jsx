@@ -4,7 +4,8 @@
 // ============================================================
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../lib/api.js';
+import { repo } from '../lib/repo.js';
+import { isNative } from '../lib/nativeAuth.js';
 import { notify } from '../lib/notify.js';
 import { contentToHtml, escapeHtml, sanitizeHtml } from '../lib/richtext.js';
 
@@ -28,7 +29,7 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
         const now = item.getAttribute('data-checked') !== 'true';
         item.setAttribute('data-checked', now ? 'true' : 'false');
         try {
-          await api.put(`/api/notes/${note.id}`, { content: sanitizeHtml(previewRef.current.innerHTML) });
+          await repo.updateNote(note.id, { content: sanitizeHtml(previewRef.current.innerHTML) });
         } catch (err) { notify('Failed to save', 'error'); }
         return;
       }
@@ -51,11 +52,16 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
         dangerouslySetInnerHTML={{ __html: previewHtml }} />
       <div className="card-actions">
         <button className="act-btn open" onClick={() => onOpen(note)}><i className="fas fa-pen-to-square" /> Open</button>
-        <button className="act-btn view" onClick={() => navigate(`/view?type=note&id=${encodeURIComponent(note.id)}`)}><i className="fas fa-eye" /> View</button>
-        <button className="act-btn share" onClick={() => onShare(note.id)}><i className="fas fa-share-alt" /> Share</button>
+        {/* View & Share are online features — hidden in the offline app. */}
+        {!isNative && (
+          <button className="act-btn view" onClick={() => navigate(`/view?type=note&id=${encodeURIComponent(note.id)}`)}><i className="fas fa-eye" /> View</button>
+        )}
+        {!isNative && (
+          <button className="act-btn share" onClick={() => onShare(note.id)}><i className="fas fa-share-alt" /> Share</button>
+        )}
         <button className="act-btn danger del" onClick={async () => {
           if (!confirm('Delete this document? This cannot be undone.')) return;
-          try { await api.del(`/api/notes/${note.id}`); notify('Document deleted', 'success'); onChanged(); }
+          try { await repo.deleteNote(note.id); notify('Document deleted', 'success'); onChanged(); }
           catch (err) { notify(err.message, 'error'); }
         }}><i className="fas fa-trash" /> Delete</button>
       </div>

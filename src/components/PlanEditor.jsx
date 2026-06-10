@@ -4,7 +4,7 @@
 //  existing ticks where the text is unchanged.
 // ============================================================
 import { useRef, useState } from 'react';
-import { api } from '../lib/api.js';
+import { repo } from '../lib/repo.js';
 import { notify } from '../lib/notify.js';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -54,10 +54,10 @@ export default function PlanEditor({ initial, onClose, onSaved }) {
     setSaving(true);
     try {
       if (initial?.id) {
-        await api.put(`/api/plans/${initial.id}`, { title: (title || '').trim() || 'Workout Plan', days });
+        await repo.updatePlan(initial.id, { title: (title || '').trim() || 'Workout Plan', days });
         notify('Plan updated', 'success');
       } else {
-        await api.post('/api/plans', { title: (title || '').trim() || 'Workout Plan', days });
+        await repo.createPlan({ title: (title || '').trim() || 'Workout Plan', days });
         notify('Plan saved', 'success');
       }
       onSaved();

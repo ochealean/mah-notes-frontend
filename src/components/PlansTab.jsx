@@ -3,7 +3,8 @@
 //  collapsible full-week grid.
 // ============================================================
 import { useNavigate } from 'react-router-dom';
-import { api } from '../lib/api.js';
+import { repo } from '../lib/repo.js';
+import { isNative } from '../lib/nativeAuth.js';
 import { notify } from '../lib/notify.js';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -73,11 +74,15 @@ function PlanCard({ plan, today, onEdit, onShare, onToggleHidden, onChanged, onT
 
       <div className="card-actions">
         <button className="act-btn edit" onClick={() => onEdit(plan)}><i className="fas fa-pen-to-square" /> Edit</button>
-        <button className="act-btn view" onClick={() => navigate(`/view?type=plan&id=${encodeURIComponent(plan.id)}`)}><i className="fas fa-eye" /> View</button>
-        <button className="act-btn share" onClick={() => onShare(plan.id)}><i className="fas fa-share-alt" /> Share</button>
+        {!isNative && (
+          <button className="act-btn view" onClick={() => navigate(`/view?type=plan&id=${encodeURIComponent(plan.id)}`)}><i className="fas fa-eye" /> View</button>
+        )}
+        {!isNative && (
+          <button className="act-btn share" onClick={() => onShare(plan.id)}><i className="fas fa-share-alt" /> Share</button>
+        )}
         <button className="act-btn danger del" onClick={async () => {
           if (!confirm('Delete this plan? This cannot be undone.')) return;
-          try { await api.del(`/api/plans/${plan.id}`); notify('Plan deleted', 'success'); onChanged(); }
+          try { await repo.deletePlan(plan.id); notify('Plan deleted', 'success'); onChanged(); }
           catch (err) { notify(err.message, 'error'); }
         }}><i className="fas fa-trash" /> Delete</button>
       </div>
@@ -96,7 +101,7 @@ export default function PlansTab({ plans, onEdit, onShare, onToggleHidden, onCha
       days[day] = items;
       return { ...p, days };
     }));
-    try { await api.patch(`/api/plans/${planId}/check`, { day, index, checked }); }
+    try { await repo.checkPlan(planId, { day, index, checked }); }
     catch (err) { notify(err.message, 'error'); onChanged(); }
   }
 
