@@ -1,17 +1,19 @@
 // ============================================================
 //  IndexedDB local store (the device's offline database).
 //
-//  Three object stores, all keyed by the item's `id` (== uid):
-//    notes : note documents
-//    plans : weekly plans
-//    meta  : small key/value rows (syncEnabled, pendingDeletes, lastSync)
+//  Object stores, all keyed by the item's `id` (== uid):
+//    notes     : note documents
+//    plans     : weekly plans
+//    schedules : weekly time blocks (Schedule tab; device-local, not synced)
+//    meta      : small key/value rows (syncEnabled, pendingDeletes, lastSync)
 //
 //  This is the source of truth for the app on a device. The sync
-//  engine mirrors it to/from the backend when an account is connected.
+//  engine mirrors notes/plans to/from the backend when an account is
+//  connected. Schedules stay local (they drive on-device notifications).
 // ============================================================
 const DB_NAME = 'mahnotes';
-const DB_VERSION = 1;
-const STORES = ['notes', 'plans', 'meta'];
+const DB_VERSION = 2;
+const STORES = ['notes', 'plans', 'schedules', 'meta'];
 
 let dbPromise = null;
 
@@ -23,6 +25,7 @@ function openDB() {
       const db = req.result;
       if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('plans')) db.createObjectStore('plans', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('schedules')) db.createObjectStore('schedules', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
     };
     req.onsuccess = () => resolve(req.result);

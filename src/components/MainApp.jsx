@@ -9,19 +9,23 @@ import { useTheme } from '../context/ThemeContext.jsx';
 import { repo } from '../lib/repo.js';
 import { isNative } from '../lib/nativeAuth.js';
 import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile, syncNow } from '../lib/sync.js';
+import { listSchedules } from '../lib/scheduleStore.js';
+import { rescheduleAll } from '../lib/notifications.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import Loader from './Loader.jsx';
 import DocsTab from './DocsTab.jsx';
 import PlansTab from './PlansTab.jsx';
 import ViewTab from './ViewTab.jsx';
+import ScheduleTab from './ScheduleTab.jsx';
 import SettingsTab from './SettingsTab.jsx';
 import DocEditor from './DocEditor.jsx';
 import PlanEditor from './PlanEditor.jsx';
+import ScheduleEditor from './ScheduleEditor.jsx';
 import ShareModal from './ShareModal.jsx';
 import ReconcileModal from './ReconcileModal.jsx';
 
-const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', settings: 'Settings' };
+const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', schedule: 'Schedule', settings: 'Settings' };
 
 export default function MainApp() {
   const { user, logout } = useAuth();
@@ -30,10 +34,12 @@ export default function MainApp() {
   const [tab, setTab] = useState('docs');
   const [notes, setNotes] = useState([]);
   const [plans, setPlans] = useState([]);
+  const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [docEditor, setDocEditor] = useState(null);   // { note } | { } (new) | null
   const [planEditor, setPlanEditor] = useState(null); // { plan } | { } | null
+  const [scheduleEditor, setScheduleEditor] = useState(null); // { block } | { } | null
   const [share, setShare] = useState(null);           // { itemType, itemId } | null
   const [reconcile, setReconcile] = useState(null);   // { notes, plans } | null
   const syncState = useSync();
@@ -43,6 +49,7 @@ export default function MainApp() {
       const [n, p] = await Promise.all([repo.listNotes(), repo.listPlans()]);
       setNotes(n);
       setPlans(p);
+      if (isNative) setSchedules(await listSchedules());
     } catch (err) {
       notify(err.message, 'error');
     } finally {
@@ -51,6 +58,13 @@ export default function MainApp() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Native: re-arm weekly reminders on app start so the OS holds them
+  // (survives reboots / app restarts).
+  useEffect(() => {
+    if (!isNative) return;
+    (async () => { try { await rescheduleAll(await listSchedules()); } catch { /* best-effort */ } })();
+  }, []);
 
   // Native: start the sync engine and refresh the lists whenever a sync
   // pull merges in new data from the account.
@@ -136,6 +150,7 @@ export default function MainApp() {
   function onFab() {
     if (tab === 'docs') setDocEditor({});
     else if (tab === 'plans') setPlanEditor({});
+    else if (tab === 'schedule') setScheduleEditor({});
   }
 
   // Open an item's permanent, read-only view. Same URL on web and app
@@ -166,7 +181,7 @@ export default function MainApp() {
             aria-label="Toggle theme" onClick={() => setTheme(effective === 'dark' ? 'light' : 'dark')}>
             <i className={`fas ${effective === 'dark' ? 'fa-sun' : 'fa-moon'}`} />
           </button>
-          {tab !== 'settings' && tab !== 'view' && (
+          {tab !== 'settings' && tab !== 'view' && tab !== 'schedule' && (
             <button className={`icon-btn${allHidden ? ' active' : ''}`} title={allHidden ? 'Show all content' : 'Hide all content'}
               onClick={togglePrivacyAll}>
               <i className={`fas ${allHidden ? 'fa-eye' : 'fa-eye-slash'}`} />
@@ -198,6 +213,9 @@ export default function MainApp() {
         {tab === 'view' && (
           <ViewTab notes={notes} plans={plans} onOpen={openView} />
         )}
+        {tab === 'schedule' && (
+          <ScheduleTab schedules={schedules} onEdit={(block) => setScheduleEditor({ block })} />
+        )}
         {tab === 'settings' && (
           <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} />
         )}
@@ -219,6 +237,11 @@ export default function MainApp() {
         <button className={`nav-item${tab === 'view' ? ' active' : ''}`} onClick={() => setTab('view')}>
           <i className="fas fa-eye" /><span>View</span>
         </button>
+        {isNative && (
+          <button className={`nav-item${tab === 'schedule' ? ' active' : ''}`} onClick={() => setTab('schedule')}>
+            <i className="fas fa-clock" /><span>Schedule</span>
+          </button>
+        )}
         <button className={`nav-item${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>
           <i className="fas fa-gear" /><span>Settings</span>
         </button>
@@ -236,6 +259,13 @@ export default function MainApp() {
           initial={planEditor.plan || null}
           onClose={() => setPlanEditor(null)}
           onSaved={() => { setPlanEditor(null); reload(); }}
+        />
+      )}
+      {scheduleEditor && (
+        <ScheduleEditor
+          initial={scheduleEditor.block || null}
+          onClose={() => setScheduleEditor(null)}
+          onSaved={() => { setScheduleEditor(null); reload(); }}
         />
       )}
       {share && (
