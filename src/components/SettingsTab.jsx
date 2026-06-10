@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth.js';
 import { useSync, setSyncEnabled, syncNow } from '../lib/sync.js';
 import { notify } from '../lib/notify.js';
+import FriendsModal from './FriendsModal.jsx';
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: 'fa-sun' },
@@ -122,6 +123,7 @@ export default function SettingsTab({ user, onPrivacy, onLogout }) {
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
   const initial = (name[0] || 'U').toUpperCase();
   const { pref, setTheme } = useTheme();
+  const [showFriends, setShowFriends] = useState(false);
 
   return (
     <section className="screen" style={{ maxWidth: 640, margin: '0 auto' }}>
@@ -140,6 +142,17 @@ export default function SettingsTab({ user, onPrivacy, onLogout }) {
 
       {/* Native: account + sync controls. */}
       {isNative && <AccountSync />}
+
+      {/* Friends — online feature, needs an account. */}
+      {user && (
+        <div className="settings-card">
+          <div className="settings-section-label">Connect</div>
+          <button className="settings-row" onClick={() => setShowFriends(true)}>
+            <span><i className="fas fa-user-group" /> Friends</span>
+            <i className="fas fa-chevron-right" />
+          </button>
+        </div>
+      )}
 
       <div className="settings-card">
         <div className="settings-section-label">Appearance</div>
@@ -168,6 +181,8 @@ export default function SettingsTab({ user, onPrivacy, onLogout }) {
       </div>
 
       <p className="settings-about">Mah Notes · MERN edition</p>
+
+      {showFriends && <FriendsModal me={user} onClose={() => setShowFriends(false)} />}
     </section>
   );
 }
