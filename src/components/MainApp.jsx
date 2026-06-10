@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { repo } from '../lib/repo.js';
 import { isNative } from '../lib/nativeAuth.js';
-import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile } from '../lib/sync.js';
+import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile, syncNow } from '../lib/sync.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import Loader from './Loader.jsx';
@@ -144,6 +144,12 @@ export default function MainApp() {
     navigate(`/view?type=${kind}&id=${encodeURIComponent(item.id)}`);
   }, [navigate]);
 
+  // After saving a friend-shared item into my account: web refetches; the app
+  // pulls it down on the next sync (which fires onMerged → reload).
+  const refreshAfterSave = useCallback(() => {
+    if (isNative) syncNow(); else reload();
+  }, [reload]);
+
   if (loading) return <Loader />;
 
   return (
@@ -193,7 +199,7 @@ export default function MainApp() {
           <ViewTab notes={notes} plans={plans} onOpen={openView} />
         )}
         {tab === 'settings' && (
-          <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} />
+          <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} />
         )}
       </main>
 

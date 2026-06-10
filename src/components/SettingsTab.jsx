@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth.js';
 import { useSync, setSyncEnabled, syncNow } from '../lib/sync.js';
+import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import FriendsModal from './FriendsModal.jsx';
+import InboxModal from './InboxModal.jsx';
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: 'fa-sun' },
@@ -119,11 +121,21 @@ function AccountSync() {
   );
 }
 
-export default function SettingsTab({ user, onPrivacy, onLogout }) {
+export default function SettingsTab({ user, onPrivacy, onLogout, onReload }) {
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
   const initial = (name[0] || 'U').toUpperCase();
   const { pref, setTheme } = useTheme();
   const [showFriends, setShowFriends] = useState(false);
+  const [showInbox, setShowInbox] = useState(false);
+  const [inboxCount, setInboxCount] = useState(0);
+
+  // How many items friends have shared with me (badge).
+  const refreshInbox = useCallback(async () => {
+    if (!user || !getToken()) { setInboxCount(0); return; }
+    try { const res = await api.get('/api/friend-shares'); setInboxCount((res.shares || []).length); }
+    catch { /* offline / non-critical */ }
+  }, [user]);
+  useEffect(() => { refreshInbox(); }, [refreshInbox]);
 
   return (
     <section className="screen" style={{ maxWidth: 640, margin: '0 auto' }}>
@@ -143,13 +155,17 @@ export default function SettingsTab({ user, onPrivacy, onLogout }) {
       {/* Native: account + sync controls. */}
       {isNative && <AccountSync />}
 
-      {/* Friends — online feature, needs an account. */}
+      {/* Friends + sharing inbox — online features, need an account. */}
       {user && (
         <div className="settings-card">
           <div className="settings-section-label">Connect</div>
           <button className="settings-row" onClick={() => setShowFriends(true)}>
             <span><i className="fas fa-user-group" /> Friends</span>
             <i className="fas fa-chevron-right" />
+          </button>
+          <button className="settings-row" onClick={() => setShowInbox(true)}>
+            <span><i className="fas fa-inbox" /> Shared with me</span>
+            {inboxCount > 0 ? <span className="inbox-badge">{inboxCount}</span> : <i className="fas fa-chevron-right" />}
           </button>
         </div>
       )}
@@ -183,6 +199,12 @@ export default function SettingsTab({ user, onPrivacy, onLogout }) {
       <p className="settings-about">Mah Notes · MERN edition</p>
 
       {showFriends && <FriendsModal me={user} onClose={() => setShowFriends(false)} />}
+      {showInbox && (
+        <InboxModal
+          onClose={() => { setShowInbox(false); refreshInbox(); }}
+          onSaved={() => { if (onReload) onReload(); refreshInbox(); }}
+        />
+      )}
     </section>
   );
 }

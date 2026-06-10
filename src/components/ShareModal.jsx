@@ -1,9 +1,12 @@
 // ============================================================
-//  Share sheet: creates/loads a live link and a reference link for
-//  the item, with copy / revoke / new-link actions.
+//  Share sheet. Two ways to share an item:
+//    1. Send to a friend  → a frozen snapshot lands in their inbox;
+//       they can "Save to my notes". (needs an account on both sides)
+//    2. Share link        → public live/reference links, for people
+//       who don't use the app ("for non-users").
 // ============================================================
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api.js';
+import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 
 const shareUrl = (token) => `${window.location.origin}/view?token=${token}`;
@@ -41,11 +44,68 @@ function ShareCard({ card, onRevoke, onRegen }) {
   );
 }
 
+// ── Send a snapshot to a friend ──
+function FriendSend({ itemType, itemId }) {
+  const [friends, setFriends] = useState(null); // null=loading
+  const [sel, setSel] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sentTo, setSentTo] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/api/friends');
+        if (cancelled) return;
+        const f = res.friends || [];
+        setFriends(f);
+        if (f[0]) setSel(f[0].user.id);
+      } catch { if (!cancelled) setFriends([]); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function send() {
+    if (!sel || busy) return;
+    setBusy(true);
+    try {
+      await api.post('/api/friend-shares', { friendId: sel, itemType, itemId });
+      const name = friends.find((f) => f.user.id === sel)?.user.displayName || 'your friend';
+      setSentTo((s) => (s.includes(name) ? s : [...s, name]));
+      notify(`Shared with ${name}`, 'success');
+    } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
+  }
+
+  if (friends === null) return <div className="friend-hint"><i className="fas fa-spinner fa-spin" /> Loading friends…</div>;
+  if (friends.length === 0) {
+    return <div className="friend-hint">Add friends in <b>Settings → Friends</b> to share directly with them.</div>;
+  }
+  return (
+    <div className="fs-send">
+      <div className="fs-send-row">
+        <select className="mini-select fs-select" value={sel} onChange={(e) => setSel(e.target.value)}>
+          {friends.map((f) => <option key={f.user.id} value={f.user.id}>{f.user.displayName}</option>)}
+        </select>
+        <button className="btn btn-primary fs-send-btn" onClick={send} disabled={busy}>
+          {busy ? <i className="fas fa-spinner fa-spin" /> : <><i className="fas fa-paper-plane" /> Send</>}
+        </button>
+      </div>
+      {sentTo.length > 0 && (
+        <div className="fs-sent">
+          <i className="fas fa-check" /> Sent to {sentTo.join(', ')}. It’s a snapshot — your later edits won’t change their copy.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ShareModal({ itemType, itemId, onClose }) {
   const [cards, setCards] = useState(null); // [{viewMode, token, revoked}]
   const [error, setError] = useState('');
+  const signedIn = !!getToken();
 
   useEffect(() => {
+    if (!signedIn) return undefined;
     let cancelled = false;
     (async () => {
       try {
@@ -58,11 +118,11 @@ export default function ShareModal({ itemType, itemId, onClose }) {
           { viewMode: 'reference', token: ref.token },
         ]);
       } catch (err) {
-        if (!cancelled) setError('Failed to create links. Try again.');
+        if (!cancelled) setError(err.message || 'Failed to create links. Try again.');
       }
     })();
     return () => { cancelled = true; };
-  }, [itemId, itemType]);
+  }, [itemId, itemType, signedIn]);
 
   async function onRevoke(card) {
     if (!confirm('Revoke this link? Anyone using it will lose access.')) return;
@@ -88,17 +148,28 @@ export default function ShareModal({ itemType, itemId, onClose }) {
           <h3><i className="fas fa-share-alt" /> Share</h3>
           <button className="icon-btn" aria-label="Close" onClick={onClose}><i className="fas fa-times" /></button>
         </div>
-        <div>
-          {error && <div className="share-revoked">{error}</div>}
-          {!cards && !error && (
-            <div style={{ textAlign: 'center', padding: 24, color: '#aaa' }}>
-              <i className="fas fa-spinner fa-spin" /> Creating links…
-            </div>
-          )}
-          {cards && cards.map((card) => (
-            <ShareCard key={card.viewMode} card={card} onRevoke={onRevoke} onRegen={onRegen} />
-          ))}
-        </div>
+
+        {!signedIn ? (
+          <div className="friend-hint" style={{ padding: '6px 4px' }}>
+            Sign in (<b>Settings → Account &amp; Sync</b>) to share this item.
+          </div>
+        ) : (
+          <>
+            <div className="view-section-label"><i className="fas fa-user-group" /> Send to a friend</div>
+            <FriendSend itemType={itemType} itemId={itemId} />
+
+            <div className="view-section-label" style={{ marginTop: 18 }}><i className="fas fa-link" /> Share link · for people without the app</div>
+            {error && <div className="share-revoked">{error}</div>}
+            {!cards && !error && (
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
+                <i className="fas fa-spinner fa-spin" /> Creating links…
+              </div>
+            )}
+            {cards && cards.map((card) => (
+              <ShareCard key={card.viewMode} card={card} onRevoke={onRevoke} onRegen={onRegen} />
+            ))}
+          </>
+        )}
       </div>
     </div>
   );

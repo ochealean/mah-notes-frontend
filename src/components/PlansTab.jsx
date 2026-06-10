@@ -4,7 +4,6 @@
 // ============================================================
 import { useNavigate } from 'react-router-dom';
 import { repo } from '../lib/repo.js';
-import { isNative } from '../lib/nativeAuth.js';
 import { notify } from '../lib/notify.js';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -74,11 +73,9 @@ function PlanCard({ plan, today, onEdit, onShare, onToggleHidden, onChanged, onT
 
       <div className="card-actions">
         <button className="act-btn edit" onClick={() => onEdit(plan)}><i className="fas fa-pen-to-square" /> Edit</button>
-        {/* View works offline (reads local); Share is online-only. */}
+        {/* View reads local (works offline); Share needs an account + sync. */}
         <button className="act-btn view" onClick={() => navigate(`/view?type=plan&id=${encodeURIComponent(plan.id)}`)}><i className="fas fa-eye" /> View</button>
-        {!isNative && (
-          <button className="act-btn share" onClick={() => onShare(plan.id)}><i className="fas fa-share-alt" /> Share</button>
-        )}
+        <button className="act-btn share" onClick={() => onShare(plan.id)}><i className="fas fa-share-alt" /> Share</button>
         <button className="act-btn danger del" onClick={async () => {
           if (!confirm('Delete this plan? This cannot be undone.')) return;
           try { await repo.deletePlan(plan.id); notify('Plan deleted', 'success'); onChanged(); }

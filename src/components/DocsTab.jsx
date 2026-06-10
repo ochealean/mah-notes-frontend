@@ -5,7 +5,6 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { repo } from '../lib/repo.js';
-import { isNative } from '../lib/nativeAuth.js';
 import { notify } from '../lib/notify.js';
 import { contentToHtml, escapeHtml, sanitizeHtml } from '../lib/richtext.js';
 
@@ -52,11 +51,9 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
         dangerouslySetInnerHTML={{ __html: previewHtml }} />
       <div className="card-actions">
         <button className="act-btn open" onClick={() => onOpen(note)}><i className="fas fa-pen-to-square" /> Open</button>
-        {/* View works offline (reads local); Share is online-only. */}
+        {/* View reads local (works offline); Share needs an account + sync. */}
         <button className="act-btn view" onClick={() => navigate(`/view?type=note&id=${encodeURIComponent(note.id)}`)}><i className="fas fa-eye" /> View</button>
-        {!isNative && (
-          <button className="act-btn share" onClick={() => onShare(note.id)}><i className="fas fa-share-alt" /> Share</button>
-        )}
+        <button className="act-btn share" onClick={() => onShare(note.id)}><i className="fas fa-share-alt" /> Share</button>
         <button className="act-btn danger del" onClick={async () => {
           if (!confirm('Delete this document? This cannot be undone.')) return;
           try { await repo.deleteNote(note.id); notify('Document deleted', 'success'); onChanged(); }
