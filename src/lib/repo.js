@@ -11,7 +11,7 @@ import { isNative } from './nativeAuth.js';
 import { api } from './api.js';
 import { localdb } from './localdb.js';
 import { newUid } from './uid.js';
-import { requestSync, markDeleted } from './sync.js';
+import { requestSync, markDeleted, markLocalOrigin } from './sync.js';
 import { applyNoteResetLocal, applyPlanResetLocal, currentPeriod, dateStr } from './localReset.js';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -68,6 +68,7 @@ const local = {
       createdAt: now(), updatedAt: now(),
     };
     await localdb.put('notes', item);
+    await markLocalOrigin('notes', uid);
     requestSync();
     return item;
   },
@@ -122,6 +123,7 @@ const local = {
       createdAt: now(), updatedAt: now(),
     };
     await localdb.put('plans', item);
+    await markLocalOrigin('plans', uid);
     requestSync();
     return item;
   },

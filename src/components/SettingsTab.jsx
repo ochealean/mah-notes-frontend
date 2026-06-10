@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth.js';
-import { useSync, setSyncEnabled, syncNow } from '../lib/sync.js';
+import { useSync, setSyncEnabled, syncNow, getAccountOnlyItems, removeAccountData, resetSyncForLogout } from '../lib/sync.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import FriendsModal from './FriendsModal.jsx';
@@ -15,7 +15,7 @@ const THEME_OPTIONS = [
 ];
 
 // ── Native-only: connect an account and control sync ──
-function AccountSync() {
+function AccountSync({ reloadLists }) {
   const { user, login, register, loginWithGoogle, logout } = useAuth();
   const sync = useSync();
   const [mode, setMode] = useState('signin');
@@ -23,10 +23,32 @@ function AccountSync() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [signOut, setSignOut] = useState(null);   // { notes, plans } counts | null
+  const [signingOut, setSigningOut] = useState(false);
 
   async function afterAuth() {
-    await setSyncEnabled(true); // turns sync on and runs the first merge
-    notify('Signed in — merging your notes', 'success');
+    // Sync starts OFF on every login — the user opts in. This also prevents one
+    // account's data from auto-merging into the next account.
+    await setSyncEnabled(false);
+    notify('Signed in. Turn on “Sync this device” to back up & merge.', 'success');
+  }
+
+  // Sign-out: first find which on-device items came from this account, then ask.
+  async function openSignOut() {
+    try {
+      const acc = await getAccountOnlyItems();
+      setSignOut({ notes: acc.notes.length, plans: acc.plans.length });
+    } catch { setSignOut({ notes: 0, plans: 0 }); }
+  }
+
+  async function doSignOut(removeData) {
+    setSigningOut(true);
+    try {
+      if (removeData) await removeAccountData(); // keeps the device's own notes
+      await resetSyncForLogout();
+      logout();
+      if (reloadLists) reloadLists();
+    } finally { setSigningOut(false); setSignOut(null); }
   }
 
   async function submit(e) {
@@ -111,17 +133,46 @@ function AccountSync() {
         <span className="settings-sub">{!sync.online ? 'Offline' : !sync.enabled ? 'Sync off' : `Last: ${last}`}</span>
       </button>
       {sync.error && <p className="settings-hint-text" style={{ color: 'var(--danger)' }}>{sync.error}</p>}
-      <button className="settings-row danger" onClick={() => {
-        if (confirm('Sign out? Your notes stay on this device.')) { setSyncEnabled(false); logout(); }
-      }}>
+      <button className="settings-row danger" onClick={openSignOut}>
         <span><i className="fas fa-sign-out-alt" /> Sign out</span>
         <i className="fas fa-chevron-right" />
       </button>
+
+      {signOut && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setSignOut(null); }}>
+          <div className="popup">
+            <div className="popup-head">
+              <h3><i className="fas fa-sign-out-alt" /> Sign out</h3>
+              <button className="icon-btn" aria-label="Close" onClick={() => setSignOut(null)}><i className="fas fa-times" /></button>
+            </div>
+            {(signOut.notes + signOut.plans) > 0 ? (
+              <>
+                <p className="reconcile-intro">
+                  <b>{signOut.notes + signOut.plans}</b> item{(signOut.notes + signOut.plans) > 1 ? 's' : ''} on this device came from <b>{user.email || user.displayName}</b>. Your own offline notes are <b>always kept</b>. What should happen to the synced data?
+                </p>
+                <div className="signout-actions">
+                  <button className="btn btn-primary btn-block" disabled={signingOut} onClick={() => doSignOut(false)}>
+                    <i className="fas fa-box-archive" /> Keep it on this device
+                  </button>
+                  <button className="btn btn-block signout-remove" disabled={signingOut} onClick={() => doSignOut(true)}>
+                    <i className="fas fa-trash" /> Remove synced data
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="reconcile-intro">Your notes stay on this device. Sync will be turned off.</p>
+                <button className="btn btn-primary btn-block" disabled={signingOut} onClick={() => doSignOut(false)}>Sign out</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default function SettingsTab({ user, onPrivacy, onLogout, onReload }) {
+export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloadLists }) {
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
   const initial = (name[0] || 'U').toUpperCase();
   const { pref, setTheme } = useTheme();
@@ -153,7 +204,7 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload }) {
       )}
 
       {/* Native: account + sync controls. */}
-      {isNative && <AccountSync />}
+      {isNative && <AccountSync reloadLists={reloadLists} />}
 
       {/* Friends + sharing inbox — online features, need an account. */}
       {user && (

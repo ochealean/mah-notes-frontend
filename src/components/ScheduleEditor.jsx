@@ -19,16 +19,17 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
   const [start, setStart] = useState(initial?.start || '09:00');
   const [end, setEnd] = useState(initial?.end || '10:00');
   const [doNotify, setDoNotify] = useState(initial?.notify !== false);
+  const [doAlarm, setDoAlarm] = useState(initial?.alarm === true);
   const [busy, setBusy] = useState(false);
 
   async function save() {
     if (busy) return;
     setBusy(true);
     try {
-      const data = { title, day, start, end, notify: doNotify };
+      const data = { title, day, start, end, notify: doNotify, alarm: doAlarm };
       if (editing) await updateSchedule(initial.id, data);
       else await createSchedule(data);
-      notify(doNotify ? 'Saved — weekly reminder set' : 'Saved', 'success');
+      notify(doAlarm ? 'Saved — weekly alarm set' : doNotify ? 'Saved — weekly reminder set' : 'Saved', 'success');
       onSaved();
     } catch (err) {
       notify(err.message || 'Could not save', 'error');
@@ -74,8 +75,15 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
             <span className="slider" />
           </label>
         </div>
+        <div className="settings-row" style={{ cursor: 'default' }}>
+          <span><i className="fas fa-clock" style={{ color: 'var(--danger)' }} /> Alarm — wake me for class</span>
+          <label className="switch">
+            <input type="checkbox" checked={doAlarm} onChange={(e) => setDoAlarm(e.target.checked)} />
+            <span className="slider" />
+          </label>
+        </div>
         <p className="settings-hint-text" style={{ padding: '0 2px 6px' }}>
-          Repeats every week on {DAYS.find(([v]) => v === day)?.[1]} at the start time. You may be asked to allow notifications.
+          Repeats every week on {DAYS.find(([v]) => v === day)?.[1]} at the start time, and fires even when the app is closed. <b>Alarm</b> is louder and stays until you dismiss it. You may be asked to allow notifications.
         </p>
 
         <button className="btn btn-primary btn-block" onClick={save} disabled={busy}>

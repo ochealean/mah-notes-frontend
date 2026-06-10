@@ -3,7 +3,7 @@
 //  device's IndexedDB. Each block can fire a weekly notification;
 //  this module keeps the store and the notifications in step.
 //
-//  A block: { id, day, start "HH:MM", end "HH:MM", title, notify }
+//  A block: { id, day, start "HH:MM", end "HH:MM", title, notify, alarm }
 // ============================================================
 import { localdb } from './localdb.js';
 import { newUid } from './uid.js';
@@ -33,6 +33,7 @@ function clean(data, base = {}) {
     end: next.end || '10:00',
     title: (next.title || '').trim() || 'Untitled block',
     notify: next.notify !== false,
+    alarm: !!next.alarm,
   };
 }
 

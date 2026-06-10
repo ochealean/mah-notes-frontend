@@ -48,7 +48,10 @@ export default function ScheduleTab({ schedules, onEdit }) {
               <button key={b.id} className="sched-block" onClick={() => onEdit(b)}>
                 <div className="sched-time">{fmt(b.start)}<span>{fmt(b.end)}</span></div>
                 <div className="sched-title">{b.title}</div>
-                <i className={`fas fa-bell sched-bell${b.notify ? ' on' : ' off'}`} title={b.notify ? 'Reminder on' : 'Reminder off'} />
+                <div className="sched-icons">
+                  {b.alarm && <i className="fas fa-clock sched-alarm" title="Alarm on" />}
+                  <i className={`fas fa-bell sched-bell${b.notify ? ' on' : ' off'}`} title={b.notify ? 'Reminder on' : 'Reminder off'} />
+                </div>
               </button>
             ))}
           </div>

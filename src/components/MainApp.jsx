@@ -217,7 +217,7 @@ export default function MainApp() {
           <ScheduleTab schedules={schedules} onEdit={(block) => setScheduleEditor({ block })} />
         )}
         {tab === 'settings' && (
-          <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} />
+          <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} reloadLists={reload} />
         )}
       </main>
 

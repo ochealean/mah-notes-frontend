@@ -16,6 +16,10 @@ import { api, getToken } from './api.js';
 const PENDING_KEY = 'pendingDeletes';
 const ENABLED_KEY = 'syncEnabled';
 const LASTSYNC_KEY = 'lastSync';
+// uids of items CREATED on this device (the user's own data). Everything else
+// in the local store arrived from a synced account. Used at logout to remove
+// only the account's data and never the device's own offline notes.
+const ORIGIN_KEY = 'localOriginUids';
 
 let state = {
   initialized: false,
@@ -49,6 +53,44 @@ export async function markDeleted(kind, uid) {
   await localdb.metaSet(PENDING_KEY, p);
 }
 
+// ── local origin (the device's own data, vs data pulled from an account) ──
+async function getLocalOrigin() {
+  return (await localdb.metaGet(ORIGIN_KEY)) || { notes: [], plans: [] };
+}
+export async function markLocalOrigin(kind, uid) {
+  const o = await getLocalOrigin();
+  if (!o[kind].includes(uid)) { o[kind].push(uid); await localdb.metaSet(ORIGIN_KEY, o); }
+}
+
+// Items on the device that came FROM the account (i.e. not device-created).
+// These are the ones we offer to remove on logout.
+export async function getAccountOnlyItems() {
+  const o = await getLocalOrigin();
+  const [notes, plans] = await Promise.all([localdb.all('notes'), localdb.all('plans')]);
+  return {
+    notes: notes.filter((n) => !o.notes.includes(n.uid)),
+    plans: plans.filter((p) => !o.plans.includes(p.uid)),
+  };
+}
+
+// Remove only the account's data from the device; keep the user's own notes.
+export async function removeAccountData() {
+  const { notes, plans } = await getAccountOnlyItems();
+  await Promise.all([
+    ...notes.map((n) => localdb.remove('notes', n.id ?? n.uid)),
+    ...plans.map((p) => localdb.remove('plans', p.id ?? p.uid)),
+  ]);
+}
+
+// Wipe sync bookkeeping so the next account starts clean (no carried-over
+// deletions / last-sync time).
+export async function resetSyncForLogout() {
+  await localdb.metaSet(ENABLED_KEY, false);
+  await localdb.metaSet(PENDING_KEY, { notes: [], plans: [] });
+  await localdb.metaSet(LASTSYNC_KEY, null);
+  set({ enabled: false, lastSync: null, pendingReconcile: { notes: [], plans: [] } });
+}
+
 // Map a server item to a local row (local id is the stable uid).
 const toLocal = (it) => ({ ...it, id: it.uid });
 
@@ -64,6 +106,15 @@ export async function initSync() {
   if (state.initialized) return;
   const enabled = (await localdb.metaGet(ENABLED_KEY)) === true;
   const lastSync = await localdb.metaGet(LASTSYNC_KEY);
+
+  // One-time migration: anything already on the device (created before origin
+  // tracking existed) is treated as the user's OWN data, so a future logout
+  // never deletes it. Only items later pulled from an account are unmarked.
+  if ((await localdb.metaGet(ORIGIN_KEY)) === null) {
+    const [notes, plans] = await Promise.all([localdb.all('notes'), localdb.all('plans')]);
+    await localdb.metaSet(ORIGIN_KEY, { notes: notes.map((n) => n.uid), plans: plans.map((p) => p.uid) });
+  }
+
   set({ initialized: true, enabled, lastSync });
   if (typeof window !== 'undefined') {
     window.addEventListener('online', () => { set({ online: true }); requestSync(); });

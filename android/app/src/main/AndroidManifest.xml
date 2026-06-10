@@ -32,4 +32,12 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Exact alarms so Schedule reminders fire ON TIME and wake the device
+         even when the app is closed (without these, Android uses inexact
+         alarms → minutes-late delivery / only when the app next runs).
+         USE_EXACT_ALARM (Android 13+) is auto-granted for alarm/reminder apps;
+         SCHEDULE_EXACT_ALARM covers Android 12. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 </manifest>
