@@ -24,6 +24,9 @@ let state = {
   syncing: false,
   lastSync: null,
   error: null,
+  // Items the WEB side deleted that this device still has — the user is asked
+  // whether to keep (re-upload) or delete each. Filled after every sync pull.
+  pendingReconcile: { notes: [], plans: [] },
 };
 
 const listeners = new Set();
@@ -100,6 +103,9 @@ export async function syncNow() {
       deletedPlanUids: pending.plans,
     };
     const res = await api.post('/api/sync', body);
+    // The returned set already excludes anything the web side deleted, so
+    // replaceAll drops those locally. We keep their full content in
+    // pendingReconcile so the user can restore (re-upload) any they want.
     await Promise.all([
       localdb.replaceAll('notes', (res.notes || []).map(toLocal)),
       localdb.replaceAll('plans', (res.plans || []).map(toLocal)),
@@ -107,9 +113,35 @@ export async function syncNow() {
     ]);
     const lastSync = new Date().toISOString();
     await localdb.metaSet(LASTSYNC_KEY, lastSync);
-    set({ syncing: false, lastSync });
+    const pr = res.pendingReconcile || { notes: [], plans: [] };
+    set({ syncing: false, lastSync, pendingReconcile: { notes: pr.notes || [], plans: pr.plans || [] } });
     if (onMergedCb) onMergedCb();
   } catch (err) {
     set({ syncing: false, error: err?.message || 'Sync failed' });
   }
+}
+
+// Resolve a batch of web-deleted items.
+//   keepNotes/keepPlans → full objects to restore (re-uploaded + re-stored locally)
+//   deleteNoteUids/deletePlanUids → confirmed deletions (purged from the DB)
+export async function applyReconcile({
+  keepNotes = [], keepPlans = [], deleteNoteUids = [], deletePlanUids = [],
+} = {}) {
+  await api.post('/api/reconcile', {
+    keepNoteUids: keepNotes.map((n) => n.uid),
+    keepPlanUids: keepPlans.map((p) => p.uid),
+    deleteNoteUids,
+    deletePlanUids,
+  });
+  // Put kept items back into the local store (the last pull had dropped them).
+  if (keepNotes.length) await localdb.bulkPut('notes', keepNotes.map(toLocal));
+  if (keepPlans.length) await localdb.bulkPut('plans', keepPlans.map(toLocal));
+  set({ pendingReconcile: { notes: [], plans: [] } });
+  if (onMergedCb) onMergedCb();
+}
+
+// Defer the prompt without acting — it reappears on the next sync if the
+// tombstones are still there.
+export function dismissReconcile() {
+  set({ pendingReconcile: { notes: [], plans: [] } });
 }

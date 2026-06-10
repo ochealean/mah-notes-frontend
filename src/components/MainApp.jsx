@@ -7,7 +7,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { repo } from '../lib/repo.js';
 import { isNative } from '../lib/nativeAuth.js';
-import { initSync, setOnMerged } from '../lib/sync.js';
+import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile } from '../lib/sync.js';
+import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import Loader from './Loader.jsx';
 import DocsTab from './DocsTab.jsx';
@@ -16,6 +17,7 @@ import SettingsTab from './SettingsTab.jsx';
 import DocEditor from './DocEditor.jsx';
 import PlanEditor from './PlanEditor.jsx';
 import ShareModal from './ShareModal.jsx';
+import ReconcileModal from './ReconcileModal.jsx';
 
 const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', settings: 'Settings' };
 
@@ -30,6 +32,8 @@ export default function MainApp() {
   const [docEditor, setDocEditor] = useState(null);   // { note } | { } (new) | null
   const [planEditor, setPlanEditor] = useState(null); // { plan } | { } | null
   const [share, setShare] = useState(null);           // { itemType, itemId } | null
+  const [reconcile, setReconcile] = useState(null);   // { notes, plans } | null
+  const syncState = useSync();
 
   const reload = useCallback(async () => {
     try {
@@ -52,6 +56,54 @@ export default function MainApp() {
     setOnMerged(reload);
     initSync();
   }, [reload]);
+
+  // Native: surface items the WEB side deleted so the user can keep/delete them.
+  useEffect(() => {
+    if (!isNative) return;
+    const pr = syncState.pendingReconcile;
+    if (pr && (pr.notes.length || pr.plans.length)) setReconcile(pr);
+  }, [syncState.pendingReconcile]);
+
+  // Web: ask the server whether the app deleted anything we still show.
+  const checkWebReconcile = useCallback(async () => {
+    if (isNative || !getToken()) return;
+    try {
+      const pr = await api.get('/api/reconcile');
+      if (pr && (pr.notes?.length || pr.plans?.length)) setReconcile(pr);
+    } catch { /* non-critical */ }
+  }, []);
+  useEffect(() => {
+    if (isNative) return undefined;
+    checkWebReconcile();
+    const onFocus = () => checkWebReconcile();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [checkWebReconcile]);
+
+  async function onReconcileApply(sel) {
+    try {
+      if (isNative) {
+        await applyReconcile(sel); // posts + restores kept items locally + reloads
+      } else {
+        await api.post('/api/reconcile', {
+          keepNoteUids: sel.keepNotes.map((n) => n.uid),
+          keepPlanUids: sel.keepPlans.map((p) => p.uid),
+          deleteNoteUids: sel.deleteNoteUids,
+          deletePlanUids: sel.deletePlanUids,
+        });
+        await reload();
+      }
+      setReconcile(null);
+      const kept = sel.keepNotes.length + sel.keepPlans.length;
+      const del = sel.deleteNoteUids.length + sel.deletePlanUids.length;
+      notify(`Kept ${kept}, deleted ${del}`, 'success');
+    } catch (err) { notify(err.message, 'error'); }
+  }
+
+  function onReconcileClose() {
+    if (isNative) dismissReconcile();
+    setReconcile(null);
+  }
 
   // ── Privacy: hide/show every item on the active content tab ──
   const items = tab === 'plans' ? plans : notes;
@@ -167,6 +219,9 @@ export default function MainApp() {
       )}
       {share && (
         <ShareModal itemType={share.itemType} itemId={share.itemId} onClose={() => setShare(null)} />
+      )}
+      {reconcile && (
+        <ReconcileModal data={reconcile} onApply={onReconcileApply} onClose={onReconcileClose} />
       )}
     </div>
   );

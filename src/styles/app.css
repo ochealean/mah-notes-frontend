@@ -362,6 +362,33 @@ a { color: var(--primary); }
 .share-mini.regen { background: rgba(245,166,35,.16); color: #c87f10; }
 .share-revoked { text-align: center; color: var(--danger); padding: 16px; font-weight: 600; }
 
+/* ═══════════ RECONCILE (deletion sync) ═══════════ */
+.reconcile-intro { font-size: 13.5px; color: var(--muted); margin: 2px 0 14px; line-height: 1.5; }
+.reconcile-bulk { display: flex; gap: 8px; margin-bottom: 10px; }
+.reconcile-bulk-btn {
+    flex: 1; border: none; border-radius: 10px; padding: 9px; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; background: rgba(47,211,182,.16); color: #1f9e89;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.reconcile-bulk-btn.danger { background: rgba(240,102,110,.14); color: var(--danger); }
+.reconcile-bulk-btn:disabled { opacity: .5; cursor: default; }
+.reconcile-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; }
+.reconcile-row {
+    display: flex; align-items: center; gap: 11px; padding: 12px 14px;
+    background: var(--light); border-radius: 12px; cursor: pointer;
+    border: 1.5px solid transparent; transition: border-color .15s, opacity .15s;
+}
+.reconcile-row input[type="checkbox"] { width: 19px; height: 19px; accent-color: var(--accent); flex-shrink: 0; }
+.reconcile-row-icon { color: var(--accent); width: 18px; text-align: center; flex-shrink: 0; }
+.reconcile-row-title { flex: 1; min-width: 0; font-weight: 600; color: var(--dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reconcile-row-tag { font-size: 11px; font-weight: 700; color: #1f9e89; text-transform: uppercase; letter-spacing: .03em; }
+.reconcile-row.will-delete { border-color: rgba(240,102,110,.4); opacity: .72; }
+.reconcile-row.will-delete .reconcile-row-icon { color: var(--danger); }
+.reconcile-row.will-delete .reconcile-row-title { text-decoration: line-through; color: var(--muted); }
+.reconcile-row.will-delete .reconcile-row-tag { color: var(--danger); }
+.reconcile-apply { width: 100%; margin-top: 16px; padding: 13px; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
+.reconcile-apply:disabled { opacity: .6; cursor: default; }
+
 /* ═══════════ LOADER / NOTIFY ═══════════ */
 .loader {
     display: none; position: fixed; inset: 0; background: rgba(255,255,255,.82); z-index: 2000;
