@@ -11,6 +11,7 @@ import { isNative } from '../lib/nativeAuth.js';
 import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile, syncNow } from '../lib/sync.js';
 import { listSchedules } from '../lib/scheduleStore.js';
 import { rescheduleAll } from '../lib/notifications.js';
+import { rearmAlarms } from '../lib/alarm.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import Loader from './Loader.jsx';
@@ -63,7 +64,13 @@ export default function MainApp() {
   // (survives reboots / app restarts).
   useEffect(() => {
     if (!isNative) return;
-    (async () => { try { await rescheduleAll(await listSchedules()); } catch { /* best-effort */ } })();
+    (async () => {
+      try {
+        const blocks = await listSchedules();
+        await rescheduleAll(blocks); // gentle reminders
+        await rearmAlarms(blocks);   // ringing alarms (safety net)
+      } catch { /* best-effort */ }
+    })();
   }, []);
 
   // Native: start the sync engine and refresh the lists whenever a sync

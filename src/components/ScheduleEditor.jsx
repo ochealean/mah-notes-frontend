@@ -3,8 +3,9 @@
 //  name it, and toggle the weekly reminder. Saving (re)schedules
 //  the notification; deleting cancels it.
 // ============================================================
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createSchedule, updateSchedule, deleteSchedule } from '../lib/scheduleStore.js';
+import { getRingtones } from '../lib/alarm.js';
 import { notify } from '../lib/notify.js';
 
 const DAYS = [
@@ -20,13 +21,22 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
   const [end, setEnd] = useState(initial?.end || '10:00');
   const [doNotify, setDoNotify] = useState(initial?.notify !== false);
   const [doAlarm, setDoAlarm] = useState(initial?.alarm === true);
+  const [ringtone, setRingtone] = useState(initial?.ringtone || '');
+  const [ringtones, setRingtones] = useState([{ title: 'Default alarm', uri: '' }]);
   const [busy, setBusy] = useState(false);
+
+  // Load the phone's alarm ringtones for the picker.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => { try { const r = await getRingtones(); if (!cancelled && r.length) setRingtones(r); } catch {} })();
+    return () => { cancelled = true; };
+  }, []);
 
   async function save() {
     if (busy) return;
     setBusy(true);
     try {
-      const data = { title, day, start, end, notify: doNotify, alarm: doAlarm };
+      const data = { title, day, start, end, notify: doNotify, alarm: doAlarm, ringtone };
       if (editing) await updateSchedule(initial.id, data);
       else await createSchedule(data);
       notify(doAlarm ? 'Saved — weekly alarm set' : doNotify ? 'Saved — weekly reminder set' : 'Saved', 'success');
@@ -82,6 +92,14 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
             <span className="slider" />
           </label>
         </div>
+        {doAlarm && (
+          <div className="sched-ringtone">
+            <span><i className="fas fa-music" /> Alarm sound</span>
+            <select className="mini-select" value={ringtone} onChange={(e) => setRingtone(e.target.value)}>
+              {ringtones.map((r) => <option key={r.uri || 'default'} value={r.uri}>{r.title}</option>)}
+            </select>
+          </div>
+        )}
         <p className="settings-hint-text" style={{ padding: '0 2px 6px' }}>
           Repeats every week on {DAYS.find(([v]) => v === day)?.[1]} at the start time, and fires even when the app is closed. <b>Alarm</b> is louder and stays until you dismiss it. You may be asked to allow notifications.
         </p>
