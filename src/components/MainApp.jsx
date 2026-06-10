@@ -3,6 +3,7 @@
 //  plans data and the editor/share modal state.
 // ============================================================
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { repo } from '../lib/repo.js';
@@ -13,17 +14,19 @@ import { notify } from '../lib/notify.js';
 import Loader from './Loader.jsx';
 import DocsTab from './DocsTab.jsx';
 import PlansTab from './PlansTab.jsx';
+import ViewTab from './ViewTab.jsx';
 import SettingsTab from './SettingsTab.jsx';
 import DocEditor from './DocEditor.jsx';
 import PlanEditor from './PlanEditor.jsx';
 import ShareModal from './ShareModal.jsx';
 import ReconcileModal from './ReconcileModal.jsx';
 
-const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', settings: 'Settings' };
+const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', settings: 'Settings' };
 
 export default function MainApp() {
   const { user, logout } = useAuth();
   const { effective, setTheme } = useTheme();
+  const navigate = useNavigate();
   const [tab, setTab] = useState('docs');
   const [notes, setNotes] = useState([]);
   const [plans, setPlans] = useState([]);
@@ -135,6 +138,12 @@ export default function MainApp() {
     else if (tab === 'plans') setPlanEditor({});
   }
 
+  // Open an item's permanent, read-only view. Same URL on web and app
+  // (/view?type=&id=) — never expires; the app reads it from local storage.
+  const openView = useCallback((kind, item) => {
+    navigate(`/view?type=${kind}&id=${encodeURIComponent(item.id)}`);
+  }, [navigate]);
+
   if (loading) return <Loader />;
 
   return (
@@ -151,7 +160,7 @@ export default function MainApp() {
             aria-label="Toggle theme" onClick={() => setTheme(effective === 'dark' ? 'light' : 'dark')}>
             <i className={`fas ${effective === 'dark' ? 'fa-sun' : 'fa-moon'}`} />
           </button>
-          {tab !== 'settings' && (
+          {tab !== 'settings' && tab !== 'view' && (
             <button className={`icon-btn${allHidden ? ' active' : ''}`} title={allHidden ? 'Show all content' : 'Hide all content'}
               onClick={togglePrivacyAll}>
               <i className={`fas ${allHidden ? 'fa-eye' : 'fa-eye-slash'}`} />
@@ -180,12 +189,15 @@ export default function MainApp() {
             setPlans={setPlans}
           />
         )}
+        {tab === 'view' && (
+          <ViewTab notes={notes} plans={plans} onOpen={openView} />
+        )}
         {tab === 'settings' && (
           <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} />
         )}
       </main>
 
-      {tab !== 'settings' && (
+      {tab !== 'settings' && tab !== 'view' && (
         <button className="fab" aria-label="Create" onClick={onFab}>
           <i className="fas fa-plus" />
         </button>
@@ -197,6 +209,9 @@ export default function MainApp() {
         </button>
         <button className={`nav-item${tab === 'plans' ? ' active' : ''}`} onClick={() => setTab('plans')}>
           <i className="fas fa-calendar-week" /><span>Plans</span>
+        </button>
+        <button className={`nav-item${tab === 'view' ? ' active' : ''}`} onClick={() => setTab('view')}>
+          <i className="fas fa-eye" /><span>View</span>
         </button>
         <button className={`nav-item${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>
           <i className="fas fa-gear" /><span>Settings</span>

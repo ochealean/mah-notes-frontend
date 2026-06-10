@@ -74,9 +74,8 @@ function PlanCard({ plan, today, onEdit, onShare, onToggleHidden, onChanged, onT
 
       <div className="card-actions">
         <button className="act-btn edit" onClick={() => onEdit(plan)}><i className="fas fa-pen-to-square" /> Edit</button>
-        {!isNative && (
-          <button className="act-btn view" onClick={() => navigate(`/view?type=plan&id=${encodeURIComponent(plan.id)}`)}><i className="fas fa-eye" /> View</button>
-        )}
+        {/* View works offline (reads local); Share is online-only. */}
+        <button className="act-btn view" onClick={() => navigate(`/view?type=plan&id=${encodeURIComponent(plan.id)}`)}><i className="fas fa-eye" /> View</button>
         {!isNative && (
           <button className="act-btn share" onClick={() => onShare(plan.id)}><i className="fas fa-share-alt" /> Share</button>
         )}

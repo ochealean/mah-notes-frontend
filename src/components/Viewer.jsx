@@ -6,8 +6,10 @@
 //    ?type=&id=…  (owner)  → signed-in owner; taps save to the server
 // ============================================================
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { api, getToken } from '../lib/api.js';
+import { isNative } from '../lib/nativeAuth.js';
+import { localdb } from '../lib/localdb.js';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext.js';
 
 const JS_DAY = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -58,6 +60,7 @@ function WeekDetails({ days, markDone = true }) {
 
 export default function Viewer() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const token = params.get('token');
   const ownerType = params.get('type');
   const ownerId = params.get('id');
@@ -79,6 +82,18 @@ export default function Viewer() {
   }, [token]);
 
   const loadOwner = useCallback(async () => {
+    // Native reads its own offline copy (read-only); web fetches from the API.
+    if (isNative) {
+      const item = await localdb.get(ownerType === 'plan' ? 'plans' : 'notes', ownerId);
+      if (!item) { const e = new Error('Not found'); e.status = 404; throw e; }
+      if (ownerType === 'plan') {
+        setData({ kind: 'plan', mode: 'owner', readOnly: true, id: ownerId, title: item.title, days: item.days || {} });
+      } else {
+        setData({ kind: 'note', mode: 'owner', readOnly: true, id: ownerId, title: item.title, contentHtml: contentToHtml(item.content) });
+      }
+      setState({ status: 'ok' });
+      return;
+    }
     const path = ownerType === 'plan' ? `/api/plans/${ownerId}` : `/api/notes/${ownerId}`;
     const item = await api.get(path);
     if (ownerType === 'plan') {
@@ -96,7 +111,7 @@ export default function Viewer() {
         if (token) {
           await loadToken();
         } else if (ownerType && ownerId) {
-          if (!getToken()) {
+          if (!isNative && !getToken()) {
             setState({ status: 'message', icon: 'fa-right-to-bracket', title: 'Sign in to view',
               desc: 'Open Mah Notes and sign in to see this item.',
               extra: <p style={{ marginTop: 14 }}><Link to="/" style={{ fontWeight: 700 }}>Go to Mah Notes →</Link></p> });
@@ -125,7 +140,7 @@ export default function Viewer() {
   // ── Note checkbox wiring (owner saves; reference = localStorage) ──
   useEffect(() => {
     if (!data || data.kind !== 'note' || !docRef.current) return;
-    if (data.mode === 'live') return; // read-only
+    if (data.mode === 'live' || data.readOnly) return; // read-only
     const el = docRef.current;
     const items = [...el.querySelectorAll('.doc-check-item')];
 
@@ -165,13 +180,20 @@ export default function Viewer() {
     ? <div className="live-badge"><span className="live-dot" /> Live · updates in real-time</div>
     : data.mode === 'reference'
       ? <div className="ref-badge"><i className="fas fa-list-check" /> Reference · your own copy</div>
-      : <div className="own-badge"><i className="fas fa-circle-check" /> View mode · taps are saved</div>;
+      : <div className="own-badge"><i className="fas fa-circle-check" /> View mode · {data.readOnly ? 'read-only' : 'taps are saved'}</div>;
 
   const sub = data.mode === 'live' ? 'live · shared' : data.mode === 'reference' ? 'your copy' : 'view mode';
 
   return (
     <div className="view-page">
-      <div className="view-bar"><span className="logo">Mah Notes</span><span className="sub">{sub}</span></div>
+      <div className="view-bar">
+        {data.mode === 'owner' && (
+          <button className="icon-btn view-back" aria-label="Back" onClick={() => navigate('/')}>
+            <i className="fas fa-arrow-left" />
+          </button>
+        )}
+        <span className="logo">Mah Notes</span><span className="sub">{sub}</span>
+      </div>
       <div className="v-card">
         {badge}
         <h1 className="v-title">{data.title || (data.kind === 'plan' ? 'Plan' : 'Untitled')}</h1>
@@ -208,7 +230,7 @@ function PlanView({ data, token }) {
     setChecks(((data.days && data.days[t]) || []).map((it) => !!it.checked));
   }, [data, t]);
 
-  const interactive = data.mode !== 'live';
+  const interactive = data.mode !== 'live' && !data.readOnly;
 
   async function toggle(i) {
     if (!interactive) return;

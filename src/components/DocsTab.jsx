@@ -52,10 +52,8 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
         dangerouslySetInnerHTML={{ __html: previewHtml }} />
       <div className="card-actions">
         <button className="act-btn open" onClick={() => onOpen(note)}><i className="fas fa-pen-to-square" /> Open</button>
-        {/* View & Share are online features — hidden in the offline app. */}
-        {!isNative && (
-          <button className="act-btn view" onClick={() => navigate(`/view?type=note&id=${encodeURIComponent(note.id)}`)}><i className="fas fa-eye" /> View</button>
-        )}
+        {/* View works offline (reads local); Share is online-only. */}
+        <button className="act-btn view" onClick={() => navigate(`/view?type=note&id=${encodeURIComponent(note.id)}`)}><i className="fas fa-eye" /> View</button>
         {!isNative && (
           <button className="act-btn share" onClick={() => onShare(note.id)}><i className="fas fa-share-alt" /> Share</button>
         )}
