@@ -5,6 +5,7 @@
 import { useNavigate } from 'react-router-dom';
 import { repo } from '../lib/repo.js';
 import { notify } from '../lib/notify.js';
+import { timeAgo } from '../lib/timeAgo.js';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
@@ -71,6 +72,9 @@ function PlanCard({ plan, today, onEdit, onShare, onToggleHidden, onChanged, onT
 
       <details className="plan-week"><summary>Full week</summary><WeekGrid days={days} today={today} /></details>
 
+      {plan.updatedAt && (
+        <div className="card-updated"><i className="fas fa-clock" /> Updated {timeAgo(plan.updatedAt)}</div>
+      )}
       <div className="card-actions">
         <button className="act-btn edit" onClick={() => onEdit(plan)}><i className="fas fa-pen-to-square" /> Edit</button>
         {/* View reads local (works offline); Share needs an account + sync. */}

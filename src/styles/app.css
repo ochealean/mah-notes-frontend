@@ -467,12 +467,34 @@ a { color: var(--primary); }
     font-weight: 800; font-size: 13.5px; color: var(--primary);
 }
 .sched-time span { font-weight: 600; font-size: 11.5px; color: var(--muted); }
-.sched-title { flex: 1; min-width: 0; font-weight: 600; color: var(--dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sched-title { font-weight: 600; color: var(--dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-group-tag {
+    margin-left: 8px; font-size: 10.5px; font-weight: 700; color: var(--primary);
+    background: var(--input-bg); border: 1px solid var(--border); padding: 1px 7px; border-radius: 999px;
+}
+.sched-sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-sub.link { color: var(--primary); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; }
 .sched-icons { flex-shrink: 0; display: flex; align-items: center; gap: 10px; }
 .sched-bell { font-size: 15px; }
 .sched-bell.on { color: var(--accent); }
 .sched-bell.off { color: var(--muted); opacity: .5; }
 .sched-alarm { font-size: 15px; color: var(--danger); }
+
+.sched-group-chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 12px; -webkit-overflow-scrolling: touch; }
+.sched-chip {
+    flex-shrink: 0; padding: 6px 13px; border: 1px solid var(--border); background: var(--input-bg);
+    border-radius: 999px; font-size: 12.5px; font-weight: 700; color: var(--muted); cursor: pointer; white-space: nowrap;
+}
+.sched-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* "Updated …" line on doc/plan cards */
+.card-updated { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+
+/* Inline (non-blocking) loaders — no more full-screen loading gate */
+.screen-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 64px 20px; color: var(--muted); font-size: 14px; }
+.screen-loading i { font-size: 26px; color: var(--primary); }
+.appbar-busy { margin-left: 10px; font-size: 12px; font-weight: 600; color: rgba(255,255,255,.9); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 
 .signout-actions { display: flex; flex-direction: column; gap: 9px; }
 .signout-remove { background: rgba(240,102,110,.14); color: var(--danger); }

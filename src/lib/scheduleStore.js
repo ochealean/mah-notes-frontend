@@ -4,12 +4,17 @@
 //  (notification) and/or a loud ringing ALARM (native). This module
 //  keeps the store, the reminders, and the alarms all in step.
 //
-//  A block: { id, day, start "HH:MM", end "HH:MM", title, notify, alarm, ringtone }
+//  A block: { id, day, start "HH:MM", end "HH:MM", title, sub, group,
+//             notify, alarm, ringtone }
+//    sub   — free note or a meeting link (e.g. "bring your notebook" / a URL)
+//    group — optional label to organise blocks (e.g. "My class", "Liza's sched")
 // ============================================================
 import { localdb } from './localdb.js';
 import { newUid } from './uid.js';
-import { scheduleBlock, cancelBlock } from './notifications.js';
-import { scheduleAlarm, cancelAlarm } from './alarm.js';
+import { ensurePermission } from './notifications.js';
+import {
+  scheduleAlarm, cancelAlarm, scheduleReminder, cancelReminder, requestBatteryUnrestricted,
+} from './alarm.js';
 
 const now = () => new Date().toISOString();
 const DAY_INDEX = { monday: 0, tuesday: 1, wednesday: 2, thursday: 3, friday: 4, saturday: 5, sunday: 6 };
@@ -26,6 +31,12 @@ export async function listSchedules() {
   return all.sort(order);
 }
 
+// Distinct, non-empty group names currently in use (for the editor's picker).
+export async function listGroups() {
+  const all = await localdb.all('schedules');
+  return [...new Set(all.map((s) => (s.group || '').trim()).filter(Boolean))].sort();
+}
+
 function clean(data, base = {}) {
   const next = { ...base, ...data };
   return {
@@ -34,6 +45,8 @@ function clean(data, base = {}) {
     start: next.start || '09:00',
     end: next.end || '10:00',
     title: (next.title || '').trim() || 'Untitled block',
+    sub: (next.sub || '').trim(),
+    group: (next.group || '').trim(),
     notify: next.notify !== false,
     alarm: !!next.alarm,
     ringtone: next.ringtone || '',
@@ -41,11 +54,17 @@ function clean(data, base = {}) {
 }
 
 // Keep both the gentle reminder and the loud alarm in step with the block.
+// Both run on the native exact-alarm path so they fire on time even when the
+// app is closed.
 async function applyTriggers(item) {
-  await cancelBlock(item);                       // clear old reminder
-  if (item.notify) await scheduleBlock(item);    // re-arm reminder
-  if (item.alarm) await scheduleAlarm(item);     // re-arm ringing alarm
-  else await cancelAlarm(item.id);               // …or clear it
+  await cancelReminder(item);                     // clear old reminder
+  await cancelAlarm(item.id);                     // clear old alarm
+  if (item.notify || item.alarm) {
+    await ensurePermission();                     // POST_NOTIFICATIONS (Android 13+)
+    requestBatteryUnrestricted();                 // best-effort, fire-and-forget
+  }
+  if (item.notify) await scheduleReminder(item);  // re-arm exact reminder
+  if (item.alarm) await scheduleAlarm(item);      // re-arm ringing alarm
 }
 
 export async function createSchedule(data) {
@@ -68,6 +87,6 @@ export async function updateSchedule(id, patch) {
 export async function deleteSchedule(id) {
   const cur = await localdb.get('schedules', id);
   await localdb.remove('schedules', id);
-  if (cur) { await cancelBlock(cur); await cancelAlarm(cur.id); }
+  if (cur) { await cancelReminder(cur); await cancelAlarm(cur.id); }
   return { ok: true };
 }

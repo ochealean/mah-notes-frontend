@@ -8,11 +8,11 @@ import Loader from './components/Loader.jsx';
 
 function Home() {
   const { user, ready } = useAuth();
-  if (!ready) return <Loader text="Loading…" />;
-  // Native is offline-first: open straight into the notepad, no login gate.
-  // Signing in is optional (Settings → Account & Sync).
+  // Native is offline-first: open STRAIGHT into the notepad — no loading screen,
+  // no login gate. The session is validated in the background (AuthContext).
   if (isNative) return <MainApp />;
-  // Web keeps the login-first flow.
+  // Web keeps the login-first flow (still needs the token check first).
+  if (!ready) return <Loader text="Loading…" />;
   return user ? <MainApp /> : <AuthScreen />;
 }
 

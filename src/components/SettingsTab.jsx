@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth.js';
-import { useSync, setSyncEnabled, syncNow, getAccountOnlyItems, removeAccountData, resetSyncForLogout } from '../lib/sync.js';
+import { useSync, setSyncEnabled, syncNow, setSyncAccount, getAccountOnlyItems, removeAccountData, resetSyncForLogout } from '../lib/sync.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import FriendsModal from './FriendsModal.jsx';
@@ -26,11 +26,21 @@ function AccountSync({ reloadLists }) {
   const [signOut, setSignOut] = useState(null);   // { notes, plans } counts | null
   const [signingOut, setSigningOut] = useState(false);
 
-  async function afterAuth() {
-    // Sync starts OFF on every login — the user opts in. This also prevents one
-    // account's data from auto-merging into the next account.
+  async function afterAuth(account) {
+    // If a DIFFERENT account's synced data is still on this device, isolate it
+    // now (before any sync) so the two accounts never merge. Your own offline
+    // notes are always kept.
+    let switched = false;
+    try { ({ switched } = await setSyncAccount(account)); } catch { /* best-effort */ }
+    // Sync starts OFF on every login — the user opts in.
     await setSyncEnabled(false);
-    notify('Signed in. Turn on “Sync this device” to back up & merge.', 'success');
+    if (switched && reloadLists) reloadLists();
+    notify(
+      switched
+        ? 'Signed in to a different account. The previous account’s synced data was cleared from this device.'
+        : 'Signed in. Turn on “Sync this device” to back up & merge.',
+      'success',
+    );
   }
 
   // Sign-out: first find which on-device items came from this account, then ask.
@@ -55,9 +65,10 @@ function AccountSync({ reloadLists }) {
     e.preventDefault();
     setBusy(true); setError('');
     try {
-      if (mode === 'signup') await register(email.trim(), password);
-      else await login(email.trim(), password);
-      await afterAuth();
+      const u = mode === 'signup'
+        ? await register(email.trim(), password)
+        : await login(email.trim(), password);
+      await afterAuth(u?.email || email.trim());
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
 
@@ -65,8 +76,8 @@ function AccountSync({ reloadLists }) {
     setBusy(true); setError('');
     try {
       const idToken = await nativeGoogleSignIn();
-      await loginWithGoogle(idToken);
-      await afterAuth();
+      const u = await loginWithGoogle(idToken);
+      await afterAuth(u?.email);
     } catch (err) {
       const m = String(err?.message || '');
       if (!/cancel|dismiss|closed/i.test(m)) setError(m || 'Google sign-in failed.');
@@ -148,14 +159,15 @@ function AccountSync({ reloadLists }) {
             {(signOut.notes + signOut.plans) > 0 ? (
               <>
                 <p className="reconcile-intro">
-                  <b>{signOut.notes + signOut.plans}</b> item{(signOut.notes + signOut.plans) > 1 ? 's' : ''} on this device came from <b>{user.email || user.displayName}</b>. Your own offline notes are <b>always kept</b>. What should happen to the synced data?
+                  Sync will be turned off and your own offline notes are <b>always kept</b>.
+                  You can also clear the <b>{signOut.notes + signOut.plans}</b> copy{(signOut.notes + signOut.plans) > 1 ? 'ies' : ''} of <b>{user.email || user.displayName}</b>’s synced notes from this device — they stay safe in your account and come back when you sign in &amp; sync again. (Signing into a different account clears them for you automatically.)
                 </p>
                 <div className="signout-actions">
                   <button className="btn btn-primary btn-block" disabled={signingOut} onClick={() => doSignOut(false)}>
-                    <i className="fas fa-box-archive" /> Keep it on this device
+                    <i className="fas fa-box-archive" /> Sign out &amp; keep them
                   </button>
                   <button className="btn btn-block signout-remove" disabled={signingOut} onClick={() => doSignOut(true)}>
-                    <i className="fas fa-trash" /> Remove synced data
+                    <i className="fas fa-trash" /> Sign out &amp; clear this device
                   </button>
                 </div>
               </>

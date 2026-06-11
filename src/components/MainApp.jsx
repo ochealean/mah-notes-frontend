@@ -10,11 +10,9 @@ import { repo } from '../lib/repo.js';
 import { isNative } from '../lib/nativeAuth.js';
 import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile, syncNow } from '../lib/sync.js';
 import { listSchedules } from '../lib/scheduleStore.js';
-import { rescheduleAll } from '../lib/notifications.js';
-import { rearmAlarms } from '../lib/alarm.js';
+import { rearmAlarms, rearmReminders } from '../lib/alarm.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
-import Loader from './Loader.jsx';
 import DocsTab from './DocsTab.jsx';
 import PlansTab from './PlansTab.jsx';
 import ViewTab from './ViewTab.jsx';
@@ -67,8 +65,8 @@ export default function MainApp() {
     (async () => {
       try {
         const blocks = await listSchedules();
-        await rescheduleAll(blocks); // gentle reminders
-        await rearmAlarms(blocks);   // ringing alarms (safety net)
+        await rearmReminders(blocks); // gentle reminders (exact, native)
+        await rearmAlarms(blocks);    // ringing alarms (safety net)
       } catch { /* best-effort */ }
     })();
   }, []);
@@ -172,7 +170,9 @@ export default function MainApp() {
     if (isNative) syncNow(); else reload();
   }, [reload]);
 
-  if (loading) return <Loader />;
+  // Open straight into the app shell — never a full-screen loader. While the
+  // first read (or a sync pull) is in flight we show a small inline indicator.
+  const busy = loading || syncState.syncing;
 
   return (
     <div className="app">
@@ -182,6 +182,11 @@ export default function MainApp() {
             <i className="fas fa-feather-pointed" />
           </span>
           <span className="appbar-title">{TAB_TITLES[tab]}</span>
+          {busy && (
+            <span className="appbar-busy" title={syncState.syncing ? 'Syncing…' : 'Loading…'}>
+              <i className="fas fa-circle-notch fa-spin" /> {syncState.syncing ? 'Syncing…' : 'Loading…'}
+            </span>
+          )}
         </div>
         <div className="appbar-actions">
           <button className="icon-btn" title={effective === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -198,6 +203,13 @@ export default function MainApp() {
       </header>
 
       <main className="screens">
+        {loading ? (
+          <div className="screen-loading">
+            <i className="fas fa-circle-notch fa-spin" />
+            <span>Loading…</span>
+          </div>
+        ) : (
+        <>
         {tab === 'docs' && (
           <DocsTab
             notes={notes}
@@ -225,6 +237,8 @@ export default function MainApp() {
         )}
         {tab === 'settings' && (
           <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} reloadLists={reload} />
+        )}
+        </>
         )}
       </main>
 

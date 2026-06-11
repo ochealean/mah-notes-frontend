@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { repo } from '../lib/repo.js';
 import { notify } from '../lib/notify.js';
 import { contentToHtml, escapeHtml, sanitizeHtml } from '../lib/richtext.js';
+import { timeAgo } from '../lib/timeAgo.js';
 
 function scheduleBadge(schedule) {
   if (!schedule) return null;
@@ -49,6 +50,9 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
       </div>
       <div ref={previewRef} className="note-preview doc-content" onClick={onPreviewClick}
         dangerouslySetInnerHTML={{ __html: previewHtml }} />
+      {note.updatedAt && (
+        <div className="card-updated"><i className="fas fa-clock" /> Updated {timeAgo(note.updatedAt)}</div>
+      )}
       <div className="card-actions">
         <button className="act-btn open" onClick={() => onOpen(note)}><i className="fas fa-pen-to-square" /> Open</button>
         {/* View reads local (works offline); Share needs an account + sync. */}

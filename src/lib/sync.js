@@ -20,6 +20,10 @@ const LASTSYNC_KEY = 'lastSync';
 // in the local store arrived from a synced account. Used at logout to remove
 // only the account's data and never the device's own offline notes.
 const ORIGIN_KEY = 'localOriginUids';
+// Which account's data currently lives on this device (its email/identifier).
+// Lets us isolate a PREVIOUS account's pulled data the moment a DIFFERENT
+// account signs in — so account A's cloud notes never merge into account B.
+const ACCOUNT_KEY = 'syncAccountKey';
 
 let state = {
   initialized: false,
@@ -80,6 +84,26 @@ export async function removeAccountData() {
     ...notes.map((n) => localdb.remove('notes', n.id ?? n.uid)),
     ...plans.map((p) => localdb.remove('plans', p.id ?? p.uid)),
   ]);
+}
+
+// Record the account now signing in. If a DIFFERENT account's pulled data is
+// still on the device, isolate it first (remove account-origin items, keep the
+// user's own offline notes) so the two accounts never merge. Call on every
+// successful login BEFORE enabling sync.
+//   → returns { switched: true } when it cleared a previous account's data.
+export async function setSyncAccount(accountKey) {
+  const key = (accountKey || '').trim();
+  const prev = await localdb.metaGet(ACCOUNT_KEY);
+  if (prev && key && prev !== key) {
+    await removeAccountData();             // drop the previous account's cloud copies
+    await localdb.metaSet(PENDING_KEY, { notes: [], plans: [] });
+    await localdb.metaSet(LASTSYNC_KEY, null);
+    await localdb.metaSet(ACCOUNT_KEY, key);
+    set({ lastSync: null });
+    return { switched: true };
+  }
+  if (key) await localdb.metaSet(ACCOUNT_KEY, key);
+  return { switched: false };
 }
 
 // Wipe sync bookkeeping so the next account starts clean (no carried-over

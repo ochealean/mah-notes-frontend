@@ -4,7 +4,7 @@
 //  the notification; deleting cancels it.
 // ============================================================
 import { useState, useEffect } from 'react';
-import { createSchedule, updateSchedule, deleteSchedule } from '../lib/scheduleStore.js';
+import { createSchedule, updateSchedule, deleteSchedule, listGroups } from '../lib/scheduleStore.js';
 import { getRingtones } from '../lib/alarm.js';
 import { notify } from '../lib/notify.js';
 
@@ -16,6 +16,9 @@ const DAYS = [
 export default function ScheduleEditor({ initial, onClose, onSaved }) {
   const editing = !!initial;
   const [title, setTitle] = useState(initial?.title || '');
+  const [sub, setSub] = useState(initial?.sub || '');
+  const [group, setGroup] = useState(initial?.group || '');
+  const [groups, setGroups] = useState([]);
   const [day, setDay] = useState(initial?.day || 'monday');
   const [start, setStart] = useState(initial?.start || '09:00');
   const [end, setEnd] = useState(initial?.end || '10:00');
@@ -29,6 +32,7 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
   useEffect(() => {
     let cancelled = false;
     (async () => { try { const r = await getRingtones(); if (!cancelled && r.length) setRingtones(r); } catch {} })();
+    (async () => { try { const g = await listGroups(); if (!cancelled) setGroups(g); } catch {} })();
     return () => { cancelled = true; };
   }, []);
 
@@ -36,7 +40,7 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
     if (busy) return;
     setBusy(true);
     try {
-      const data = { title, day, start, end, notify: doNotify, alarm: doAlarm, ringtone };
+      const data = { title, sub, group, day, start, end, notify: doNotify, alarm: doAlarm, ringtone };
       if (editing) await updateSchedule(initial.id, data);
       else await createSchedule(data);
       notify(doAlarm ? 'Saved — weekly alarm set' : doNotify ? 'Saved — weekly reminder set' : 'Saved', 'success');
@@ -65,6 +69,21 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
           <i className="fas fa-tag field-icon" />
           <input className="field-input" placeholder="What is it? (e.g. Algebra)" value={title}
             onChange={(e) => setTitle(e.target.value)} autoFocus />
+        </div>
+
+        <div className="field">
+          <i className="fas fa-note-sticky field-icon" />
+          <input className="field-input" placeholder="Note or meeting link (optional)" value={sub}
+            onChange={(e) => setSub(e.target.value)} inputMode="text" />
+        </div>
+
+        <div className="field">
+          <i className="fas fa-layer-group field-icon" />
+          <input className="field-input" list="sched-groups" placeholder="Group — e.g. My class, Liza's sched (optional)"
+            value={group} onChange={(e) => setGroup(e.target.value)} />
+          <datalist id="sched-groups">
+            {groups.map((g) => <option key={g} value={g} />)}
+          </datalist>
         </div>
 
         <div className="sched-day-seg">

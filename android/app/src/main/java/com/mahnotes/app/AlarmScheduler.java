@@ -25,25 +25,37 @@ public class AlarmScheduler {
         int hour;
         int minute;
         String title;
-        String ringtone; // content URI string, or "" for the default alarm
+        String ringtone;    // content URI string, or "" for the default alarm
+        boolean notifyOnly; // true → post a gentle reminder notification instead of ringing
 
         AlarmItem(int id, int weekday, int hour, int minute, String title, String ringtone) {
+            this(id, weekday, hour, minute, title, ringtone, false);
+        }
+
+        AlarmItem(int id, int weekday, int hour, int minute, String title, String ringtone, boolean notifyOnly) {
             this.id = id; this.weekday = weekday; this.hour = hour; this.minute = minute;
             this.title = title == null ? "" : title;
             this.ringtone = ringtone == null ? "" : ringtone;
+            this.notifyOnly = notifyOnly;
         }
 
         String serialize() {
-            // weekday|hour|minute|ringtone|title  (title last, may contain nothing risky)
-            return weekday + "|" + hour + "|" + minute + "|" + ringtone + "|" + title;
+            // weekday|hour|minute|ringtone|notifyOnly|title  (title last)
+            return weekday + "|" + hour + "|" + minute + "|" + ringtone + "|" + (notifyOnly ? "1" : "0") + "|" + title;
         }
 
         static AlarmItem parse(int id, String s) {
-            String[] p = s.split("\\|", 5);
-            if (p.length < 5) return null;
+            String[] p = s.split("\\|", 6);
             try {
-                return new AlarmItem(id, Integer.parseInt(p[0]), Integer.parseInt(p[1]),
-                        Integer.parseInt(p[2]), p[4], p[3]);
+                if (p.length >= 6) { // current format (with notifyOnly)
+                    return new AlarmItem(id, Integer.parseInt(p[0]), Integer.parseInt(p[1]),
+                            Integer.parseInt(p[2]), p[5], p[3], "1".equals(p[4]));
+                }
+                if (p.length == 5) { // legacy format (ringing alarm, no notifyOnly)
+                    return new AlarmItem(id, Integer.parseInt(p[0]), Integer.parseInt(p[1]),
+                            Integer.parseInt(p[2]), p[4], p[3], false);
+                }
+                return null;
             } catch (NumberFormatException e) { return null; }
         }
     }
@@ -77,6 +89,7 @@ public class AlarmScheduler {
         i.putExtra("minute", a.minute);
         i.putExtra("title", a.title);
         i.putExtra("ringtone", a.ringtone);
+        i.putExtra("notifyOnly", a.notifyOnly);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
         return PendingIntent.getBroadcast(ctx, a.id, i, flags);

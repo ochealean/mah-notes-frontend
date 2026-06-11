@@ -46,19 +46,20 @@ export function AuthProvider({ children }) {
     setToken(data.token);
     cacheUser(data.user);
     setUser(data.user);
+    return data.user;
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    adopt(await api.post('/api/auth/login', { email, password }));
-  }, [adopt]);
+  const login = useCallback(async (email, password) => (
+    adopt(await api.post('/api/auth/login', { email, password }))
+  ), [adopt]);
 
-  const register = useCallback(async (email, password) => {
-    adopt(await api.post('/api/auth/register', { email, password }));
-  }, [adopt]);
+  const register = useCallback(async (email, password) => (
+    adopt(await api.post('/api/auth/register', { email, password }))
+  ), [adopt]);
 
-  const loginWithGoogle = useCallback(async (credential) => {
-    adopt(await api.post('/api/auth/google', { credential }));
-  }, [adopt]);
+  const loginWithGoogle = useCallback(async (credential) => (
+    adopt(await api.post('/api/auth/google', { credential }))
+  ), [adopt]);
 
   const logout = useCallback(() => {
     setToken(null);
