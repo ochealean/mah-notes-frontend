@@ -27,33 +27,45 @@ public class AlarmScheduler {
         String title;
         String ringtone;    // content URI string, or "" for the default alarm
         boolean notifyOnly; // true → post a gentle reminder notification instead of ringing
+        boolean oneShot;    // true → fire once and forget (used by the in-app test alarm)
 
         AlarmItem(int id, int weekday, int hour, int minute, String title, String ringtone) {
-            this(id, weekday, hour, minute, title, ringtone, false);
+            this(id, weekday, hour, minute, title, ringtone, false, false);
         }
 
         AlarmItem(int id, int weekday, int hour, int minute, String title, String ringtone, boolean notifyOnly) {
+            this(id, weekday, hour, minute, title, ringtone, notifyOnly, false);
+        }
+
+        AlarmItem(int id, int weekday, int hour, int minute, String title, String ringtone,
+                  boolean notifyOnly, boolean oneShot) {
             this.id = id; this.weekday = weekday; this.hour = hour; this.minute = minute;
             this.title = title == null ? "" : title;
             this.ringtone = ringtone == null ? "" : ringtone;
             this.notifyOnly = notifyOnly;
+            this.oneShot = oneShot;
         }
 
         String serialize() {
-            // weekday|hour|minute|ringtone|notifyOnly|title  (title last)
-            return weekday + "|" + hour + "|" + minute + "|" + ringtone + "|" + (notifyOnly ? "1" : "0") + "|" + title;
+            // weekday|hour|minute|ringtone|notifyOnly|oneShot|title  (title last)
+            return weekday + "|" + hour + "|" + minute + "|" + ringtone + "|"
+                    + (notifyOnly ? "1" : "0") + "|" + (oneShot ? "1" : "0") + "|" + title;
         }
 
         static AlarmItem parse(int id, String s) {
-            String[] p = s.split("\\|", 6);
+            String[] p = s.split("\\|", 7);
             try {
-                if (p.length >= 6) { // current format (with notifyOnly)
+                if (p.length >= 7) { // current format (notifyOnly + oneShot)
                     return new AlarmItem(id, Integer.parseInt(p[0]), Integer.parseInt(p[1]),
-                            Integer.parseInt(p[2]), p[5], p[3], "1".equals(p[4]));
+                            Integer.parseInt(p[2]), p[6], p[3], "1".equals(p[4]), "1".equals(p[5]));
                 }
-                if (p.length == 5) { // legacy format (ringing alarm, no notifyOnly)
+                if (p.length == 6) { // previous format (notifyOnly, no oneShot)
                     return new AlarmItem(id, Integer.parseInt(p[0]), Integer.parseInt(p[1]),
-                            Integer.parseInt(p[2]), p[4], p[3], false);
+                            Integer.parseInt(p[2]), p[5], p[3], "1".equals(p[4]), false);
+                }
+                if (p.length == 5) { // legacy format (ringing alarm only)
+                    return new AlarmItem(id, Integer.parseInt(p[0]), Integer.parseInt(p[1]),
+                            Integer.parseInt(p[2]), p[4], p[3], false, false);
                 }
                 return null;
             } catch (NumberFormatException e) { return null; }
@@ -90,6 +102,7 @@ public class AlarmScheduler {
         i.putExtra("title", a.title);
         i.putExtra("ringtone", a.ringtone);
         i.putExtra("notifyOnly", a.notifyOnly);
+        i.putExtra("oneShot", a.oneShot);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
         return PendingIntent.getBroadcast(ctx, a.id, i, flags);

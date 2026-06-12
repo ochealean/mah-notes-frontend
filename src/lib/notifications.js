@@ -28,3 +28,10 @@ export async function ensurePermission() {
     return perm.display === 'granted';
   } catch { return false; }
 }
+
+// Read-only check (does NOT prompt) — for reflecting real status in the UI.
+export async function hasPermission() {
+  if (!notificationsSupported) return false;
+  try { return (await LocalNotifications.checkPermissions()).display === 'granted'; }
+  catch { return false; }
+}

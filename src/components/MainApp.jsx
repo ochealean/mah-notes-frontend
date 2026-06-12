@@ -10,7 +10,7 @@ import { repo } from '../lib/repo.js';
 import { isNative } from '../lib/nativeAuth.js';
 import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile, syncNow } from '../lib/sync.js';
 import { listSchedules } from '../lib/scheduleStore.js';
-import { rearmAlarms, rearmReminders } from '../lib/alarm.js';
+import { rearmAlarms, rearmReminders, ensureKeepAlive } from '../lib/alarm.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import DocsTab from './DocsTab.jsx';
@@ -67,6 +67,7 @@ export default function MainApp() {
         const blocks = await listSchedules();
         await rearmReminders(blocks); // gentle reminders (exact, native)
         await rearmAlarms(blocks);    // ringing alarms (safety net)
+        await ensureKeepAlive();      // resume keep-alive service if user enabled it
       } catch { /* best-effort */ }
     })();
   }, []);
@@ -233,7 +234,7 @@ export default function MainApp() {
           <ViewTab notes={notes} plans={plans} onOpen={openView} />
         )}
         {tab === 'schedule' && (
-          <ScheduleTab schedules={schedules} onEdit={(block) => setScheduleEditor({ block })} />
+          <ScheduleTab schedules={schedules} onEdit={(block) => setScheduleEditor({ block })} onChanged={reload} />
         )}
         {tab === 'settings' && (
           <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} reloadLists={reload} />

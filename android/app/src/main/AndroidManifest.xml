@@ -44,6 +44,17 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- Opt-in keep-alive: a quiet ongoing service that stops aggressive
+             OEMs from freezing the process (so alarms fire while the app is closed). -->
+        <service
+            android:name=".AlarmGuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps scheduled class alarms reliable on devices that aggressively kill background apps" />
+        </service>
+
         <!-- Fired by AlarmManager when an alarm goes off. -->
         <receiver android:name=".AlarmReceiver" android:exported="false" />
 
@@ -72,6 +83,7 @@
          full-screen alarm over the lock screen, and re-arm after reboot. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />

@@ -5,13 +5,36 @@
 // ============================================================
 import { useState, useEffect } from 'react';
 import { createSchedule, updateSchedule, deleteSchedule, listGroups } from '../lib/scheduleStore.js';
-import { getRingtones } from '../lib/alarm.js';
+import { getRingtones, reliabilityStatus, isKeepAlive } from '../lib/alarm.js';
 import { notify } from '../lib/notify.js';
 
 const DAYS = [
   ['monday', 'Mon'], ['tuesday', 'Tue'], ['wednesday', 'Wed'], ['thursday', 'Thu'],
   ['friday', 'Fri'], ['saturday', 'Sat'], ['sunday', 'Sun'],
 ];
+const JS_DAY = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const todayName = () => JS_DAY[new Date().getDay()];
+
+// When the block will next fire (same roll-forward rule as the native side).
+function nextFire(day, start) {
+  const [h, m] = String(start || '0:0').split(':').map((n) => parseInt(n, 10) || 0);
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(h, m, 0, 0);
+  let diff = (JS_DAY.indexOf(day) - now.getDay() + 7) % 7;
+  if (diff === 0 && target <= now) diff = 7;
+  target.setDate(target.getDate() + diff);
+  return target;
+}
+
+// "in 9 min" / "in 3 h" / "in 6 days" — makes a wrong day instantly obvious.
+function inWords(target) {
+  const min = Math.max(1, Math.round((target - Date.now()) / 60000));
+  if (min < 60) return `in ${min} min`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `in ${hr} h`;
+  return `in ${Math.round(hr / 24)} day${hr >= 48 ? 's' : ''}`;
+}
 
 export default function ScheduleEditor({ initial, onClose, onSaved }) {
   const editing = !!initial;
@@ -19,7 +42,7 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
   const [sub, setSub] = useState(initial?.sub || '');
   const [group, setGroup] = useState(initial?.group || '');
   const [groups, setGroups] = useState([]);
-  const [day, setDay] = useState(initial?.day || 'monday');
+  const [day, setDay] = useState(initial?.day || todayName()); // default TODAY (not Monday)
   const [start, setStart] = useState(initial?.start || '09:00');
   const [end, setEnd] = useState(initial?.end || '10:00');
   const [doNotify, setDoNotify] = useState(initial?.notify !== false);
@@ -43,7 +66,23 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
       const data = { title, sub, group, day, start, end, notify: doNotify, alarm: doAlarm, ringtone };
       if (editing) await updateSchedule(initial.id, data);
       else await createSchedule(data);
-      notify(doAlarm ? 'Saved — weekly alarm set' : doNotify ? 'Saved — weekly reminder set' : 'Saved', 'success');
+      if (doAlarm || doNotify) {
+        const t = nextFire(day, start);
+        notify(`${doAlarm ? 'Alarm' : 'Reminder'} set — rings ${t.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })} (${inWords(t)})`, 'success');
+      } else {
+        notify('Saved', 'success');
+      }
+      // If the phone can still freeze us in the background, warn right away —
+      // an unprotected alarm is exactly the "didn't ring until I opened the
+      // app" failure. (Best-effort: never blocks the save.)
+      if (doAlarm) {
+        try {
+          const [s, k] = await Promise.all([reliabilityStatus(), isKeepAlive()]);
+          if (!k && !s.battery) {
+            notify('⚠ Your phone may freeze closed apps. Turn on “Keep alarms running” via the red banner in Schedule.', 'error');
+          }
+        } catch { /* non-critical */ }
+      }
       onSaved();
     } catch (err) {
       notify(err.message || 'Could not save', 'error');
@@ -96,6 +135,18 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
           <label>Start<input type="time" className="field-input" value={start} onChange={(e) => setStart(e.target.value)} /></label>
           <label>End<input type="time" className="field-input" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
         </div>
+
+        {(doNotify || doAlarm) && (() => {
+          const t = nextFire(day, start);
+          const soon = (t - Date.now()) < 24 * 3600 * 1000;
+          return (
+            <div className={`sched-next${soon ? '' : ' far'}`}>
+              <i className={`fas ${soon ? 'fa-circle-check' : 'fa-triangle-exclamation'}`} />
+              Next ring: <b>{t.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b> · {inWords(t)}
+              {!soon && ' — check the day if you expected it sooner!'}
+            </div>
+          );
+        })()}
 
         <div className="settings-row" style={{ cursor: 'default' }}>
           <span><i className="fas fa-bell" /> Weekly reminder + sound</span>

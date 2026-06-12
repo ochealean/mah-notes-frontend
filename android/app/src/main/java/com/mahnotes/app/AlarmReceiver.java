@@ -29,6 +29,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         String title = intent.getStringExtra("title");
         String ringtone = intent.getStringExtra("ringtone");
         boolean notifyOnly = intent.getBooleanExtra("notifyOnly", false);
+        boolean oneShot = intent.getBooleanExtra("oneShot", false);
         int weekday = intent.getIntExtra("weekday", 1);
         int hour = intent.getIntExtra("hour", 0);
         int minute = intent.getIntExtra("minute", 0);
@@ -47,9 +48,13 @@ public class AlarmReceiver extends BroadcastReceiver {
             }
         }
 
-        // Re-arm for next week (same mode).
-        AlarmScheduler.rescheduleNext(context,
-                new AlarmScheduler.AlarmItem(id, weekday, hour, minute, title, ringtone, notifyOnly));
+        // Re-arm for next week (same mode) — unless this was a fire-once test alarm.
+        if (oneShot) {
+            AlarmScheduler.cancel(context, id); // forget it (clears the persisted entry)
+        } else {
+            AlarmScheduler.rescheduleNext(context,
+                    new AlarmScheduler.AlarmItem(id, weekday, hour, minute, title, ringtone, notifyOnly));
+        }
     }
 
     /** A normal (dismissible) reminder notification with the default notification sound. */

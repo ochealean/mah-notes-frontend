@@ -3,7 +3,9 @@
 //  Tapping a block opens the editor. Blocks with the bell on fire
 //  a weekly notification + sound at their start time.
 // ============================================================
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import AlarmHelp from './AlarmHelp.jsx';
+import ScanSchedule from './ScanSchedule.jsx';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABEL = { monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday' };
@@ -24,9 +26,23 @@ function openLink(url) {
   try { window.open(url.trim(), '_system'); } catch { window.open(url.trim(), '_blank'); }
 }
 
-export default function ScheduleTab({ schedules, onEdit }) {
+export default function ScheduleTab({ schedules, onEdit, onChanged }) {
   const today = todayName();
   const [activeGroup, setActiveGroup] = useState('all');
+  const [showHelp, setShowHelp] = useState(false);
+  const hasAlarm = schedules.some((s) => s.alarm);
+
+  // The first time the user has a ringing alarm, surface the reliability panel
+  // once (aggressive OEMs need the battery/autostart grants or it won't fire).
+  useEffect(() => {
+    if (!hasAlarm) return;
+    try {
+      if (!localStorage.getItem('alarmHelpSeen')) {
+        setShowHelp(true);
+        localStorage.setItem('alarmHelpSeen', '1');
+      }
+    } catch { /* ignore */ }
+  }, [hasAlarm]);
 
   // Distinct group labels present (for the filter chips).
   const groups = useMemo(
@@ -48,9 +64,10 @@ export default function ScheduleTab({ schedules, onEdit }) {
   if (!schedules.length) {
     return (
       <section className="screen">
+        <ScanSchedule onAdded={onChanged} />
         <div className="empty-state">
           <i className="fas fa-clock" />
-          <p>No time blocks yet. Tap <b>+</b> to add one — e.g. <b>Mon 9–11am · Algebra</b>. Turn the reminder on to get a weekly notification with sound.</p>
+          <p>No time blocks yet. Tap <b>+</b> to add one — e.g. <b>Mon 9–11am · Algebra</b> — or scan a photo of your class schedule above and let AI fill it in.</p>
         </div>
       </section>
     );
@@ -58,6 +75,13 @@ export default function ScheduleTab({ schedules, onEdit }) {
 
   return (
     <section className="screen">
+      <ScanSchedule onAdded={onChanged} />
+      {hasAlarm && (
+        <button className="sched-reliability" onClick={() => setShowHelp(true)}>
+          <i className="fas fa-shield-halved" />
+          <span>Alarm only rings when you open the app? <b>Fix reliability →</b></span>
+        </button>
+      )}
       {groups.length > 0 && (
         <div className="sched-group-chips">
           <button className={`sched-chip${activeGroup === 'all' ? ' active' : ''}`} onClick={() => setActiveGroup('all')}>All</button>
@@ -98,6 +122,7 @@ export default function ScheduleTab({ schedules, onEdit }) {
           </div>
         ))}
       </div>
+      {showHelp && <AlarmHelp onClose={() => setShowHelp(false)} />}
     </section>
   );
 }
