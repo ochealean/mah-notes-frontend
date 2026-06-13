@@ -19,6 +19,7 @@ function AccountSync({ reloadLists }) {
   const { user, login, register, loginWithGoogle, logout } = useAuth();
   const sync = useSync();
   const [mode, setMode] = useState('signin');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -66,7 +67,7 @@ function AccountSync({ reloadLists }) {
     setBusy(true); setError('');
     try {
       const u = mode === 'signup'
-        ? await register(email.trim(), password)
+        ? await register(email.trim(), password, name.trim())
         : await login(email.trim(), password);
       await afterAuth(u?.email || email.trim());
     } catch (err) { setError(err.message); } finally { setBusy(false); }
@@ -94,6 +95,13 @@ function AccountSync({ reloadLists }) {
           up and sync — your offline notes <b>merge</b> with your account, nothing is replaced.
         </p>
         <form className="auth-form" style={{ padding: '0 16px 12px' }} onSubmit={submit}>
+          {mode === 'signup' && (
+            <div className="field">
+              <i className="fas fa-user field-icon" />
+              <input className="field-input" type="text" placeholder="Name (optional)" autoComplete="name"
+                value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+            </div>
+          )}
           <div className="field">
             <i className="fas fa-envelope field-icon" />
             <input className="field-input" type="email" placeholder="Email" autoComplete="email"
@@ -188,9 +196,33 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
   const initial = (name[0] || 'U').toUpperCase();
   const { pref, setTheme } = useTheme();
+  const { updateProfile } = useAuth();
   const [showFriends, setShowFriends] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  // Seed the editor with the *custom* name (blank when on the email fallback),
+  // so saving an untouched field doesn't overwrite the fallback with a literal.
+  function startEditName() {
+    setNameDraft(user?.displayName || '');
+    setEditingName(true);
+  }
+  async function saveName() {
+    if (savingName) return;
+    setSavingName(true);
+    try {
+      await updateProfile(nameDraft.trim());
+      setEditingName(false);
+      notify('Name updated', 'success');
+    } catch (err) {
+      notify(err.message || 'Could not update name', 'error');
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   // How many items friends have shared with me (badge).
   const refreshInbox = useCallback(async () => {
@@ -207,10 +239,40 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
         <div className="settings-card">
           <div className="settings-user">
             <div className="settings-avatar">{initial}</div>
-            <div>
-              <div className="settings-name">{name}</div>
-              <div className="settings-email">{user?.email || ''}</div>
-            </div>
+            {editingName ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                <input
+                  className="field-input"
+                  type="text"
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  placeholder={(user?.email || 'You').split('@')[0]}
+                  maxLength={60}
+                  autoFocus
+                  disabled={savingName}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); saveName(); }
+                    if (e.key === 'Escape') setEditingName(false);
+                  }}
+                />
+                <button className="icon-btn" title="Save name" disabled={savingName} onClick={saveName}>
+                  <i className={`fas ${savingName ? 'fa-spinner fa-spin' : 'fa-check'}`} />
+                </button>
+                <button className="icon-btn" title="Cancel" disabled={savingName} onClick={() => setEditingName(false)}>
+                  <i className="fas fa-times" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{ minWidth: 0 }}>
+                  <div className="settings-name">{name}</div>
+                  <div className="settings-email">{user?.email || ''}</div>
+                </div>
+                <button className="icon-btn" title="Edit name" style={{ marginLeft: 'auto' }} onClick={startEditName}>
+                  <i className="fas fa-pen" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

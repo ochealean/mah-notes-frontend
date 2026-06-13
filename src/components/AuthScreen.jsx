@@ -11,6 +11,7 @@ const ERROR_MAP = {
 export default function AuthScreen() {
   const { login, register, loginWithGoogle } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -48,7 +49,7 @@ export default function AuthScreen() {
     setError('');
     setBusy(true);
     try {
-      if (isSignUp) await register(email.trim(), password);
+      if (isSignUp) await register(email.trim(), password, name.trim());
       else await login(email.trim(), password);
       // AuthContext flips us into the app on success.
     } catch (err) {
@@ -71,6 +72,13 @@ export default function AuthScreen() {
         </div>
 
         <form className="auth-form" onSubmit={onSubmit}>
+          {isSignUp && (
+            <div className="field">
+              <i className="fas fa-user field-icon" />
+              <input type="text" className="field-input" placeholder="Name (optional)" autoComplete="name"
+                value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+            </div>
+          )}
           <div className="field">
             <i className="fas fa-envelope field-icon" />
             <input type="email" className="field-input" placeholder="Email" autoComplete="email"

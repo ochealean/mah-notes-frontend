@@ -7,6 +7,7 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
+import { onRealtime } from '../lib/realtime.js';
 import { notify } from '../lib/notify.js';
 
 const initialOf = (p) => ((p?.displayName || p?.email || 'U')[0] || 'U').toUpperCase();
@@ -50,6 +51,9 @@ export default function FriendsModal({ me, onClose }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: when a friend renames themselves, refresh so the list shows it live.
+  useEffect(() => onRealtime('friend:updated', () => load()), [load]);
 
   // Debounced search.
   useEffect(() => {

@@ -4,6 +4,7 @@
 // ============================================================
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import { onRealtime } from '../lib/realtime.js';
 import { notify } from '../lib/notify.js';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -35,6 +36,9 @@ export default function InboxModal({ onClose, onSaved }) {
     catch (err) { notify(err.message, 'error'); setShares([]); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: a sender renaming themselves should update their name here too.
+  useEffect(() => onRealtime('friend:updated', () => load()), [load]);
 
   async function save(s) {
     setBusyId(s.id);

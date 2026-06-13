@@ -8,6 +8,7 @@
 // ============================================================
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api, setToken, getToken } from '../lib/api.js';
+import { connectRealtime, disconnectRealtime, onRealtime } from '../lib/realtime.js';
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -53,13 +54,22 @@ export function AuthProvider({ children }) {
     adopt(await api.post('/api/auth/login', { email, password }))
   ), [adopt]);
 
-  const register = useCallback(async (email, password) => (
-    adopt(await api.post('/api/auth/register', { email, password }))
+  const register = useCallback(async (email, password, name) => (
+    adopt(await api.post('/api/auth/register', { email, password, name }))
   ), [adopt]);
 
   const loginWithGoogle = useCallback(async (credential) => (
     adopt(await api.post('/api/auth/google', { credential }))
   ), [adopt]);
+
+  // Edit the profile (display name). A blank name clears it server-side and the
+  // returned user falls back to the email prefix.
+  const updateProfile = useCallback(async (displayName) => {
+    const { user: u } = await api.patch('/api/auth/me', { displayName });
+    cacheUser(u);
+    setUser(u);
+    return u;
+  }, []);
 
   const logout = useCallback(() => {
     setToken(null);
@@ -67,8 +77,18 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // Realtime: keep one socket alive while signed in. me:updated covers this
+  // account's other devices (and echoes back our own edits). Keyed on the user
+  // id so re-renders from setUser don't churn the connection.
+  useEffect(() => {
+    if (!user) { disconnectRealtime(); return undefined; }
+    connectRealtime();
+    const off = onRealtime('me:updated', ({ user: u }) => { setUser(u); cacheUser(u); });
+    return off;
+  }, [user?.id]);
+
   return (
-    <AuthContext.Provider value={{ user, ready, login, register, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, ready, login, register, loginWithGoogle, updateProfile, logout }}>
       {children}
     </AuthContext.Provider>
   );
