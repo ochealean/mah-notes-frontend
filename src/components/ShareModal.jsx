@@ -9,7 +9,12 @@ import { useEffect, useState } from 'react';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 
-const shareUrl = (token) => `${window.location.origin}/view?token=${token}`;
+// Share links must point at the public website, not the in-app origin.
+// Inside the APK window.location.origin is "https://localhost", so links
+// built from it are useless to recipients. Use the configured public web
+// base when set (required for native); fall back to the current origin on web.
+const WEB_BASE = (import.meta.env.VITE_PUBLIC_WEB_BASE || window.location.origin).replace(/\/$/, '');
+const shareUrl = (token) => `${WEB_BASE}/view?token=${token}`;
 
 function ShareCard({ card, onRevoke, onRegen }) {
   const [copied, setCopied] = useState(false);
