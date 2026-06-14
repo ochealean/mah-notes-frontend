@@ -4,12 +4,12 @@
 //  Object stores, all keyed by the item's `id` (== uid):
 //    notes     : note documents
 //    plans     : weekly plans
-//    schedules : weekly time blocks (Schedule tab; device-local, not synced)
+//    schedules : weekly time blocks (Schedule tab; synced like notes/plans)
 //    meta      : small key/value rows (syncEnabled, pendingDeletes, lastSync)
 //
-//  This is the source of truth for the app on a device. The sync
-//  engine mirrors notes/plans to/from the backend when an account is
-//  connected. Schedules stay local (they drive on-device notifications).
+//  This is the source of truth for the app on a device. The sync engine
+//  mirrors notes, plans AND schedules to/from the backend when an account
+//  is connected; the app additionally arms native reminders/alarms locally.
 // ============================================================
 const DB_NAME = 'mahnotes';
 const DB_VERSION = 2;

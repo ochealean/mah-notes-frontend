@@ -9,8 +9,11 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { api, getToken } from '../lib/api.js';
 import { isNative } from '../lib/nativeAuth.js';
+import { repo } from '../lib/repo.js';
 import { localdb } from '../lib/localdb.js';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext.js';
+
+const KNOWN_TABS = ['docs', 'plans', 'view', 'schedule', 'settings'];
 
 const JS_DAY = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const DAY_LABEL = { sunday: 'Sunday', monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday' };
@@ -64,6 +67,10 @@ export default function Viewer() {
   const token = params.get('token');
   const ownerType = params.get('type');
   const ownerId = params.get('id');
+  const from = params.get('from');
+  // Back returns to the tab the user opened this from (Docs/Plans/View), not
+  // always the home default. Falls back to home when there's no/unknown source.
+  const backTo = KNOWN_TABS.includes(from) ? `/?tab=${from}` : '/';
 
   const [state, setState] = useState({ status: 'loading' }); // loading | ok | message
   const [data, setData] = useState(null); // { kind, mode, title, contentHtml?, days?, id }
@@ -86,10 +93,12 @@ export default function Viewer() {
     if (isNative) {
       const item = await localdb.get(ownerType === 'plan' ? 'plans' : 'notes', ownerId);
       if (!item) { const e = new Error('Not found'); e.status = 404; throw e; }
+      // Owner view on the device: text stays read-only, but checkbox taps are
+      // saved straight to the local store (repo routes to IndexedDB on native).
       if (ownerType === 'plan') {
-        setData({ kind: 'plan', mode: 'owner', readOnly: true, id: ownerId, title: item.title, days: item.days || {} });
+        setData({ kind: 'plan', mode: 'owner', id: ownerId, title: item.title, days: item.days || {} });
       } else {
-        setData({ kind: 'note', mode: 'owner', readOnly: true, id: ownerId, title: item.title, contentHtml: contentToHtml(item.content) });
+        setData({ kind: 'note', mode: 'owner', id: ownerId, title: item.title, contentHtml: contentToHtml(item.content) });
       }
       setState({ status: 'ok' });
       return;
@@ -160,7 +169,8 @@ export default function Viewer() {
       if (data.mode === 'reference') {
         const s = refLoad(token); s[idx] = now; refSave(token, s);
       } else {
-        try { await api.put(`/api/notes/${data.id}`, { content: sanitizeHtml(el.innerHTML) }); }
+        // repo → API on web, local IndexedDB on the device.
+        try { await repo.updateNote(data.id, { content: sanitizeHtml(el.innerHTML) }); }
         catch { it.setAttribute('data-checked', now ? 'false' : 'true'); }
       }
     };
@@ -188,7 +198,7 @@ export default function Viewer() {
     <div className="view-page">
       <div className="view-bar">
         {data.mode === 'owner' && (
-          <button className="icon-btn view-back" aria-label="Back" onClick={() => navigate('/')}>
+          <button className="icon-btn view-back" aria-label="Back" onClick={() => navigate(backTo)}>
             <i className="fas fa-arrow-left" />
           </button>
         )}
@@ -239,7 +249,8 @@ function PlanView({ data, token }) {
     if (data.mode === 'reference') {
       const s = refLoad(token); s[i] = now; refSave(token, s);
     } else {
-      try { await api.patch(`/api/plans/${data.id}/check`, { day: t, index: i, checked: now }); }
+      // repo → API on web, local IndexedDB on the device.
+      try { await repo.checkPlan(data.id, { day: t, index: i, checked: now }); }
       catch { setChecks((c) => c.map((v, idx) => (idx === i ? !now : v))); }
     }
   }

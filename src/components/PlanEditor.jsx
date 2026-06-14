@@ -6,6 +6,7 @@
 import { useRef, useState } from 'react';
 import { repo } from '../lib/repo.js';
 import { notify } from '../lib/notify.js';
+import UnsavedChangesModal from './UnsavedChangesModal.jsx';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
@@ -28,8 +29,14 @@ export default function PlanEditor({ initial, onClose, onSaved }) {
   const [activeDay, setActiveDay] = useState(DAY_ORDER.includes(startDay) ? startDay : 'monday');
   const [text, setText] = useState((dayDataRef.current[activeDay] || []).join('\n'));
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   // bump to re-render tab dots after edits
   const [, force] = useState(0);
+
+  // Leaving with unsaved edits → ask first (Save / Don't save / Cancel).
+  function requestClose() { if (dirty) setConfirmLeave(true); else onClose(); }
+  function confirmSave() { setConfirmLeave(false); save(); }
 
   function persistCurrent() {
     dayDataRef.current[activeDay] = text.split('\n').map((s) => s.trim()).filter(Boolean);
@@ -72,11 +79,12 @@ export default function PlanEditor({ initial, onClose, onSaved }) {
     : (dayDataRef.current[day] || []).some((s) => s.trim()));
 
   return (
+    <>
     <div className="sheet">
       <div className="sheet-bar">
-        <button className="icon-btn" aria-label="Close" onClick={onClose}><i className="fas fa-arrow-left" /></button>
+        <button className="icon-btn" aria-label="Close" onClick={requestClose}><i className="fas fa-arrow-left" /></button>
         <input type="text" className="sheet-title-input" placeholder="e.g. Workout Plan"
-          value={title} onChange={(e) => setTitle(e.target.value)} />
+          value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} />
         <button className="icon-btn save-icon" aria-label="Save" disabled={saving} onClick={save}><i className="fas fa-check" /></button>
       </div>
 
@@ -94,9 +102,18 @@ export default function PlanEditor({ initial, onClose, onSaved }) {
         </div>
 
         <label className="day-label">{DAY_LABEL[activeDay]}</label>
-        <textarea className="day-textarea" rows={8} value={text} onChange={(e) => setText(e.target.value)}
+        <textarea className="day-textarea" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDirty(true); }}
           placeholder={'One item per line, e.g.\nBench press — 3×10\nSquats — 3×8\nPlank — 60s'} />
       </div>
     </div>
+    {confirmLeave && (
+      <UnsavedChangesModal
+        saving={saving}
+        onSave={confirmSave}
+        onDiscard={onClose}
+        onCancel={() => setConfirmLeave(false)}
+      />
+    )}
+    </>
   );
 }

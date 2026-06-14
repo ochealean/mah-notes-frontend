@@ -20,6 +20,12 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
   const navigate = useNavigate();
   const previewHtml = contentToHtml(note.content) || '<span class="note-preview-empty">Empty document</span>';
 
+  async function togglePin(e) {
+    e.stopPropagation();
+    try { await repo.updateNote(note.id, { pinned: !note.pinned }); onChanged(); }
+    catch (err) { notify(err.message || 'Could not update pin', 'error'); }
+  }
+
   // Tap inside the checkbox gutter → toggle + save; tap elsewhere → open editor.
   async function onPreviewClick(e) {
     const item = e.target.closest('.doc-check-item');
@@ -38,25 +44,36 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
   }
 
   return (
-    <div className={`note-card${note.hidden ? ' content-hidden' : ''}`}>
+    <div className={`note-card${note.hidden ? ' content-hidden' : ''}${note.pinned ? ' pinned' : ''}`}>
       <div className="note-card-top">
         <div className="note-card-title">
+          {note.pinned && <i className="fas fa-thumbtack note-pin-flag" title="Pinned" />}
           <span dangerouslySetInnerHTML={{ __html: escapeHtml(note.title || 'Untitled') }} /> {scheduleBadge(note.schedule)}
         </div>
-        <button className="icon-btn hide-toggle note-kebab" aria-label="Hide"
-          onClick={(e) => { e.stopPropagation(); onToggleHidden(note.id, !note.hidden); }}>
-          <i className={`fas ${note.hidden ? 'fa-eye' : 'fa-eye-slash'}`} />
-        </button>
+        <div className="note-card-tools">
+          <button className={`icon-btn pin-toggle note-kebab${note.pinned ? ' active' : ''}`} aria-label={note.pinned ? 'Unpin' : 'Pin'}
+            title={note.pinned ? 'Unpin' : 'Pin to top'} onClick={togglePin}>
+            <i className="fas fa-thumbtack" />
+          </button>
+          <button className="icon-btn hide-toggle note-kebab" aria-label="Hide"
+            onClick={(e) => { e.stopPropagation(); onToggleHidden(note.id, !note.hidden); }}>
+            <i className={`fas ${note.hidden ? 'fa-eye' : 'fa-eye-slash'}`} />
+          </button>
+        </div>
       </div>
-      <div ref={previewRef} className="note-preview doc-content" onClick={onPreviewClick}
-        dangerouslySetInnerHTML={{ __html: previewHtml }} />
+      {note.hidden ? (
+        <div className="note-hidden-hint"><i className="fas fa-eye-slash" /> Hidden — tap the eye to show</div>
+      ) : (
+        <div ref={previewRef} className="note-preview doc-content" onClick={onPreviewClick}
+          dangerouslySetInnerHTML={{ __html: previewHtml }} />
+      )}
       {note.updatedAt && (
         <div className="card-updated"><i className="fas fa-clock" /> Updated {timeAgo(note.updatedAt)}</div>
       )}
       <div className="card-actions">
         <button className="act-btn open" onClick={() => onOpen(note)}><i className="fas fa-pen-to-square" /> Open</button>
         {/* View reads local (works offline); Share needs an account + sync. */}
-        <button className="act-btn view" onClick={() => navigate(`/view?type=note&id=${encodeURIComponent(note.id)}`)}><i className="fas fa-eye" /> View</button>
+        <button className="act-btn view" onClick={() => navigate(`/view?type=note&id=${encodeURIComponent(note.id)}&from=docs`)}><i className="fas fa-eye" /> View</button>
         <button className="act-btn share" onClick={() => onShare(note.id)}><i className="fas fa-share-alt" /> Share</button>
         <button className="act-btn danger del" onClick={async () => {
           if (!confirm('Delete this document? This cannot be undone.')) return;
@@ -71,8 +88,10 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
 export default function DocsTab({ notes, onOpen, onShare, onToggleHidden, onChanged }) {
   const [q, setQ] = useState('');
   const query = q.toLowerCase().trim();
-  const filtered = !query ? notes : notes.filter((n) =>
+  const matched = !query ? notes : notes.filter((n) =>
     `${n.title} ${n.content}`.toLowerCase().includes(query));
+  // Pinned docs float to the top; order within each group is unchanged (stable sort).
+  const filtered = [...matched].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
   return (
     <section className="screen">

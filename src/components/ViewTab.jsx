@@ -21,7 +21,11 @@ function NoteRow({ note, onOpen }) {
         </div>
         <span className="view-go"><i className="fas fa-eye" /></span>
       </div>
-      <div className="note-preview doc-content" dangerouslySetInnerHTML={{ __html: preview }} />
+      {note.hidden ? (
+        <div className="note-hidden-hint"><i className="fas fa-eye-slash" /> Hidden — tap to view</div>
+      ) : (
+        <div className="note-preview doc-content" dangerouslySetInnerHTML={{ __html: preview }} />
+      )}
     </div>
   );
 }

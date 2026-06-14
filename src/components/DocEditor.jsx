@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { repo } from '../lib/repo.js';
 import { notify } from '../lib/notify.js';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext.js';
+import UnsavedChangesModal from './UnsavedChangesModal.jsx';
 
 export default function DocEditor({ initial, onClose, onSaved }) {
   const editorRef = useRef(null);
@@ -14,6 +15,12 @@ export default function DocEditor({ initial, onClose, onSaved }) {
   const [title, setTitle] = useState(initial?.title || '');
   const [schedule, setSchedule] = useState(initial?.schedule || '');
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+  // Leaving with unsaved edits → ask first (Save / Don't save / Cancel).
+  function requestClose() { if (dirty) setConfirmLeave(true); else onClose(); }
+  function confirmSave() { setConfirmLeave(false); save(); }
 
   // Seed the editable surface once.
   useEffect(() => {
@@ -96,6 +103,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     const btn = e.target.closest('.tb-btn');
     if (!btn) return;
     editorRef.current.focus();
+    setDirty(true);
     if (btn.dataset.action === 'checklist') { insertChecklistItem(); return; }
     document.execCommand(btn.dataset.cmd, false, btn.dataset.val || null);
     updateToolbarState();
@@ -108,6 +116,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     if (e.clientX - rect.left <= 30) {
       e.preventDefault();
       item.setAttribute('data-checked', item.getAttribute('data-checked') === 'true' ? 'false' : 'true');
+      setDirty(true);
     }
   }
 
@@ -137,6 +146,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     editorRef.current.querySelectorAll('.doc-check-item[data-checked="true"]')
       .forEach((it) => it.setAttribute('data-checked', 'false'));
     editorRef.current.focus();
+    setDirty(true);
   }
 
   async function save() {
@@ -159,18 +169,19 @@ export default function DocEditor({ initial, onClose, onSaved }) {
   }
 
   return (
+    <>
     <div className="sheet">
       <div className="sheet-bar">
-        <button className="icon-btn" aria-label="Close" onClick={onClose}><i className="fas fa-arrow-left" /></button>
+        <button className="icon-btn" aria-label="Close" onClick={requestClose}><i className="fas fa-arrow-left" /></button>
         <input type="text" className="sheet-title-input" placeholder="Untitled document"
-          value={title} onChange={(e) => setTitle(e.target.value)} />
+          value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} />
         <button className="icon-btn save-icon" aria-label="Save" disabled={saving} onClick={save}><i className="fas fa-check" /></button>
       </div>
 
       <div className="sheet-scroll">
         <div className="schedule-row">
           <label><i className="fas fa-repeat" /> Repeat</label>
-          <select className="mini-select" value={schedule} onChange={(e) => setSchedule(e.target.value)}>
+          <select className="mini-select" value={schedule} onChange={(e) => { setSchedule(e.target.value); setDirty(true); }}>
             <option value="">Never</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly (Mon)</option>
@@ -189,6 +200,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
           onKeyDown={onEditorKeyDown}
           onKeyUp={updateToolbarState}
           onMouseUp={updateToolbarState}
+          onInput={() => setDirty(true)}
         />
       </div>
 
@@ -212,5 +224,14 @@ export default function DocEditor({ initial, onClose, onSaved }) {
         <button type="button" className="tb-btn" data-cmd="removeFormat" title="Clear"><i className="fas fa-eraser" /></button>
       </div>
     </div>
+    {confirmLeave && (
+      <UnsavedChangesModal
+        saving={saving}
+        onSave={confirmSave}
+        onDiscard={onClose}
+        onCancel={() => setConfirmLeave(false)}
+      />
+    )}
+    </>
   );
 }

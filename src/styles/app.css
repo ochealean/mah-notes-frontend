@@ -50,6 +50,16 @@ a { color: var(--primary); }
 .btn-block { width: 100%; }
 .btn-primary { background: var(--grad-primary); color: #fff; }
 .btn-google { background: #fff; color: #3c4043; border: 1px solid #dadce0; }
+.btn-ghost { background: var(--light); color: var(--dark); }
+.btn-danger-ghost { background: rgba(240,102,110,.12); color: var(--danger); }
+.btn:disabled { opacity: .6; cursor: default; }
+
+/* Unsaved-changes / confirm dialog — sits above sheets and other modals.
+   Higher specificity so it beats the later .modal-overlay z-index. */
+.modal-overlay.confirm-overlay { z-index: 1200; }
+.confirm-popup { max-width: 360px; }
+.confirm-text { color: var(--muted); font-size: 14.5px; line-height: 1.5; margin: 4px 2px 16px; }
+.confirm-actions { display: flex; flex-direction: column; gap: 9px; }
 
 .icon-btn {
     width: 42px; height: 42px; border: none; background: transparent; color: inherit;
@@ -135,6 +145,13 @@ a { color: var(--primary); }
 .note-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .note-card-title { font-weight: 700; font-size: 16.5px; color: var(--dark); flex: 1; word-break: break-word; }
 .note-kebab { flex-shrink: 0; }
+.note-card-tools { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+
+/* Pin */
+.note-pin-flag { color: var(--primary); font-size: 12px; margin-right: 5px; transform: rotate(20deg); }
+.pin-toggle i { transform: rotate(20deg); }
+.pin-toggle.active { color: var(--primary); }
+.note-card.pinned { border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
 
 .note-preview {
     margin-top: 8px; color: var(--muted); font-size: 14px; max-height: 130px; overflow: hidden;
@@ -157,9 +174,15 @@ a { color: var(--primary); }
 }
 #docs-list .card-actions { margin-top: auto; }
 
-/* Privacy: blur hidden content */
-.note-card.content-hidden .note-preview,
-.note-card.content-hidden .plan-today { filter: blur(7px); pointer-events: none; user-select: none; }
+/* Privacy: hide the body entirely — only the header/title stays visible.
+   The body isn't rendered when hidden (see the cards), so there's nothing to
+   blur; this small hint takes its place. */
+.note-hidden-hint {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12.5px; font-weight: 600; color: var(--muted, #8a93a3);
+    padding: 8px 2px 2px; user-select: none;
+}
+.note-hidden-hint i { opacity: .8; }
 
 .schedule-badge, .today-badge {
     display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
@@ -374,14 +397,20 @@ a { color: var(--primary); }
 .reconcile-bulk-btn:disabled { opacity: .5; cursor: default; }
 .reconcile-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; }
 .reconcile-row {
-    display: flex; align-items: center; gap: 11px; padding: 12px 14px;
+    display: flex; align-items: flex-start; gap: 11px; padding: 12px 14px;
     background: var(--light); border-radius: 12px; cursor: pointer;
     border: 1.5px solid transparent; transition: border-color .15s, opacity .15s;
 }
-.reconcile-row input[type="checkbox"] { width: 19px; height: 19px; accent-color: var(--accent); flex-shrink: 0; }
-.reconcile-row-icon { color: var(--accent); width: 18px; text-align: center; flex-shrink: 0; }
+.reconcile-row input[type="checkbox"] { width: 19px; height: 19px; accent-color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+.reconcile-row-icon { color: var(--accent); width: 18px; text-align: center; flex-shrink: 0; margin-top: 2px; }
+.reconcile-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.reconcile-row-head { display: flex; align-items: center; gap: 8px; }
 .reconcile-row-title { flex: 1; min-width: 0; font-weight: 600; color: var(--dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.reconcile-row-tag { font-size: 11px; font-weight: 700; color: #1f9e89; text-transform: uppercase; letter-spacing: .03em; }
+.reconcile-row-tag { font-size: 11px; font-weight: 700; color: #1f9e89; text-transform: uppercase; letter-spacing: .03em; flex-shrink: 0; }
+.reconcile-row-body { font-size: 12.5px; line-height: 1.45; color: var(--muted); max-height: 72px; overflow: hidden; }
+.reconcile-row-body.muted { font-style: italic; opacity: .8; }
+.reconcile-row-body.plan-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.reconcile-row-body .doc-content { font-size: 12.5px; }
 .reconcile-row.will-delete { border-color: rgba(240,102,110,.4); opacity: .72; }
 .reconcile-row.will-delete .reconcile-row-icon { color: var(--danger); }
 .reconcile-row.will-delete .reconcile-row-title { text-decoration: line-through; color: var(--muted); }
@@ -487,6 +516,12 @@ a { color: var(--primary); }
     border-radius: 999px; font-size: 12.5px; font-weight: 700; color: var(--muted); cursor: pointer; white-space: nowrap;
 }
 .sched-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.sched-group-delete {
+    display: inline-flex; align-items: center; gap: 7px; margin: 0 2px 12px;
+    padding: 8px 14px; border: 1px solid rgba(240,102,110,.4); border-radius: 999px;
+    background: rgba(240,102,110,.10); color: var(--danger); font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.sched-group-delete:disabled { opacity: .6; cursor: default; }
 
 /* "Alarm not ringing?" banner + reliability panel */
 .sched-reliability {

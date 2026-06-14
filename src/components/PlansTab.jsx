@@ -55,22 +55,28 @@ function PlanCard({ plan, today, onEdit, onShare, onToggleHidden, onChanged, onT
         </button>
       </div>
 
-      <div className="plan-today">
-        {total ? todayItems.map((it, i) => (
-          <div key={i} className="doc-check-item" data-checked={it.checked ? 'true' : 'false'}
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              if (e.clientX - rect.left > 32) return;
-              onToggleCheck(plan.id, today, i, !it.checked);
-            }}>
-            {it.text}
+      {plan.hidden ? (
+        <div className="note-hidden-hint"><i className="fas fa-eye-slash" /> Hidden — tap the eye to show</div>
+      ) : (
+        <>
+          <div className="plan-today">
+            {total ? todayItems.map((it, i) => (
+              <div key={i} className="doc-check-item" data-checked={it.checked ? 'true' : 'false'}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  if (e.clientX - rect.left > 32) return;
+                  onToggleCheck(plan.id, today, i, !it.checked);
+                }}>
+                {it.text}
+              </div>
+            )) : (
+              <div className="plan-empty-today"><i className="fas fa-mug-hot" /> Nothing scheduled for {todayLabel} — rest day!</div>
+            )}
           </div>
-        )) : (
-          <div className="plan-empty-today"><i className="fas fa-mug-hot" /> Nothing scheduled for {todayLabel} — rest day!</div>
-        )}
-      </div>
 
-      <details className="plan-week"><summary>Full week</summary><WeekGrid days={days} today={today} /></details>
+          <details className="plan-week"><summary>Full week</summary><WeekGrid days={days} today={today} /></details>
+        </>
+      )}
 
       {plan.updatedAt && (
         <div className="card-updated"><i className="fas fa-clock" /> Updated {timeAgo(plan.updatedAt)}</div>
@@ -78,7 +84,7 @@ function PlanCard({ plan, today, onEdit, onShare, onToggleHidden, onChanged, onT
       <div className="card-actions">
         <button className="act-btn edit" onClick={() => onEdit(plan)}><i className="fas fa-pen-to-square" /> Edit</button>
         {/* View reads local (works offline); Share needs an account + sync. */}
-        <button className="act-btn view" onClick={() => navigate(`/view?type=plan&id=${encodeURIComponent(plan.id)}`)}><i className="fas fa-eye" /> View</button>
+        <button className="act-btn view" onClick={() => navigate(`/view?type=plan&id=${encodeURIComponent(plan.id)}&from=plans`)}><i className="fas fa-eye" /> View</button>
         <button className="act-btn share" onClick={() => onShare(plan.id)}><i className="fas fa-share-alt" /> Share</button>
         <button className="act-btn danger del" onClick={async () => {
           if (!confirm('Delete this plan? This cannot be undone.')) return;

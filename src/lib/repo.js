@@ -65,6 +65,7 @@ const local = {
       schedule,
       lastResetPeriod: schedule ? currentPeriod(schedule) : null,
       hidden: false,
+      pinned: false,
       createdAt: now(), updatedAt: now(),
     };
     await localdb.put('notes', item);
@@ -80,6 +81,7 @@ const local = {
     if (patch.title !== undefined) next.title = (patch.title || '').trim() || 'Untitled';
     if (patch.content !== undefined) next.content = patch.content || '';
     if (patch.hidden !== undefined) next.hidden = !!patch.hidden;
+    if (patch.pinned !== undefined) next.pinned = !!patch.pinned;
     if (patch.schedule !== undefined) {
       const schedule = VALID_SCHEDULES.includes(patch.schedule) ? patch.schedule : null;
       if (schedule) {

@@ -6,7 +6,9 @@
 import { useState, useEffect } from 'react';
 import { createSchedule, updateSchedule, deleteSchedule, listGroups } from '../lib/scheduleStore.js';
 import { getRingtones, reliabilityStatus, isKeepAlive } from '../lib/alarm.js';
+import { isNative } from '../lib/nativeAuth.js';
 import { notify } from '../lib/notify.js';
+import UnsavedChangesModal from './UnsavedChangesModal.jsx';
 
 const DAYS = [
   ['monday', 'Mon'], ['tuesday', 'Tue'], ['wednesday', 'Wed'], ['thursday', 'Thu'],
@@ -50,6 +52,17 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
   const [ringtone, setRingtone] = useState(initial?.ringtone || '');
   const [ringtones, setRingtones] = useState([{ title: 'Default alarm', uri: '' }]);
   const [busy, setBusy] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+  // Dirty = any field differs from what we opened with.
+  const initialSnap = JSON.stringify({
+    title: initial?.title || '', sub: initial?.sub || '', group: initial?.group || '',
+    day: initial?.day || todayName(), start: initial?.start || '09:00', end: initial?.end || '10:00',
+    notify: initial?.notify !== false, alarm: initial?.alarm === true, ringtone: initial?.ringtone || '',
+  });
+  const dirty = JSON.stringify({ title, sub, group, day, start, end, notify: doNotify, alarm: doAlarm, ringtone }) !== initialSnap;
+  function requestClose() { if (dirty) setConfirmLeave(true); else onClose(); }
+  function confirmSave() { setConfirmLeave(false); save(); }
 
   // Load the phone's alarm ringtones for the picker.
   useEffect(() => {
@@ -97,11 +110,12 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <>
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
       <div className="popup">
         <div className="popup-head">
           <h3><i className="fas fa-clock" /> {editing ? 'Edit time block' : 'New time block'}</h3>
-          <button className="icon-btn" aria-label="Close" onClick={onClose}><i className="fas fa-times" /></button>
+          <button className="icon-btn" aria-label="Close" onClick={requestClose}><i className="fas fa-times" /></button>
         </div>
 
         <div className="field">
@@ -136,43 +150,53 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
           <label>End<input type="time" className="field-input" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
         </div>
 
-        {(doNotify || doAlarm) && (() => {
-          const t = nextFire(day, start);
-          const soon = (t - Date.now()) < 24 * 3600 * 1000;
-          return (
-            <div className={`sched-next${soon ? '' : ' far'}`}>
-              <i className={`fas ${soon ? 'fa-circle-check' : 'fa-triangle-exclamation'}`} />
-              Next ring: <b>{t.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b> · {inWords(t)}
-              {!soon && ' — check the day if you expected it sooner!'}
-            </div>
-          );
-        })()}
+        {/* Reminders & alarms are native-only (they fire when the app is closed).
+            On the web the schedule is a pure timetable — no alarm, per request. */}
+        {isNative ? (
+          <>
+            {(doNotify || doAlarm) && (() => {
+              const t = nextFire(day, start);
+              const soon = (t - Date.now()) < 24 * 3600 * 1000;
+              return (
+                <div className={`sched-next${soon ? '' : ' far'}`}>
+                  <i className={`fas ${soon ? 'fa-circle-check' : 'fa-triangle-exclamation'}`} />
+                  Next ring: <b>{t.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</b> · {inWords(t)}
+                  {!soon && ' — check the day if you expected it sooner!'}
+                </div>
+              );
+            })()}
 
-        <div className="settings-row" style={{ cursor: 'default' }}>
-          <span><i className="fas fa-bell" /> Weekly reminder + sound</span>
-          <label className="switch">
-            <input type="checkbox" checked={doNotify} onChange={(e) => setDoNotify(e.target.checked)} />
-            <span className="slider" />
-          </label>
-        </div>
-        <div className="settings-row" style={{ cursor: 'default' }}>
-          <span><i className="fas fa-clock" style={{ color: 'var(--danger)' }} /> Alarm — wake me for class</span>
-          <label className="switch">
-            <input type="checkbox" checked={doAlarm} onChange={(e) => setDoAlarm(e.target.checked)} />
-            <span className="slider" />
-          </label>
-        </div>
-        {doAlarm && (
-          <div className="sched-ringtone">
-            <span><i className="fas fa-music" /> Alarm sound</span>
-            <select className="mini-select" value={ringtone} onChange={(e) => setRingtone(e.target.value)}>
-              {ringtones.map((r) => <option key={r.uri || 'default'} value={r.uri}>{r.title}</option>)}
-            </select>
-          </div>
+            <div className="settings-row" style={{ cursor: 'default' }}>
+              <span><i className="fas fa-bell" /> Weekly reminder + sound</span>
+              <label className="switch">
+                <input type="checkbox" checked={doNotify} onChange={(e) => setDoNotify(e.target.checked)} />
+                <span className="slider" />
+              </label>
+            </div>
+            <div className="settings-row" style={{ cursor: 'default' }}>
+              <span><i className="fas fa-clock" style={{ color: 'var(--danger)' }} /> Alarm — wake me for class</span>
+              <label className="switch">
+                <input type="checkbox" checked={doAlarm} onChange={(e) => setDoAlarm(e.target.checked)} />
+                <span className="slider" />
+              </label>
+            </div>
+            {doAlarm && (
+              <div className="sched-ringtone">
+                <span><i className="fas fa-music" /> Alarm sound</span>
+                <select className="mini-select" value={ringtone} onChange={(e) => setRingtone(e.target.value)}>
+                  {ringtones.map((r) => <option key={r.uri || 'default'} value={r.uri}>{r.title}</option>)}
+                </select>
+              </div>
+            )}
+            <p className="settings-hint-text" style={{ padding: '0 2px 6px' }}>
+              Repeats every week on {DAYS.find(([v]) => v === day)?.[1]} at the start time, and fires even when the app is closed. <b>Alarm</b> is louder and stays until you dismiss it. You may be asked to allow notifications.
+            </p>
+          </>
+        ) : (
+          <p className="settings-hint-text" style={{ padding: '4px 2px 8px' }}>
+            <i className="fas fa-circle-info" /> Saved to your weekly timetable and synced to your account. Alarms &amp; reminders are available in the mobile app.
+          </p>
         )}
-        <p className="settings-hint-text" style={{ padding: '0 2px 6px' }}>
-          Repeats every week on {DAYS.find(([v]) => v === day)?.[1]} at the start time, and fires even when the app is closed. <b>Alarm</b> is louder and stays until you dismiss it. You may be asked to allow notifications.
-        </p>
 
         <button className="btn btn-primary btn-block" onClick={save} disabled={busy}>
           {busy ? 'Saving…' : editing ? 'Save changes' : 'Add block'}
@@ -185,5 +209,14 @@ export default function ScheduleEditor({ initial, onClose, onSaved }) {
         )}
       </div>
     </div>
+    {confirmLeave && (
+      <UnsavedChangesModal
+        saving={busy}
+        onSave={confirmSave}
+        onDiscard={onClose}
+        onCancel={() => setConfirmLeave(false)}
+      />
+    )}
+    </>
   );
 }

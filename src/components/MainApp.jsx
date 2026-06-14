@@ -3,7 +3,7 @@
 //  plans data and the editor/share modal state.
 // ============================================================
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { repo } from '../lib/repo.js';
@@ -30,7 +30,13 @@ export default function MainApp() {
   const { user, logout } = useAuth();
   const { effective, setTheme } = useTheme();
   const navigate = useNavigate();
-  const [tab, setTab] = useState('docs');
+  const [searchParams] = useSearchParams();
+  // Returning from the Viewer (/view?...&from=plans) lands back on the tab the
+  // user was on (?tab=plans) instead of always resetting to Docs.
+  const [tab, setTab] = useState(() => {
+    const t = searchParams.get('tab');
+    return TAB_TITLES[t] ? t : 'docs';
+  });
   const [notes, setNotes] = useState([]);
   const [plans, setPlans] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -48,7 +54,9 @@ export default function MainApp() {
       const [n, p] = await Promise.all([repo.listNotes(), repo.listPlans()]);
       setNotes(n);
       setPlans(p);
-      if (isNative) setSchedules(await listSchedules());
+      // Schedules sync like notes/plans (web → API, app → local + sync).
+      // The app adds native alarms on top; the web is a plain timetable.
+      setSchedules(await listSchedules());
     } catch (err) {
       notify(err.message, 'error');
     } finally {
@@ -73,10 +81,18 @@ export default function MainApp() {
   }, []);
 
   // Native: start the sync engine and refresh the lists whenever a sync
-  // pull merges in new data from the account.
+  // pull merges in new data from the account. Schedules pulled from another
+  // device need their reminders/alarms armed on THIS device too.
   useEffect(() => {
     if (!isNative) return;
-    setOnMerged(reload);
+    setOnMerged(async () => {
+      await reload();
+      try {
+        const blocks = await listSchedules();
+        await rearmReminders(blocks);
+        await rearmAlarms(blocks);
+      } catch { /* best-effort */ }
+    });
     initSync();
   }, [reload]);
 
@@ -162,7 +178,7 @@ export default function MainApp() {
   // Open an item's permanent, read-only view. Same URL on web and app
   // (/view?type=&id=) — never expires; the app reads it from local storage.
   const openView = useCallback((kind, item) => {
-    navigate(`/view?type=${kind}&id=${encodeURIComponent(item.id)}`);
+    navigate(`/view?type=${kind}&id=${encodeURIComponent(item.id)}&from=view`);
   }, [navigate]);
 
   // After saving a friend-shared item into my account: web refetches; the app
@@ -259,11 +275,9 @@ export default function MainApp() {
         <button className={`nav-item${tab === 'view' ? ' active' : ''}`} onClick={() => setTab('view')}>
           <i className="fas fa-eye" /><span>View</span>
         </button>
-        {isNative && (
-          <button className={`nav-item${tab === 'schedule' ? ' active' : ''}`} onClick={() => setTab('schedule')}>
-            <i className="fas fa-clock" /><span>Schedule</span>
-          </button>
-        )}
+        <button className={`nav-item${tab === 'schedule' ? ' active' : ''}`} onClick={() => setTab('schedule')}>
+          <i className="fas fa-clock" /><span>Schedule</span>
+        </button>
         <button className={`nav-item${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>
           <i className="fas fa-gear" /><span>Settings</span>
         </button>

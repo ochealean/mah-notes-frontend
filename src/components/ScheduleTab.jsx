@@ -4,6 +4,8 @@
 //  a weekly notification + sound at their start time.
 // ============================================================
 import { useMemo, useState, useEffect } from 'react';
+import { deleteSchedule } from '../lib/scheduleStore.js';
+import { notify } from '../lib/notify.js';
 import AlarmHelp from './AlarmHelp.jsx';
 import ScanSchedule from './ScanSchedule.jsx';
 
@@ -54,6 +56,26 @@ export default function ScheduleTab({ schedules, onEdit, onChanged }) {
     ? schedules
     : schedules.filter((s) => (s.group || '').trim() === activeGroup);
 
+  // Delete a whole group at once (all its time blocks).
+  const [deletingGroup, setDeletingGroup] = useState(false);
+  async function deleteActiveGroup() {
+    if (activeGroup === 'all' || deletingGroup) return;
+    const inGroup = schedules.filter((s) => (s.group || '').trim() === activeGroup);
+    if (!inGroup.length) return;
+    if (!confirm(`Delete the entire “${activeGroup}” group? This removes ${inGroup.length} time block${inGroup.length > 1 ? 's' : ''}. This cannot be undone.`)) return;
+    setDeletingGroup(true);
+    try {
+      for (const b of inGroup) await deleteSchedule(b.id); // eslint-disable-line no-await-in-loop
+      notify(`Deleted “${activeGroup}” (${inGroup.length} block${inGroup.length > 1 ? 's' : ''})`, 'success');
+      setActiveGroup('all');
+      if (onChanged) onChanged();
+    } catch (err) {
+      notify(err.message || 'Could not delete the group', 'error');
+    } finally {
+      setDeletingGroup(false);
+    }
+  }
+
   const byDay = useMemo(() => {
     const m = {};
     DAY_ORDER.forEach((d) => { m[d] = []; });
@@ -83,12 +105,20 @@ export default function ScheduleTab({ schedules, onEdit, onChanged }) {
         </button>
       )}
       {groups.length > 0 && (
-        <div className="sched-group-chips">
-          <button className={`sched-chip${activeGroup === 'all' ? ' active' : ''}`} onClick={() => setActiveGroup('all')}>All</button>
-          {groups.map((g) => (
-            <button key={g} className={`sched-chip${activeGroup === g ? ' active' : ''}`} onClick={() => setActiveGroup(g)}>{g}</button>
-          ))}
-        </div>
+        <>
+          <div className="sched-group-chips">
+            <button className={`sched-chip${activeGroup === 'all' ? ' active' : ''}`} onClick={() => setActiveGroup('all')}>All</button>
+            {groups.map((g) => (
+              <button key={g} className={`sched-chip${activeGroup === g ? ' active' : ''}`} onClick={() => setActiveGroup(g)}>{g}</button>
+            ))}
+          </div>
+          {activeGroup !== 'all' && (
+            <button className="sched-group-delete" onClick={deleteActiveGroup} disabled={deletingGroup}>
+              <i className={`fas ${deletingGroup ? 'fa-spinner fa-spin' : 'fa-trash'}`} />
+              {deletingGroup ? ' Deleting…' : <> Delete “{activeGroup}” group</>}
+            </button>
+          )}
+        </>
       )}
       <div className="list">
         {DAY_ORDER.filter((d) => byDay[d].length).map((d) => (

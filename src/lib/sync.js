@@ -49,7 +49,8 @@ export const getSyncState = () => state;
 
 // ── pending deletions (so a delete propagates to the server) ──
 async function getPending() {
-  return (await localdb.metaGet(PENDING_KEY)) || { notes: [], plans: [] };
+  const p = (await localdb.metaGet(PENDING_KEY)) || {};
+  return { notes: p.notes || [], plans: p.plans || [], schedules: p.schedules || [] };
 }
 export async function markDeleted(kind, uid) {
   const p = await getPending();
@@ -59,7 +60,8 @@ export async function markDeleted(kind, uid) {
 
 // ── local origin (the device's own data, vs data pulled from an account) ──
 async function getLocalOrigin() {
-  return (await localdb.metaGet(ORIGIN_KEY)) || { notes: [], plans: [] };
+  const o = (await localdb.metaGet(ORIGIN_KEY)) || {};
+  return { notes: o.notes || [], plans: o.plans || [], schedules: o.schedules || [] };
 }
 export async function markLocalOrigin(kind, uid) {
   const o = await getLocalOrigin();
@@ -70,19 +72,23 @@ export async function markLocalOrigin(kind, uid) {
 // These are the ones we offer to remove on logout.
 export async function getAccountOnlyItems() {
   const o = await getLocalOrigin();
-  const [notes, plans] = await Promise.all([localdb.all('notes'), localdb.all('plans')]);
+  const [notes, plans, schedules] = await Promise.all([
+    localdb.all('notes'), localdb.all('plans'), localdb.all('schedules'),
+  ]);
   return {
     notes: notes.filter((n) => !o.notes.includes(n.uid)),
     plans: plans.filter((p) => !o.plans.includes(p.uid)),
+    schedules: schedules.filter((s) => !o.schedules.includes(s.uid ?? s.id)),
   };
 }
 
 // Remove only the account's data from the device; keep the user's own notes.
 export async function removeAccountData() {
-  const { notes, plans } = await getAccountOnlyItems();
+  const { notes, plans, schedules } = await getAccountOnlyItems();
   await Promise.all([
     ...notes.map((n) => localdb.remove('notes', n.id ?? n.uid)),
     ...plans.map((p) => localdb.remove('plans', p.id ?? p.uid)),
+    ...schedules.map((s) => localdb.remove('schedules', s.id ?? s.uid)),
   ]);
 }
 
@@ -96,7 +102,7 @@ export async function setSyncAccount(accountKey) {
   const prev = await localdb.metaGet(ACCOUNT_KEY);
   if (prev && key && prev !== key) {
     await removeAccountData();             // drop the previous account's cloud copies
-    await localdb.metaSet(PENDING_KEY, { notes: [], plans: [] });
+    await localdb.metaSet(PENDING_KEY, { notes: [], plans: [], schedules: [] });
     await localdb.metaSet(LASTSYNC_KEY, null);
     await localdb.metaSet(ACCOUNT_KEY, key);
     set({ lastSync: null });
@@ -110,7 +116,7 @@ export async function setSyncAccount(accountKey) {
 // deletions / last-sync time).
 export async function resetSyncForLogout() {
   await localdb.metaSet(ENABLED_KEY, false);
-  await localdb.metaSet(PENDING_KEY, { notes: [], plans: [] });
+  await localdb.metaSet(PENDING_KEY, { notes: [], plans: [], schedules: [] });
   await localdb.metaSet(LASTSYNC_KEY, null);
   set({ enabled: false, lastSync: null, pendingReconcile: { notes: [], plans: [] } });
 }
@@ -135,8 +141,14 @@ export async function initSync() {
   // tracking existed) is treated as the user's OWN data, so a future logout
   // never deletes it. Only items later pulled from an account are unmarked.
   if ((await localdb.metaGet(ORIGIN_KEY)) === null) {
-    const [notes, plans] = await Promise.all([localdb.all('notes'), localdb.all('plans')]);
-    await localdb.metaSet(ORIGIN_KEY, { notes: notes.map((n) => n.uid), plans: plans.map((p) => p.uid) });
+    const [notes, plans, schedules] = await Promise.all([
+      localdb.all('notes'), localdb.all('plans'), localdb.all('schedules'),
+    ]);
+    await localdb.metaSet(ORIGIN_KEY, {
+      notes: notes.map((n) => n.uid),
+      plans: plans.map((p) => p.uid),
+      schedules: schedules.map((s) => s.uid ?? s.id),
+    });
   }
 
   set({ initialized: true, enabled, lastSync });
@@ -168,14 +180,16 @@ export async function syncNow() {
   if (!state.enabled || !state.online || !getToken() || state.syncing) return;
   set({ syncing: true, error: null });
   try {
-    const [notes, plans, pending] = await Promise.all([
-      localdb.all('notes'), localdb.all('plans'), getPending(),
+    const [notes, plans, schedules, pending] = await Promise.all([
+      localdb.all('notes'), localdb.all('plans'), localdb.all('schedules'), getPending(),
     ]);
     const body = {
       notes,
       plans,
+      schedules,
       deletedNoteUids: pending.notes,
       deletedPlanUids: pending.plans,
+      deletedScheduleUids: pending.schedules,
     };
     const res = await api.post('/api/sync', body);
     // The returned set already excludes anything the web side deleted, so
@@ -184,7 +198,8 @@ export async function syncNow() {
     await Promise.all([
       localdb.replaceAll('notes', (res.notes || []).map(toLocal)),
       localdb.replaceAll('plans', (res.plans || []).map(toLocal)),
-      localdb.metaSet(PENDING_KEY, { notes: [], plans: [] }),
+      localdb.replaceAll('schedules', (res.schedules || []).map(toLocal)),
+      localdb.metaSet(PENDING_KEY, { notes: [], plans: [], schedules: [] }),
     ]);
     const lastSync = new Date().toISOString();
     await localdb.metaSet(LASTSYNC_KEY, lastSync);
