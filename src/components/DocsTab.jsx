@@ -15,15 +15,14 @@ function scheduleBadge(schedule) {
   return <span className="schedule-badge"><i className="fas fa-repeat" /> {label}</span>;
 }
 
-function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
+function NoteCard({ note, onOpen, onShare, onToggleHidden, onTogglePin, onChanged }) {
   const previewRef = useRef(null);
   const navigate = useNavigate();
   const previewHtml = contentToHtml(note.content) || '<span class="note-preview-empty">Empty document</span>';
 
-  async function togglePin(e) {
+  function togglePin(e) {
     e.stopPropagation();
-    try { await repo.updateNote(note.id, { pinned: !note.pinned }); onChanged(); }
-    catch (err) { notify(err.message || 'Could not update pin', 'error'); }
+    onTogglePin(note.id, !note.pinned); // optimistic in the parent — instant UI
   }
 
   // Tap inside the checkbox gutter → toggle + save; tap elsewhere → open editor.
@@ -85,7 +84,7 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onChanged }) {
   );
 }
 
-export default function DocsTab({ notes, onOpen, onShare, onToggleHidden, onChanged }) {
+export default function DocsTab({ notes, onOpen, onShare, onToggleHidden, onTogglePin, onChanged }) {
   const [q, setQ] = useState('');
   const query = q.toLowerCase().trim();
   const matched = !query ? notes : notes.filter((n) =>
@@ -108,7 +107,7 @@ export default function DocsTab({ notes, onOpen, onShare, onToggleHidden, onChan
         ) : (
           filtered.map((note) => (
             <NoteCard key={note.id} note={note} onOpen={onOpen} onShare={onShare}
-              onToggleHidden={onToggleHidden} onChanged={onChanged} />
+              onToggleHidden={onToggleHidden} onTogglePin={onTogglePin} onChanged={onChanged} />
           ))
         )}
       </div>

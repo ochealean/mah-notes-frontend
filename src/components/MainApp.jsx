@@ -169,6 +169,14 @@ export default function MainApp() {
     catch (err) { notify(err.message, 'error'); reload(); }
   }
 
+  // Optimistic: flip the pin (and re-sort) instantly, then persist in the
+  // background — the round-trip never blocks the UI.
+  async function togglePinned(id, pinned) {
+    setNotes((arr) => arr.map((i) => (i.id === id ? { ...i, pinned } : i)));
+    try { await repo.updateNote(id, { pinned }); }
+    catch (err) { notify(err.message, 'error'); reload(); }
+  }
+
   function onFab() {
     if (tab === 'docs') setDocEditor({});
     else if (tab === 'plans') setPlanEditor({});
@@ -233,6 +241,7 @@ export default function MainApp() {
             onOpen={(note) => setDocEditor({ note })}
             onShare={(id) => setShare({ itemType: 'note', itemId: id })}
             onToggleHidden={(id, hidden) => toggleHidden('note', id, hidden)}
+            onTogglePin={(id, pinned) => togglePinned(id, pinned)}
             onChanged={reload}
           />
         )}
