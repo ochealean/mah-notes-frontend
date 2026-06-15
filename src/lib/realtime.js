@@ -4,12 +4,16 @@
 //  subscribe to server events via onRealtime(); right now those are
 //  display-name updates (me:updated for self, friend:updated for friends).
 //
-//  We force the WebSocket transport so that inside the Android WebView the
-//  handshake doesn't get routed through the CapacitorHttp plugin (which only
-//  patches fetch/XHR, not raw WebSockets).
+//  Transport: on the Android WebView we force the WebSocket transport so the
+//  handshake isn't routed through the CapacitorHttp plugin (which only patches
+//  fetch/XHR, not raw WebSockets). On the WEB we keep socket.io's default
+//  polling→websocket upgrade — the polling fallback is more resilient (a raw
+//  websocket-only connection has nothing to fall back to if the upgrade is
+//  interrupted, e.g. while the server is redeploying).
 // ============================================================
 import { io } from 'socket.io-client';
 import { API_BASE, getToken } from './api.js';
+import { isNative } from './nativeAuth.js';
 
 let socket = null;
 const listeners = new Map(); // event -> Set<fn>
@@ -30,7 +34,8 @@ export function connectRealtime() {
   }
   socket = io(API_BASE, {
     auth: { token },
-    transports: ['websocket'],
+    // Native: websocket only (WebView/CapacitorHttp). Web: default upgrade path.
+    ...(isNative ? { transports: ['websocket'] } : {}),
   });
   // Re-broadcast every known event to local subscribers.
   ['me:updated', 'friend:updated'].forEach((ev) => socket.on(ev, (p) => fanOut(ev, p)));
