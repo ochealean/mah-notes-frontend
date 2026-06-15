@@ -17,16 +17,24 @@ export default function DocEditor({ initial, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  // The "Repeat" row only makes sense for checklists (it resets the boxes on a
+  // schedule), so it's hidden until the doc actually contains a checklist.
+  const [hasChecklist, setHasChecklist] = useState(false);
 
   // Leaving with unsaved edits → ask first (Save / Don't save / Cancel).
   function requestClose() { if (dirty) setConfirmLeave(true); else onClose(); }
   function confirmSave() { setConfirmLeave(false); save(); }
+
+  function refreshChecklist() {
+    setHasChecklist(!!editorRef.current?.querySelector('.doc-check-item'));
+  }
 
   // Seed the editable surface once.
   useEffect(() => {
     const editor = editorRef.current;
     editor.innerHTML = initial ? contentToHtml(initial.content || '') : '';
     try { document.execCommand('defaultParagraphSeparator', false, 'div'); } catch {}
+    refreshChecklist();
     setTimeout(() => { (initial?.title ? editor : null)?.focus(); updateToolbarState(); }, 60);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -85,6 +93,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     else if (block) block.after(item);
     else editor.appendChild(item);
     placeCaretAtStart(item);
+    refreshChecklist();
   }
 
   function updateToolbarState() {
@@ -140,6 +149,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
         item.replaceWith(line); placeCaretAtStart(line);
       }
     }
+    refreshChecklist();
   }
 
   function uncheckAll() {
@@ -179,16 +189,18 @@ export default function DocEditor({ initial, onClose, onSaved }) {
       </div>
 
       <div className="sheet-scroll">
-        <div className="schedule-row">
-          <label><i className="fas fa-repeat" /> Repeat</label>
-          <select className="mini-select" value={schedule} onChange={(e) => { setSchedule(e.target.value); setDirty(true); }}>
-            <option value="">Never</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly (Mon)</option>
-            <option value="monthly">Monthly (1st)</option>
-          </select>
-          <button type="button" className="chip-btn" onClick={uncheckAll}><i className="fas fa-rotate-left" /> Uncheck</button>
-        </div>
+        {hasChecklist && (
+          <div className="schedule-row">
+            <label><i className="fas fa-repeat" /> Repeat</label>
+            <select className="mini-select" value={schedule} onChange={(e) => { setSchedule(e.target.value); setDirty(true); }}>
+              <option value="">Never</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly (Mon)</option>
+              <option value="monthly">Monthly (1st)</option>
+            </select>
+            <button type="button" className="chip-btn" onClick={uncheckAll}><i className="fas fa-rotate-left" /> Uncheck</button>
+          </div>
+        )}
 
         <div
           ref={editorRef}
@@ -200,7 +212,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
           onKeyDown={onEditorKeyDown}
           onKeyUp={updateToolbarState}
           onMouseUp={updateToolbarState}
-          onInput={() => setDirty(true)}
+          onInput={() => { setDirty(true); refreshChecklist(); }}
         />
       </div>
 

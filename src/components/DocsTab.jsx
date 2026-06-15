@@ -86,11 +86,23 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onTogglePin, onChange
 
 export default function DocsTab({ notes, onOpen, onShare, onToggleHidden, onTogglePin, onChanged }) {
   const [q, setQ] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
   const query = q.toLowerCase().trim();
   const matched = !query ? notes : notes.filter((n) =>
     `${n.title} ${n.content}`.toLowerCase().includes(query));
   // Pinned docs float to the top; order within each group is unchanged (stable sort).
   const filtered = [...matched].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+  async function deleteAll() {
+    if (bulkBusy || notes.length === 0) return;
+    if (!confirm(`Delete ALL ${notes.length} document${notes.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setBulkBusy(true);
+    try {
+      for (const n of notes) await repo.deleteNote(n.id); // eslint-disable-line no-await-in-loop
+      notify(`Deleted ${notes.length} document${notes.length > 1 ? 's' : ''}`, 'success');
+    } catch (err) { notify(err.message || 'Could not delete all', 'error'); }
+    finally { setBulkBusy(false); onChanged(); }
+  }
 
   return (
     <section className="screen">
@@ -98,6 +110,13 @@ export default function DocsTab({ notes, onOpen, onShare, onToggleHidden, onTogg
         <i className="fas fa-search" />
         <input type="text" placeholder="Search documents…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      {notes.length > 0 && (
+        <div className="list-bulk">
+          <button className="bulk-delete-btn" onClick={deleteAll} disabled={bulkBusy}>
+            <i className={`fas ${bulkBusy ? 'fa-spinner fa-spin' : 'fa-trash'}`} /> {bulkBusy ? 'Deleting…' : `Delete all (${notes.length})`}
+          </button>
+        </div>
+      )}
       <div className="list" id="docs-list">
         {notes.length === 0 ? (
           <div className="empty-state">

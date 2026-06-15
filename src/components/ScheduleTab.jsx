@@ -56,6 +56,20 @@ export default function ScheduleTab({ schedules, onEdit, onChanged }) {
     ? schedules
     : schedules.filter((s) => (s.group || '').trim() === activeGroup);
 
+  // Delete every time block.
+  const [bulkBusy, setBulkBusy] = useState(false);
+  async function deleteAll() {
+    if (bulkBusy || schedules.length === 0) return;
+    if (!confirm(`Delete ALL ${schedules.length} time block${schedules.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setBulkBusy(true);
+    try {
+      for (const b of schedules) await deleteSchedule(b.id); // eslint-disable-line no-await-in-loop
+      notify(`Deleted ${schedules.length} block${schedules.length > 1 ? 's' : ''}`, 'success');
+      setActiveGroup('all');
+    } catch (err) { notify(err.message || 'Could not delete all', 'error'); }
+    finally { setBulkBusy(false); if (onChanged) onChanged(); }
+  }
+
   // Delete a whole group at once (all its time blocks).
   const [deletingGroup, setDeletingGroup] = useState(false);
   async function deleteActiveGroup() {
@@ -104,6 +118,11 @@ export default function ScheduleTab({ schedules, onEdit, onChanged }) {
           <span>Alarm only rings when you open the app? <b>Fix reliability →</b></span>
         </button>
       )}
+      <div className="list-bulk">
+        <button className="bulk-delete-btn" onClick={deleteAll} disabled={bulkBusy}>
+          <i className={`fas ${bulkBusy ? 'fa-spinner fa-spin' : 'fa-trash'}`} /> {bulkBusy ? 'Deleting…' : `Delete all (${schedules.length})`}
+        </button>
+      </div>
       {groups.length > 0 && (
         <>
           <div className="sched-group-chips">

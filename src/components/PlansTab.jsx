@@ -2,6 +2,7 @@
 //  Weekly plans tab. Shows today's checklist (tickable) plus a
 //  collapsible full-week grid.
 // ============================================================
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { repo } from '../lib/repo.js';
 import { notify } from '../lib/notify.js';
@@ -98,6 +99,18 @@ function PlanCard({ plan, today, onEdit, onShare, onToggleHidden, onChanged, onT
 
 export default function PlansTab({ plans, onEdit, onShare, onToggleHidden, onChanged, setPlans }) {
   const today = todayName();
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  async function deleteAll() {
+    if (bulkBusy || plans.length === 0) return;
+    if (!confirm(`Delete ALL ${plans.length} plan${plans.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setBulkBusy(true);
+    try {
+      for (const p of plans) await repo.deletePlan(p.id); // eslint-disable-line no-await-in-loop
+      notify(`Deleted ${plans.length} plan${plans.length > 1 ? 's' : ''}`, 'success');
+    } catch (err) { notify(err.message || 'Could not delete all', 'error'); }
+    finally { setBulkBusy(false); onChanged(); }
+  }
 
   async function onToggleCheck(planId, day, index, checked) {
     setPlans((arr) => arr.map((p) => {
@@ -113,6 +126,13 @@ export default function PlansTab({ plans, onEdit, onShare, onToggleHidden, onCha
 
   return (
     <section className="screen">
+      {plans.length > 0 && (
+        <div className="list-bulk">
+          <button className="bulk-delete-btn" onClick={deleteAll} disabled={bulkBusy}>
+            <i className={`fas ${bulkBusy ? 'fa-spinner fa-spin' : 'fa-trash'}`} /> {bulkBusy ? 'Deleting…' : `Delete all (${plans.length})`}
+          </button>
+        </div>
+      )}
       <div className="list">
         {plans.length === 0 ? (
           <div className="empty-state">
