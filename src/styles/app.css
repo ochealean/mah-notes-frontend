@@ -692,6 +692,15 @@ a { color: var(--primary); }
         gap: 16px;
         align-items: start;
     }
+    /* Full-width rows inside the card grid: section headers (View tab),
+       day groups (Schedule), the bulk toolbar, and empty/no-match states
+       must span every column instead of being squeezed into one cell. */
+    .list > .view-section-label,
+    .list > .sched-day,
+    .list > .list-bulk,
+    .list > .empty-state {
+        grid-column: 1 / -1;
+    }
     .search-bar { max-width: 520px; }
     #tab-settings { max-width: 640px; }
 
