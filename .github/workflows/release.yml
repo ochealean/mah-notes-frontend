@@ -1,0 +1,74 @@
+# ============================================================
+#  Build a signed Android APK and publish it as a GitHub Release.
+#  Triggered by pushing a version tag, e.g.  git tag v1.2.2 && git push origin v1.2.2
+#  The installed app reads the latest release tag and offers the update.
+#
+#  Required repository secrets (Settings → Secrets and variables → Actions):
+#    ANDROID_KEYSTORE_BASE64   base64 of android/mahnotes-release.keystore
+#    ANDROID_KEYSTORE_PASSWORD  the store password
+#    ANDROID_KEY_ALIAS          the key alias (e.g. mahnotes)
+#    ANDROID_KEY_PASSWORD       the key password
+# ============================================================
+name: Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # needed to create the release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync Capacitor → Android
+        run: npx cap sync android
+
+      - name: Restore signing keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/mahnotes-release.keystore
+
+      - name: Write keystore.properties
+        run: |
+          cat > android/keystore.properties <<EOF
+          storeFile=../mahnotes-release.keystore
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Build signed release APK
+        run: |
+          chmod +x android/gradlew
+          (cd android && ./gradlew assembleRelease --warning-mode none)
+
+      - name: Rename APK with version
+        run: cp android/app/build/outputs/apk/release/app-release.apk "mah-notes-${{ github.ref_name }}.apk"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: mah-notes-${{ github.ref_name }}.apk
+          generate_release_notes: true

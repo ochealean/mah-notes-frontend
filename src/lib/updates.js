@@ -9,8 +9,12 @@
 //  releases. Publish each release with a tag like "v1.2.0" and
 //  attach the built app-release.apk as a release asset.
 // ============================================================
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { FileOpener } from '@capacitor-community/file-opener';
 import { isNative } from './nativeAuth.js';
 import { APP_VERSION } from './appInfo.js';
+
+const APK_MIME = 'application/vnd.android.package-archive';
 
 // owner/repo of the public repo that holds your APK releases.
 export const UPDATE_REPO = 'ochealean/mah-notes-frontend';
@@ -64,10 +68,30 @@ export async function checkForUpdate() {
   }
 }
 
-// Open the download in the system browser. Android downloads the APK and
-// then prompts the user to install it. Falls back to the release page.
-export function startUpdate(update) {
+// Last-resort path: open the download/release page in the system browser.
+function openExternally(update) {
   const url = update?.apkUrl || update?.htmlUrl;
   if (!url) return;
   try { window.open(url, '_system'); } catch { window.open(url, '_blank'); }
+}
+
+// Download the APK INSIDE the app, then launch Android's package installer
+// (the user still taps "Install" — the OS never lets an app self-install).
+// On any failure (or on web) it falls back to a browser download so the
+// update is always reachable. Returns true if it stayed in-app.
+export async function startUpdate(update) {
+  if (!isNative || !update?.apkUrl) { openExternally(update); return false; }
+  try {
+    const { path } = await Filesystem.downloadFile({
+      url: update.apkUrl,
+      path: `mah-notes-${update.version}.apk`,
+      directory: Directory.Cache,
+    });
+    if (!path) throw new Error('download failed');
+    await FileOpener.open({ filePath: path, contentType: APK_MIME });
+    return true;
+  } catch {
+    openExternally(update); // network / installer hiccup → browser fallback
+    return false;
+  }
 }

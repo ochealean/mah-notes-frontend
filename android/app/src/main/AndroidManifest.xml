@@ -93,4 +93,8 @@
     <!-- Let the app ask to be exempted from battery optimisation (Doze) so
          aggressive OEMs don't delay or kill scheduled alarms/reminders. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- In-app update: download the new APK and launch Android's installer
+         (the user still confirms the install). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>
