@@ -6,11 +6,19 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.2.5';
+export const APP_VERSION = '1.2.6';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.2.6',
+    date: '2026-06-20',
+    title: 'Fix: connect to the live server',
+    changes: [
+      'Fixed sync and Friends failing on auto-built releases (they were pointing at localhost instead of the live server).',
+    ],
+  },
   {
     version: '1.2.5',
     date: '2026-06-20',

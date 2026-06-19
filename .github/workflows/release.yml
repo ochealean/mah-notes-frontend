@@ -40,6 +40,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The .env is gitignored, so CI has no env vars → the app would fall back
+      # to http://localhost:3000 and fail (cleartext/localhost). These are all
+      # PUBLIC values (already shipped in the web app), so we write them here.
+      # Move to repo Variables if you prefer not to hardcode them.
+      - name: Write frontend .env
+        run: |
+          cat > .env <<EOF
+          VITE_API_BASE=https://mah-notes-backend.onrender.com
+          VITE_GOOGLE_CLIENT_ID=982037934424-cfvsb73fo771e6u4citndjke8mblrqp5.apps.googleusercontent.com
+          VITE_PUBLIC_WEB_BASE=https://mah-notes.vercel.app
+          EOF
+
       - name: Build web assets
         run: npm run build
 
