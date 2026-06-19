@@ -139,6 +139,17 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
     return node && node.closest ? node.closest('.doc-check-item') : null;
   }
+  // True when the caret sits at the very start of `block` (nothing typed before
+  // it) — so a new checklist should go ABOVE the existing text, not after it.
+  function caretAtBlockStart(block) {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !block) return false;
+    const caret = sel.getRangeAt(0);
+    const probe = document.createRange();
+    probe.selectNodeContents(block);
+    try { probe.setEnd(caret.startContainer, caret.startOffset); } catch { return false; }
+    return probe.toString().length === 0;
+  }
 
   function insertChecklistItem() {
     const editor = editorRef.current;
@@ -147,6 +158,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     const item = makeCheckItem();
     if (isCheckItem(block)) block.after(item);
     else if (block && isEmptyBlock(block)) block.replaceWith(item);
+    else if (block && caretAtBlockStart(block)) block.before(item); // caret before the text → checklist goes above it
     else if (block) block.after(item);
     else editor.appendChild(item);
     placeCaretAtStart(item);

@@ -93,6 +93,11 @@ export default function AuthScreen() {
               <i className={`fas ${showPw ? 'fa-eye-slash' : 'fa-eye'}`} />
             </button>
           </div>
+          {isSignUp && (
+            <p className="signup-warn">
+              <i className="fas fa-triangle-exclamation" /> There’s no password reset — if you forget this password, the account <b>can’t be recovered</b>. Save it somewhere safe (or use Google instead).
+            </p>
+          )}
           <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
             {busy ? 'Please wait…' : isSignUp ? 'Sign Up' : 'Sign In'}
           </button>

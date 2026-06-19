@@ -117,6 +117,11 @@ function AccountSync({ reloadLists }) {
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
               value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
+          {mode === 'signup' && (
+            <p className="signup-warn">
+              <i className="fas fa-triangle-exclamation" /> There’s no password reset — if you forget this password, the account <b>can’t be recovered</b>. Save it somewhere safe (or use Google instead).
+            </p>
+          )}
           <button className="btn btn-primary btn-block" disabled={busy}>
             {busy ? 'Please wait…' : mode === 'signup' ? 'Create account & sync' : 'Sign in & sync'}
           </button>
