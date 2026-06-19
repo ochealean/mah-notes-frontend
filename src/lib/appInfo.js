@@ -6,11 +6,20 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.2.2';
+export const APP_VERSION = '1.2.3';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.2.3',
+    date: '2026-06-20',
+    title: 'More reliable updates',
+    changes: [
+      'Update now has a dependable “Download in browser” option that always works.',
+      'If the seamless in-app install can’t run, the app now tells you why.',
+    ],
+  },
   {
     version: '1.2.2',
     date: '2026-06-20',

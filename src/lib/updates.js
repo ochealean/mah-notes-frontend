@@ -11,6 +11,7 @@
 // ============================================================
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
+import { AppLauncher } from '@capacitor/app-launcher';
 import { isNative } from './nativeAuth.js';
 import { APP_VERSION } from './appInfo.js';
 
@@ -68,30 +69,31 @@ export async function checkForUpdate() {
   }
 }
 
-// Last-resort path: open the download/release page in the system browser.
-function openExternally(update) {
+// Reliable path: open the APK download in the REAL external browser (e.g.
+// Chrome), which downloads it and lets the user tap to install. AppLauncher
+// hands off to the OS's default browser app (not the in-app WebView, which
+// can't complete an APK install). Falls back to window.open if needed.
+export async function openInBrowser(update) {
   const url = update?.apkUrl || update?.htmlUrl;
   if (!url) return;
-  try { window.open(url, '_system'); } catch { window.open(url, '_blank'); }
+  try { await AppLauncher.openUrl({ url }); }
+  catch {
+    try { window.open(url, '_system'); } catch { window.open(url, '_blank'); }
+  }
 }
 
-// Download the APK INSIDE the app, then launch Android's package installer
-// (the user still taps "Install" — the OS never lets an app self-install).
-// On any failure (or on web) it falls back to a browser download so the
-// update is always reachable. Returns true if it stayed in-app.
-export async function startUpdate(update) {
-  if (!isNative || !update?.apkUrl) { openExternally(update); return false; }
-  try {
-    const { path } = await Filesystem.downloadFile({
-      url: update.apkUrl,
-      path: `mah-notes-${update.version}.apk`,
-      directory: Directory.Cache,
-    });
-    if (!path) throw new Error('download failed');
-    await FileOpener.open({ filePath: path, contentType: APK_MIME });
-    return true;
-  } catch {
-    openExternally(update); // network / installer hiccup → browser fallback
-    return false;
-  }
+// Seamless path: download the APK inside the app, then launch Android's
+// package installer (the user still taps "Install"). THROWS on any failure
+// so the caller can show why and offer the browser path instead.
+export async function installInApp(update) {
+  if (!isNative) throw new Error('In-app install is Android-only.');
+  if (!update?.apkUrl) throw new Error('No APK in this release.');
+  const { path } = await Filesystem.downloadFile({
+    url: update.apkUrl,
+    path: `mah-notes-${update.version}.apk`,
+    directory: Directory.Cache,
+  });
+  if (!path) throw new Error('Download returned no file path.');
+  // contentType triggers the package-installer intent for the .apk.
+  await FileOpener.open({ filePath: path, contentType: APK_MIME });
 }

@@ -1,6 +1,6 @@
 {
   "name": "mah-notes-frontend",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "MERN frontend for Mah Notes — React + Vite.",
   "private": true,
   "type": "module",
@@ -16,6 +16,7 @@
   "dependencies": {
     "@capacitor-community/file-opener": "^8.0.1",
     "@capacitor/android": "^8.4.0",
+    "@capacitor/app-launcher": "^8.0.1",
     "@capacitor/cli": "^8.4.0",
     "@capacitor/core": "^8.4.0",
     "@capacitor/filesystem": "^8.1.2",

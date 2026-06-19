@@ -1,19 +1,37 @@
 // ============================================================
-//  Update-available prompt. The user always chooses — "Update now"
-//  downloads the APK inside the app and launches Android's installer
-//  (falls back to a browser download if that fails); "Later" just
-//  dismisses. Nothing installs without the user's tap.
+//  Update-available prompt. The user always chooses.
+//   • "Update now" tries the seamless in-app install (download +
+//     Android installer). If that fails it shows the real error and
+//     points the user at the reliable browser path.
+//   • "Download in browser" always works: opens the APK in the real
+//     external browser (Chrome), which downloads + installs it.
+//  Nothing installs without the user's tap.
 // ============================================================
 import { useState } from 'react';
-import { startUpdate } from '../lib/updates.js';
+import { installInApp, openInBrowser } from '../lib/updates.js';
 
 export default function UpdateModal({ update, onClose }) {
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
 
-  async function go() {
+  async function inApp() {
     if (busy) return;
-    setBusy(true);
-    try { await startUpdate(update); } finally { setBusy(false); onClose(); }
+    setBusy(true); setErr('');
+    try {
+      await installInApp(update); // resolves once the installer is launched
+      onClose();
+    } catch (e) {
+      // Show why it failed so the in-app path can be perfected, and steer
+      // the user to the reliable browser button below.
+      setErr((e && e.message) || 'In-app install failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function browser() {
+    await openInBrowser(update);
+    onClose();
   }
 
   return (
@@ -27,14 +45,27 @@ export default function UpdateModal({ update, onClose }) {
           Version <b>{update.version}</b> is ready. Update now to get the latest fixes and features.
         </p>
         {update.notes && <div className="update-notes">{update.notes}</div>}
-        <button className="btn btn-primary btn-block" disabled={busy} onClick={go}>
+
+        {err && (
+          <div className="update-error">
+            <b><i className="fas fa-triangle-exclamation" /> Couldn’t install in-app.</b>
+            <span>{err}</span>
+            <span>Use <b>Download in browser</b> below — it always works.</span>
+          </div>
+        )}
+
+        <button className="btn btn-primary btn-block" disabled={busy} onClick={inApp}>
           {busy
             ? <><i className="fas fa-spinner fa-spin" /> Downloading…</>
             : <><i className="fas fa-download" /> Update now</>}
         </button>
-        {!busy && <button className="btn btn-ghost btn-block" style={{ marginTop: 9 }} onClick={onClose}>Later</button>}
+        <button className="btn btn-ghost btn-block" style={{ marginTop: 9 }} disabled={busy} onClick={browser}>
+          <i className="fas fa-up-right-from-square" /> Download in browser
+        </button>
+        {!busy && <button className="btn btn-block update-later" style={{ marginTop: 9 }} onClick={onClose}>Later</button>}
+
         <p className="changelog-foot">
-          {busy ? 'Android will ask you to install when the download finishes.' : 'Downloads in the app, then Android asks you to install.'}
+          {busy ? 'Android will ask you to install when the download finishes.' : 'Seamless install can need “Install unknown apps” permission; the browser path always works.'}
         </p>
       </div>
     </div>
