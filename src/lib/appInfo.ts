@@ -6,11 +6,20 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.2.6';
+export const APP_VERSION = '1.2.7';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.2.7',
+    date: '2026-06-20',
+    title: 'Checklist & signup fixes',
+    changes: [
+      'Adding a checklist at the start of a line now places it above your text, not after it.',
+      'Email/password signup now warns that there’s no password reset — a forgotten password can’t be recovered.',
+    ],
+  },
   {
     version: '1.2.6',
     date: '2026-06-20',
