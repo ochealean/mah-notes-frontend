@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "cap": "C:\\PROGRA~1\\nodejs\\node node_modules/@capacitor/cli/bin/capacitor",
     "android:sync": "vite build && npm run cap -- sync android",
@@ -30,7 +31,11 @@
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
+    "@types/node": "^26.0.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^6.0.3",
     "vite": "^5.4.8"
   }
 }

@@ -1,0 +1,159 @@
+// ============================================================
+//  Documents tab: search + list of note cards. Checklist boxes in
+//  a card preview can be ticked directly (gutter tap), which saves.
+// ============================================================
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { repo } from '../lib/repo';
+import { notify } from '../lib/notify';
+import { contentToHtml, escapeHtml, sanitizeHtml } from '../lib/richtext';
+import { loadDraft, clearDraft } from '../lib/drafts';
+import { timeAgo } from '../lib/timeAgo';
+
+// Plain-text preview of a saved draft's HTML body, for the resume banner.
+function draftPreview(d) {
+  const text = String(d?.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return (d?.title || '').trim() || text || 'Untitled draft';
+}
+
+function scheduleBadge(schedule) {
+  if (!schedule) return null;
+  const label = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[schedule] || schedule;
+  return <span className="schedule-badge"><i className="fas fa-repeat" /> {label}</span>;
+}
+
+function NoteCard({ note, onOpen, onShare, onToggleHidden, onTogglePin, onChanged }) {
+  const previewRef = useRef(null);
+  const navigate = useNavigate();
+  const previewHtml = contentToHtml(note.content) || '<span class="note-preview-empty">Empty document</span>';
+
+  function togglePin(e) {
+    e.stopPropagation();
+    onTogglePin(note.id, !note.pinned); // optimistic in the parent — instant UI
+  }
+
+  // Tap inside the checkbox gutter → toggle + save; tap elsewhere → open editor.
+  async function onPreviewClick(e) {
+    const item = e.target.closest('.doc-check-item');
+    if (item) {
+      const rect = item.getBoundingClientRect();
+      if (e.clientX - rect.left <= 32) {
+        const now = item.getAttribute('data-checked') !== 'true';
+        item.setAttribute('data-checked', now ? 'true' : 'false');
+        try {
+          await repo.updateNote(note.id, { content: sanitizeHtml(previewRef.current.innerHTML) });
+        } catch (err) { notify('Failed to save', 'error'); }
+        return;
+      }
+    }
+    onOpen(note);
+  }
+
+  return (
+    <div className={`note-card${note.hidden ? ' content-hidden' : ''}${note.pinned ? ' pinned' : ''}`}>
+      <div className="note-card-top">
+        <div className="note-card-title">
+          {note.pinned && <i className="fas fa-thumbtack note-pin-flag" title="Pinned" />}
+          <span dangerouslySetInnerHTML={{ __html: escapeHtml(note.title || 'Untitled') }} /> {scheduleBadge(note.schedule)}
+        </div>
+        <div className="note-card-tools">
+          <button className={`icon-btn pin-toggle note-kebab${note.pinned ? ' active' : ''}`} aria-label={note.pinned ? 'Unpin' : 'Pin'}
+            title={note.pinned ? 'Unpin' : 'Pin to top'} onClick={togglePin}>
+            <i className="fas fa-thumbtack" />
+          </button>
+          <button className="icon-btn hide-toggle note-kebab" aria-label="Hide"
+            onClick={(e) => { e.stopPropagation(); onToggleHidden(note.id, !note.hidden); }}>
+            <i className={`fas ${note.hidden ? 'fa-eye' : 'fa-eye-slash'}`} />
+          </button>
+        </div>
+      </div>
+      {note.hidden ? (
+        <div className="note-hidden-hint"><i className="fas fa-eye-slash" /> Hidden — tap the eye to show</div>
+      ) : (
+        <div ref={previewRef} className="note-preview doc-content" onClick={onPreviewClick}
+          dangerouslySetInnerHTML={{ __html: previewHtml }} />
+      )}
+      {note.updatedAt && (
+        <div className="card-updated"><i className="fas fa-clock" /> Updated {timeAgo(note.updatedAt)}</div>
+      )}
+      <div className="card-actions">
+        <button className="act-btn open" onClick={() => onOpen(note)}><i className="fas fa-pen-to-square" /> Open</button>
+        {/* View reads local (works offline); Share needs an account + sync. */}
+        <button className="act-btn view" onClick={() => navigate(`/view?type=note&id=${encodeURIComponent(note.id)}&from=docs`)}><i className="fas fa-eye" /> View</button>
+        <button className="act-btn share" onClick={() => onShare(note.id)}><i className="fas fa-share-alt" /> Share</button>
+        <button className="act-btn danger del" onClick={async () => {
+          if (!confirm('Delete this document? This cannot be undone.')) return;
+          try { await repo.deleteNote(note.id); notify('Document deleted', 'success'); onChanged(); }
+          catch (err) { notify(err.message, 'error'); }
+        }}><i className="fas fa-trash" /> Delete</button>
+      </div>
+    </div>
+  );
+}
+
+export default function DocsTab({ notes, onOpen, onNew, onShare, onToggleHidden, onTogglePin, onChanged }) {
+  const [q, setQ] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // A new-doc draft (app closed mid-typing before the first save). Re-check on
+  // mount and whenever the list changes (saving a doc clears its own draft).
+  const [draft, setDraft] = useState(() => loadDraft('note:new'));
+  useEffect(() => { setDraft(loadDraft('note:new')); }, [notes]);
+  const query = q.toLowerCase().trim();
+  const matched = !query ? notes : notes.filter((n) =>
+    `${n.title} ${n.content}`.toLowerCase().includes(query));
+  // Pinned docs float to the top; order within each group is unchanged (stable sort).
+  const filtered = [...matched].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+  async function deleteAll() {
+    if (bulkBusy || notes.length === 0) return;
+    if (!confirm(`Delete ALL ${notes.length} document${notes.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    setBulkBusy(true);
+    try {
+      for (const n of notes) await repo.deleteNote(n.id); // eslint-disable-line no-await-in-loop
+      notify(`Deleted ${notes.length} document${notes.length > 1 ? 's' : ''}`, 'success');
+    } catch (err) { notify(err.message || 'Could not delete all', 'error'); }
+    finally { setBulkBusy(false); onChanged(); }
+  }
+
+  return (
+    <section className="screen">
+      <div className="search-bar">
+        <i className="fas fa-search" />
+        <input type="text" placeholder="Search documents…" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+      {draft && (
+        <div className="docs-draft-banner">
+          <div className="ddb-main">
+            <div className="ddb-title"><i className="fas fa-clock-rotate-left" /> Unsaved draft</div>
+            <div className="ddb-sub">{draftPreview(draft)}</div>
+          </div>
+          <button className="ddb-resume" onClick={() => onNew && onNew()}>Resume</button>
+          <button className="ddb-discard" aria-label="Discard draft"
+            onClick={() => { clearDraft('note:new'); setDraft(null); }}>
+            <i className="fas fa-times" />
+          </button>
+        </div>
+      )}
+      {notes.length > 0 && (
+        <div className="list-bulk">
+          <button className="bulk-delete-btn" onClick={deleteAll} disabled={bulkBusy}>
+            <i className={`fas ${bulkBusy ? 'fa-spinner fa-spin' : 'fa-trash'}`} /> {bulkBusy ? 'Deleting…' : `Delete all (${notes.length})`}
+          </button>
+        </div>
+      )}
+      <div className="list" id="docs-list">
+        {notes.length === 0 ? (
+          <div className="empty-state">
+            <i className="fas fa-feather-pointed" />
+            <p>No documents yet. Tap <b>+</b> to start writing — mix notes, headings and checklists freely.</p>
+          </div>
+        ) : (
+          filtered.map((note) => (
+            <NoteCard key={note.id} note={note} onOpen={onOpen} onShare={onShare}
+              onToggleHidden={onToggleHidden} onTogglePin={onTogglePin} onChanged={onChanged} />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
