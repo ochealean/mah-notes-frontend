@@ -14,7 +14,7 @@ import { rearmAlarms, rearmReminders, ensureKeepAlive } from '../lib/alarm.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
 import { APP_VERSION } from '../lib/appInfo.js';
-import { checkForUpdate, autoUpdateEnabled } from '../lib/updates.js';
+import { checkForUpdate, autoUpdateEnabled, shouldAutoPrompt } from '../lib/updates.js';
 import DocsTab from './DocsTab.jsx';
 import PlansTab from './PlansTab.jsx';
 import ViewTab from './ViewTab.jsx';
@@ -52,7 +52,8 @@ export default function MainApp() {
   const [share, setShare] = useState(null);           // { itemType, itemId } | null
   const [reconcile, setReconcile] = useState(null);   // { notes, plans } | null
   const [showWhatsNew, setShowWhatsNew] = useState(false);
-  const [update, setUpdate] = useState(null);         // { version, notes, apkUrl } | null
+  const [update, setUpdate] = useState(null);             // prompt currently shown | null
+  const [updateAvailable, setUpdateAvailable] = useState(null); // an update exists → red dot
   const syncState = useSync();
 
   const reload = useCallback(async () => {
@@ -83,13 +84,17 @@ export default function MainApp() {
   }, []);
 
   // Native: quietly check GitHub Releases for a newer APK on startup (only if
-  // the user hasn't turned auto-check off). We only ever PROMPT — never install.
+  // the user hasn't turned auto-check off). An update lights the red dot in
+  // Settings; the prompt auto-opens only ONCE per version (and never if the
+  // user picked "don't remind me again"). We only ever prompt — never install.
   useEffect(() => {
     if (!isNative || !autoUpdateEnabled()) return undefined;
     let alive = true;
     const t = setTimeout(async () => {
       const u = await checkForUpdate();
-      if (alive && u) setUpdate(u);
+      if (!alive || !u) return;
+      setUpdateAvailable(u);                 // red dot in Settings
+      if (shouldAutoPrompt(u.version)) setUpdate(u); // prompt once
     }, 2500); // let the app settle before hitting the network
     return () => { alive = false; clearTimeout(t); };
   }, []);
@@ -291,7 +296,7 @@ export default function MainApp() {
           <ScheduleTab schedules={schedules} onEdit={(block) => setScheduleEditor({ block })} onChanged={reload} />
         )}
         {tab === 'settings' && (
-          <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} reloadLists={reload} />
+          <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} reloadLists={reload} updateAvailable={updateAvailable} />
         )}
         </>
         )}
@@ -317,7 +322,7 @@ export default function MainApp() {
           <i className="fas fa-clock" /><span>Schedule</span>
         </button>
         <button className={`nav-item${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>
-          <i className="fas fa-gear" /><span>Settings</span>
+          <i className="fas fa-gear" />{updateAvailable && <span className="nav-dot" />}<span>Settings</span>
         </button>
       </nav>
 

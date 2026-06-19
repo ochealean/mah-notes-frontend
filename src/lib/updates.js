@@ -20,6 +20,8 @@ const APK_MIME = 'application/vnd.android.package-archive';
 // owner/repo of the public repo that holds your APK releases.
 export const UPDATE_REPO = 'ochealean/mah-notes-frontend';
 const AUTO_KEY = 'mahnotes:autoUpdateCheck';
+const DISMISS_KEY = 'mahnotes:updateDismissedVersion'; // last version the prompt was shown for
+const MUTE_KEY = 'mahnotes:updateMuted';               // user ticked "don't remind me again"
 
 // "v1.2.0" / "1.2.0" → [1, 2, 0]; missing parts count as 0.
 function parse(v) {
@@ -42,6 +44,27 @@ export function autoUpdateEnabled() {
 }
 export function setAutoUpdate(on) {
   try { localStorage.setItem(AUTO_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+}
+
+// "Don't remind me again" — when on, the prompt never auto-opens; the only
+// signal that an update exists is the red dot in Settings.
+export function isUpdateMuted() {
+  try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; }
+}
+export function setUpdateMuted(on) {
+  try { localStorage.setItem(MUTE_KEY, on ? '1' : '0'); } catch { /* ignore */ }
+}
+
+// Auto-open the prompt for this version? Only once per version (until a newer
+// one ships) and never when muted. The red dot is shown regardless.
+export function shouldAutoPrompt(version) {
+  if (isUpdateMuted()) return false;
+  try { return cmp(version, localStorage.getItem(DISMISS_KEY) || '0') > 0; }
+  catch { return true; }
+}
+// Remember the prompt was shown for this version, so it won't auto-open again.
+export function markUpdateDismissed(version) {
+  try { localStorage.setItem(DISMISS_KEY, String(version || '')); } catch { /* ignore */ }
 }
 
 // Returns { version, notes, apkUrl, htmlUrl } when a newer release exists,

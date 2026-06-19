@@ -196,7 +196,7 @@ function AccountSync({ reloadLists }) {
   );
 }
 
-export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloadLists }) {
+export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloadLists, updateAvailable }) {
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
   const initial = (name[0] || 'U').toUpperCase();
   const { pref, setTheme } = useTheme();
@@ -358,8 +358,13 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
               </label>
             </div>
             <button className="settings-row" disabled={checking} onClick={checkUpdates}>
-              <span><i className={`fas ${checking ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-down'}`} /> {checking ? 'Checking…' : 'Check for updates'}</span>
-              <i className="fas fa-chevron-right" />
+              <span>
+                <i className={`fas ${checking ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-down'}`} /> {checking ? 'Checking…' : 'Check for updates'}
+                {updateAvailable && <span className="update-dot" />}
+              </span>
+              {updateAvailable
+                ? <span className="settings-sub update-ready">v{updateAvailable.version} ready</span>
+                : <i className="fas fa-chevron-right" />}
             </button>
           </>
         )}

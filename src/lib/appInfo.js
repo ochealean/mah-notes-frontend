@@ -6,11 +6,20 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.2.4';
+export const APP_VERSION = '1.2.5';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.2.5',
+    date: '2026-06-20',
+    title: 'Quieter update reminders',
+    changes: [
+      'The update prompt now appears once, with a “Don’t remind me again” option.',
+      'After that, a red dot on Settings → Check for updates is your reminder — no more pop-up on every launch.',
+    ],
+  },
   {
     version: '1.2.4',
     date: '2026-06-20',
