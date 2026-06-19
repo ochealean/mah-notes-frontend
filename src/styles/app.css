@@ -752,3 +752,51 @@ a { color: var(--primary); }
     from { opacity: 0; transform: translate(-50%, -50%) scale(.96); }
     to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
+
+/* ═══════════ DRAFTS ═══════════ */
+/* Restored-draft banner inside the doc editor */
+.draft-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: rgba(245,166,35,.14); color: #a96f08; border: 1px solid rgba(245,166,35,.3);
+    border-radius: 12px; padding: 9px 12px; margin-bottom: 12px; font-size: 13px; font-weight: 600;
+}
+.draft-banner > span { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.draft-banner button {
+    border: none; background: rgba(245,166,35,.22); color: #a96f08; font-weight: 700;
+    border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer; flex-shrink: 0;
+}
+
+/* "Resume draft" banner at the top of the Docs list */
+.docs-draft-banner {
+    display: flex; align-items: center; gap: 11px; margin-bottom: 12px;
+    background: rgba(124,131,253,.1); border: 1px solid rgba(124,131,253,.28);
+    border-radius: 14px; padding: 12px 14px;
+}
+.docs-draft-banner .ddb-main { flex: 1; min-width: 0; }
+.docs-draft-banner .ddb-title { font-weight: 700; color: var(--primary); font-size: 14px; display: flex; align-items: center; gap: 7px; }
+.docs-draft-banner .ddb-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.docs-draft-banner .ddb-resume {
+    border: none; background: var(--grad-primary); color: #fff; border-radius: 999px;
+    padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+}
+.docs-draft-banner .ddb-discard {
+    border: none; background: transparent; color: var(--muted); font-size: 15px;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer; flex-shrink: 0;
+}
+
+/* ═══════════ WHAT'S NEW / CHANGELOG ═══════════ */
+.changelog { display: flex; flex-direction: column; gap: 18px; }
+.changelog-ver { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 9px; }
+.changelog-badge { background: var(--grad-primary); color: #fff; font-weight: 700; font-size: 12px; padding: 3px 10px; border-radius: 999px; }
+.changelog-title { font-weight: 700; color: var(--dark); font-size: 14.5px; }
+.changelog-date { color: var(--muted); font-size: 12px; margin-left: auto; }
+.changelog-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.changelog-list li { font-size: 13.5px; color: var(--dark); line-height: 1.5; }
+.changelog-foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 12px; }
+
+/* Update-available notes block */
+.update-notes {
+    background: var(--light); border-radius: 12px; padding: 12px 14px; margin: 4px 0 14px;
+    font-size: 13px; color: var(--dark); white-space: pre-wrap; line-height: 1.5;
+    max-height: 200px; overflow-y: auto;
+}

@@ -2,12 +2,19 @@
 //  Documents tab: search + list of note cards. Checklist boxes in
 //  a card preview can be ticked directly (gutter tap), which saves.
 // ============================================================
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { repo } from '../lib/repo.js';
 import { notify } from '../lib/notify.js';
 import { contentToHtml, escapeHtml, sanitizeHtml } from '../lib/richtext.js';
+import { loadDraft, clearDraft } from '../lib/drafts.js';
 import { timeAgo } from '../lib/timeAgo.js';
+
+// Plain-text preview of a saved draft's HTML body, for the resume banner.
+function draftPreview(d) {
+  const text = String(d?.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return (d?.title || '').trim() || text || 'Untitled draft';
+}
 
 function scheduleBadge(schedule) {
   if (!schedule) return null;
@@ -84,9 +91,13 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onTogglePin, onChange
   );
 }
 
-export default function DocsTab({ notes, onOpen, onShare, onToggleHidden, onTogglePin, onChanged }) {
+export default function DocsTab({ notes, onOpen, onNew, onShare, onToggleHidden, onTogglePin, onChanged }) {
   const [q, setQ] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
+  // A new-doc draft (app closed mid-typing before the first save). Re-check on
+  // mount and whenever the list changes (saving a doc clears its own draft).
+  const [draft, setDraft] = useState(() => loadDraft('note:new'));
+  useEffect(() => { setDraft(loadDraft('note:new')); }, [notes]);
   const query = q.toLowerCase().trim();
   const matched = !query ? notes : notes.filter((n) =>
     `${n.title} ${n.content}`.toLowerCase().includes(query));
@@ -110,6 +121,19 @@ export default function DocsTab({ notes, onOpen, onShare, onToggleHidden, onTogg
         <i className="fas fa-search" />
         <input type="text" placeholder="Search documents…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      {draft && (
+        <div className="docs-draft-banner">
+          <div className="ddb-main">
+            <div className="ddb-title"><i className="fas fa-clock-rotate-left" /> Unsaved draft</div>
+            <div className="ddb-sub">{draftPreview(draft)}</div>
+          </div>
+          <button className="ddb-resume" onClick={() => onNew && onNew()}>Resume</button>
+          <button className="ddb-discard" aria-label="Discard draft"
+            onClick={() => { clearDraft('note:new'); setDraft(null); }}>
+            <i className="fas fa-times" />
+          </button>
+        </div>
+      )}
       {notes.length > 0 && (
         <div className="list-bulk">
           <button className="bulk-delete-btn" onClick={deleteAll} disabled={bulkBusy}>

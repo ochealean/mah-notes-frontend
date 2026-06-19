@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { repo } from '../lib/repo.js';
 import { notify } from '../lib/notify.js';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext.js';
+import { saveDraft, loadDraft, clearDraft } from '../lib/drafts.js';
 import UnsavedChangesModal from './UnsavedChangesModal.jsx';
 
 export default function DocEditor({ initial, onClose, onSaved }) {
@@ -20,24 +21,80 @@ export default function DocEditor({ initial, onClose, onSaved }) {
   // The "Repeat" row only makes sense for checklists (it resets the boxes on a
   // schedule), so it's hidden until the doc actually contains a checklist.
   const [hasChecklist, setHasChecklist] = useState(false);
+  // Drafts: a brand-new doc shares one slot; edits to an existing doc key by id.
+  const draftKey = initial?.id ? `note:${initial.id}` : 'note:new';
+  const [restoredDraft, setRestoredDraft] = useState(false);
+  // Bumped on every content change so the autosave effect re-runs (the editor
+  // body isn't React state, so we can't depend on it directly).
+  const [draftTick, setDraftTick] = useState(0);
+
+  // Mark the doc edited: enables Save, and triggers the debounced draft autosave.
+  function markChanged() { setDirty(true); setDraftTick((t) => t + 1); }
 
   // Leaving with unsaved edits → ask first (Save / Don't save / Cancel).
   function requestClose() { if (dirty) setConfirmLeave(true); else onClose(); }
   function confirmSave() { setConfirmLeave(false); save(); }
+  // Explicit "Don't save": the work is being thrown away, so drop the draft too.
+  function discardAndClose() { clearDraft(draftKey); onClose(); }
 
   function refreshChecklist() {
     setHasChecklist(!!editorRef.current?.querySelector('.doc-check-item'));
   }
 
-  // Seed the editable surface once.
+  // Revert the restored draft back to what's actually saved (or empty for a
+  // new doc) and forget it.
+  function discardDraft() {
+    clearDraft(draftKey);
+    const editor = editorRef.current;
+    if (editor) editor.innerHTML = initial ? contentToHtml(initial.content || '') : '';
+    setTitle(initial?.title || '');
+    setSchedule(initial?.schedule || '');
+    setDirty(false);
+    setRestoredDraft(false);
+    refreshChecklist();
+  }
+
+  // Seed the editable surface once, then restore an unsaved draft if one exists
+  // (e.g. the app was closed mid-typing) and it actually differs from what's saved.
   useEffect(() => {
     const editor = editorRef.current;
-    editor.innerHTML = initial ? contentToHtml(initial.content || '') : '';
+    const savedHtml = initial ? contentToHtml(initial.content || '') : '';
+    editor.innerHTML = savedHtml;
     try { document.execCommand('defaultParagraphSeparator', false, 'div'); } catch {}
+
+    const draft = loadDraft(draftKey);
+    if (draft) {
+      const draftHtml = contentToHtml(draft.content || '');
+      const changed = draftHtml !== savedHtml
+        || (draft.title || '') !== (initial?.title || '')
+        || (draft.schedule || '') !== (initial?.schedule || '');
+      if (changed && (draftHtml.trim() || (draft.title || '').trim())) {
+        editor.innerHTML = draftHtml;
+        setTitle(draft.title || '');
+        setSchedule(draft.schedule || '');
+        setDirty(true);
+        setRestoredDraft(true);
+      }
+    }
+
     refreshChecklist();
     setTimeout(() => { (initial?.title ? editor : null)?.focus(); updateToolbarState(); }, 60);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Autosave the in-progress doc to a local draft (debounced) whenever it
+  // changes, so closing the app mid-typing never loses work. Cleared on save.
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const id = setTimeout(() => {
+      const content = sanitizeHtml(editorRef.current?.innerHTML || '');
+      const plain = content.replace(/<[^>]*>/g, '').replace(/​|&nbsp;/g, '').trim();
+      if (!title.trim() && !plain) { clearDraft(draftKey); return; }
+      saveDraft(draftKey, { title, content, schedule });
+    }, 500);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, schedule, draftTick, dirty]);
 
   // ── DOM helpers (operate on the editor element) ──
   const makeCheckItem = (innerHtml) => {
@@ -112,7 +169,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     const btn = e.target.closest('.tb-btn');
     if (!btn) return;
     editorRef.current.focus();
-    setDirty(true);
+    markChanged();
     if (btn.dataset.action === 'checklist') { insertChecklistItem(); return; }
     document.execCommand(btn.dataset.cmd, false, btn.dataset.val || null);
     updateToolbarState();
@@ -125,7 +182,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     if (e.clientX - rect.left <= 30) {
       e.preventDefault();
       item.setAttribute('data-checked', item.getAttribute('data-checked') === 'true' ? 'false' : 'true');
-      setDirty(true);
+      markChanged();
     }
   }
 
@@ -149,6 +206,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
         item.replaceWith(line); placeCaretAtStart(line);
       }
     }
+    markChanged();
     refreshChecklist();
   }
 
@@ -156,7 +214,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     editorRef.current.querySelectorAll('.doc-check-item[data-checked="true"]')
       .forEach((it) => it.setAttribute('data-checked', 'false'));
     editorRef.current.focus();
-    setDirty(true);
+    markChanged();
   }
 
   async function save() {
@@ -171,6 +229,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
         await repo.createNote(payload);
         notify('Document saved', 'success');
       }
+      clearDraft(draftKey); // saved for real — the draft is no longer needed
       onSaved();
     } catch (err) {
       notify(err.message, 'error');
@@ -184,15 +243,21 @@ export default function DocEditor({ initial, onClose, onSaved }) {
       <div className="sheet-bar">
         <button className="icon-btn" aria-label="Close" onClick={requestClose}><i className="fas fa-arrow-left" /></button>
         <input type="text" className="sheet-title-input" placeholder="Untitled document"
-          value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} />
+          value={title} onChange={(e) => { setTitle(e.target.value); markChanged(); }} />
         <button className="icon-btn save-icon" aria-label="Save" disabled={saving} onClick={save}><i className="fas fa-check" /></button>
       </div>
 
       <div className="sheet-scroll">
+        {restoredDraft && (
+          <div className="draft-banner">
+            <span><i className="fas fa-clock-rotate-left" /> Restored your unsaved draft</span>
+            <button type="button" onClick={discardDraft}>Discard</button>
+          </div>
+        )}
         {hasChecklist && (
           <div className="schedule-row">
             <label><i className="fas fa-repeat" /> Repeat</label>
-            <select className="mini-select" value={schedule} onChange={(e) => { setSchedule(e.target.value); setDirty(true); }}>
+            <select className="mini-select" value={schedule} onChange={(e) => { setSchedule(e.target.value); markChanged(); }}>
               <option value="">Never</option>
               <option value="daily">Daily</option>
               <option value="weekly">Weekly (Mon)</option>
@@ -212,7 +277,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
           onKeyDown={onEditorKeyDown}
           onKeyUp={updateToolbarState}
           onMouseUp={updateToolbarState}
-          onInput={() => { setDirty(true); refreshChecklist(); }}
+          onInput={() => { markChanged(); refreshChecklist(); }}
         />
       </div>
 
@@ -240,7 +305,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
       <UnsavedChangesModal
         saving={saving}
         onSave={confirmSave}
-        onDiscard={onClose}
+        onDiscard={discardAndClose}
         onCancel={() => setConfirmLeave(false)}
       />
     )}

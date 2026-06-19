@@ -13,6 +13,8 @@ import { listSchedules } from '../lib/scheduleStore.js';
 import { rearmAlarms, rearmReminders, ensureKeepAlive } from '../lib/alarm.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
+import { APP_VERSION } from '../lib/appInfo.js';
+import { checkForUpdate, autoUpdateEnabled } from '../lib/updates.js';
 import DocsTab from './DocsTab.jsx';
 import PlansTab from './PlansTab.jsx';
 import ViewTab from './ViewTab.jsx';
@@ -23,6 +25,8 @@ import PlanEditor from './PlanEditor.jsx';
 import ScheduleEditor from './ScheduleEditor.jsx';
 import ShareModal from './ShareModal.jsx';
 import ReconcileModal from './ReconcileModal.jsx';
+import WhatsNewModal from './WhatsNewModal.jsx';
+import UpdateModal from './UpdateModal.jsx';
 
 const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', schedule: 'Schedule', settings: 'Settings' };
 
@@ -47,6 +51,8 @@ export default function MainApp() {
   const [scheduleEditor, setScheduleEditor] = useState(null); // { block } | { } | null
   const [share, setShare] = useState(null);           // { itemType, itemId } | null
   const [reconcile, setReconcile] = useState(null);   // { notes, plans } | null
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [update, setUpdate] = useState(null);         // { version, notes, apkUrl } | null
   const syncState = useSync();
 
   const reload = useCallback(async () => {
@@ -65,6 +71,28 @@ export default function MainApp() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Show "What's new" once after an update (compare last-seen vs current
+  // version). Skipped on a first-ever install — we just record the version.
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem('mahnotes:lastSeenVersion');
+      if (seen && seen !== APP_VERSION) setShowWhatsNew(true);
+      localStorage.setItem('mahnotes:lastSeenVersion', APP_VERSION);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Native: quietly check GitHub Releases for a newer APK on startup (only if
+  // the user hasn't turned auto-check off). We only ever PROMPT — never install.
+  useEffect(() => {
+    if (!isNative || !autoUpdateEnabled()) return undefined;
+    let alive = true;
+    const t = setTimeout(async () => {
+      const u = await checkForUpdate();
+      if (alive && u) setUpdate(u);
+    }, 2500); // let the app settle before hitting the network
+    return () => { alive = false; clearTimeout(t); };
+  }, []);
 
   // Native: re-arm weekly reminders on app start so the OS holds them
   // (survives reboots / app restarts).
@@ -239,6 +267,7 @@ export default function MainApp() {
           <DocsTab
             notes={notes}
             onOpen={(note) => setDocEditor({ note })}
+            onNew={() => setDocEditor({})}
             onShare={(id) => setShare({ itemType: 'note', itemId: id })}
             onToggleHidden={(id, hidden) => toggleHidden('note', id, hidden)}
             onTogglePin={(id, pinned) => togglePinned(id, pinned)}
@@ -319,6 +348,8 @@ export default function MainApp() {
       {reconcile && (
         <ReconcileModal data={reconcile} onApply={onReconcileApply} onClose={onReconcileClose} />
       )}
+      {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
+      {update && <UpdateModal update={update} onClose={() => setUpdate(null)} />}
     </div>
   );
 }

@@ -5,8 +5,12 @@ import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth.js';
 import { useSync, setSyncEnabled, syncNow, setSyncAccount, getAccountOnlyItems, removeAccountData, resetSyncForLogout } from '../lib/sync.js';
 import { api, getToken } from '../lib/api.js';
 import { notify } from '../lib/notify.js';
+import { APP_VERSION } from '../lib/appInfo.js';
+import { checkForUpdate, autoUpdateEnabled, setAutoUpdate } from '../lib/updates.js';
 import FriendsModal from './FriendsModal.jsx';
 import InboxModal from './InboxModal.jsx';
+import WhatsNewModal from './WhatsNewModal.jsx';
+import UpdateModal from './UpdateModal.jsx';
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: 'fa-sun' },
@@ -203,6 +207,22 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [update, setUpdate] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [autoUpd, setAutoUpd] = useState(autoUpdateEnabled());
+
+  function toggleAuto(on) { setAutoUpd(on); setAutoUpdate(on); }
+  async function checkUpdates() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const u = await checkForUpdate();
+      if (u) setUpdate(u);
+      else notify('You’re on the latest version', 'success');
+    } catch { notify('Could not check for updates', 'error'); }
+    finally { setChecking(false); }
+  }
 
   // Seed the editor with the *custom* name (blank when on the email fallback),
   // so saving an untouched field doesn't overwrite the fallback with a literal.
@@ -321,8 +341,34 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
         )}
       </div>
 
+      <div className="settings-card">
+        <div className="settings-section-label">About &amp; updates</div>
+        <button className="settings-row" onClick={() => setShowWhatsNew(true)}>
+          <span><i className="fas fa-gift" /> What’s new</span>
+          <span className="settings-sub">v{APP_VERSION}</span>
+        </button>
+        {/* Native only: the APK self-updates from GitHub Releases (the web auto-updates on deploy). */}
+        {isNative && (
+          <>
+            <div className="settings-row" style={{ cursor: 'default' }}>
+              <span><i className="fas fa-rotate" /> Check for updates automatically</span>
+              <label className="switch">
+                <input type="checkbox" checked={autoUpd} onChange={(e) => toggleAuto(e.target.checked)} />
+                <span className="slider" />
+              </label>
+            </div>
+            <button className="settings-row" disabled={checking} onClick={checkUpdates}>
+              <span><i className={`fas ${checking ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-down'}`} /> {checking ? 'Checking…' : 'Check for updates'}</span>
+              <i className="fas fa-chevron-right" />
+            </button>
+          </>
+        )}
+      </div>
+
       <p className="settings-about">Mah Notes · MERN edition</p>
 
+      {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
+      {update && <UpdateModal update={update} onClose={() => setUpdate(null)} />}
       {showFriends && <FriendsModal me={user} onClose={() => setShowFriends(false)} />}
       {showInbox && (
         <InboxModal
