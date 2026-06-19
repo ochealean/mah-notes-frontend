@@ -3,3 +3,10 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Built APK artifacts — distributed via GitHub Releases, not the repo
+*.apk
+# Never commit signing material
+*.keystore
+*keystore*base64*
+keystore.properties
