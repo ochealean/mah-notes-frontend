@@ -10,6 +10,8 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { googleLogout } from '@react-oauth/google';
 import { api, setToken, getToken } from '../lib/api';
 import { isNative } from '../lib/nativeAuth';
+import { consumeGoogleRedirect } from '../lib/googleRedirect';
+import { notify } from '../lib/notify';
 import { connectRealtime, disconnectRealtime, onRealtime } from '../lib/realtime';
 
 // Tell Google Identity (web only) to drop its cached/auto-select session. This
@@ -88,6 +90,30 @@ export function AuthProvider({ children }) {
     setUser(u);
     return u;
   }, []);
+
+  // Handle the return leg of the web Google *redirect* flow: if we came back from
+  // Google with a code, finish login or linking. Runs once on mount.
+  useEffect(() => {
+    if (isNative) return;
+    const r = consumeGoogleRedirect();
+    if (!r) return;
+    (async () => {
+      if (r.error) {
+        if (r.error !== 'state_mismatch') notify('Google sign-in was cancelled or failed.', 'error');
+        return;
+      }
+      try {
+        if (r.intent === 'link') {
+          await linkGoogle({ code: r.code, redirectUri: r.redirectUri });
+          notify('Google connected', 'success');
+        } else {
+          await loginWithGoogle({ code: r.code, redirectUri: r.redirectUri });
+        }
+      } catch (err) {
+        notify(err?.message || 'Could not complete Google sign-in.', 'error');
+      }
+    })();
+  }, [loginWithGoogle, linkGoogle]);
 
   // Edit the profile (display name). A blank name clears it server-side and the
   // returned user falls back to the email prefix.

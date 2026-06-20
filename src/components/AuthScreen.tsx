@@ -124,17 +124,8 @@ export default function AuthScreen() {
             </div>
           ) : (
             <div style={{ width: '100%' }}>
-              <WebGoogleButton
-                disabled={busy}
-                onCode={async (code) => {
-                  setError('');
-                  setBusy(true);
-                  try { await loginWithGoogle({ code }); }
-                  catch (err) { setError(err.message); }
-                  finally { setBusy(false); }
-                }}
-                onError={() => setError('Google sign-in failed.')}
-              />
+              {/* Redirect flow: navigates to Google; AuthContext finishes on return. */}
+              <WebGoogleButton intent="login" disabled={busy} />
             </div>
           )}
         </div>

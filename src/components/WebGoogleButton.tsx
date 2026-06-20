@@ -1,21 +1,16 @@
 // ============================================================
 //  Our own "Continue with Google" button for the WEB.
-//  Uses the auth-code flow (popup) instead of the GIS-rendered <GoogleLogin>
-//  widget — that widget renders unreliably in some browsers (0px / hidden) and
-//  could leave a stray floating "G". This button is plain markup we control; it
-//  hands the auth `code` to onCode(), which the backend exchanges for an id token.
+//  Uses the OAuth *redirect* flow (full-page navigation to Google and back),
+//  not the GIS popup/widget. That avoids the unreliable GIS button (0px/hidden),
+//  Cross-Origin-Opener-Policy popup errors, FedCM, and any stray floating "G".
+//  The return leg is handled in AuthContext via consumeGoogleRedirect().
 // ============================================================
-import { useGoogleLogin } from '@react-oauth/google';
+import { startGoogleRedirect } from '../lib/googleRedirect';
 
-export default function WebGoogleButton({ onCode, onError, disabled, label = 'Continue with Google' }) {
-  const start = useGoogleLogin({
-    flow: 'auth-code',
-    onSuccess: (resp) => { if (resp?.code) onCode(resp.code); },
-    onError: () => onError && onError(),
-  });
-
+export default function WebGoogleButton({ intent = 'login', disabled = false, label = 'Continue with Google' }) {
   return (
-    <button type="button" className="btn btn-google btn-block" disabled={disabled} onClick={() => start()}>
+    <button type="button" className="btn btn-google btn-block" disabled={disabled}
+      onClick={() => startGoogleRedirect(intent)}>
       <i className="fab fa-google" style={{ marginRight: 8 }} /> {label}
     </button>
   );

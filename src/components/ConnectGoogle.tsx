@@ -52,19 +52,6 @@ export default function ConnectGoogle() {
     }
   }
 
-  async function linkWeb(code) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await linkGoogle({ code });
-      notify('Google connected', 'success');
-    } catch (err) {
-      notify(err.message || 'Could not connect Google.', 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <div className="settings-card">
       <div className="settings-section-label">Google</div>
@@ -78,12 +65,8 @@ export default function ConnectGoogle() {
             {busy ? 'Connecting…' : 'Connect Google'}
           </button>
         ) : (
-          <WebGoogleButton
-            label={busy ? 'Connecting…' : 'Connect Google'}
-            disabled={busy}
-            onCode={linkWeb}
-            onError={() => notify('Google sign-in failed.', 'error')}
-          />
+          // Redirect flow: navigates to Google; AuthContext finishes the link on return.
+          <WebGoogleButton intent="link" label="Connect Google" />
         )}
       </div>
     </div>
