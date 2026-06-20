@@ -7,8 +7,18 @@
 //  server explicitly rejects the token (401), not on a network error.
 // ============================================================
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { googleLogout } from '@react-oauth/google';
 import { api, setToken, getToken } from '../lib/api';
+import { isNative } from '../lib/nativeAuth';
 import { connectRealtime, disconnectRealtime, onRealtime } from '../lib/realtime';
+
+// Tell Google Identity (web only) to drop its cached/auto-select session. This
+// does NOT sign the user out of our app — it only stops GIS from re-rendering a
+// lingering personalized "Sign in as you" button (the stray floating green G).
+function clearGoogleIdentitySession() {
+  if (isNative) return;
+  try { googleLogout(); } catch {}
+}
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -29,6 +39,9 @@ export function AuthProvider({ children }) {
       if (!getToken()) { setReady(true); return; }
       const cached = readCachedUser();
       if (cached && !cancelled) setUser(cached);
+      // Already signed in from a previous session → make sure GIS isn't keeping a
+      // lingering personalized button alive (the stray floating green G).
+      clearGoogleIdentitySession();
       try {
         const { user } = await api.get('/api/auth/me');
         if (!cancelled) { setUser(user); cacheUser(user); }
@@ -58,9 +71,11 @@ export function AuthProvider({ children }) {
     adopt(await api.post('/api/auth/register', { email, password, name }))
   ), [adopt]);
 
-  const loginWithGoogle = useCallback(async (credential) => (
-    adopt(await api.post('/api/auth/google', { credential }))
-  ), [adopt]);
+  const loginWithGoogle = useCallback(async (credential) => {
+    const u = adopt(await api.post('/api/auth/google', { credential }));
+    clearGoogleIdentitySession(); // stop GIS leaving a lingering personalized button
+    return u;
+  }, [adopt]);
 
   // Connect a Google account to the CURRENT signed-in account (keeps the same
   // session/token — only the user record gains a googleId).
@@ -68,6 +83,7 @@ export function AuthProvider({ children }) {
     const { user: u } = await api.post('/api/auth/link-google', { credential });
     cacheUser(u);
     setUser(u);
+    clearGoogleIdentitySession(); // stop GIS leaving a lingering personalized button
     return u;
   }, []);
 
