@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
-import { isNative, initNativeGoogle, nativeGoogleSignIn } from '../lib/nativeAuth';
+import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth';
 
 const ERROR_MAP = {
   'Incorrect email or password.': 'Incorrect email or password.',
@@ -19,8 +19,9 @@ export default function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [googleSetupNeeded, setGoogleSetupNeeded] = useState(false);
 
-  // On a device, warm up the native Google plugin so the first tap is instant.
-  useEffect(() => { if (isNative) initNativeGoogle().catch(() => {}); }, []);
+  // The native Google plugin is initialised lazily inside nativeGoogleSignIn()
+  // on the actual sign-in tap. We deliberately do NOT warm it up on mount —
+  // eager init can leave Google's One Tap "Sign in" button rendered in a corner.
 
   async function onNativeGoogle() {
     setError('');

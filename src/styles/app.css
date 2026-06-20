@@ -3,6 +3,24 @@
    Mobile-first. Reuses the "Calm Lavender" theme from the web app.
    ============================================================ */
 
+/* Backstop for any stray Google Identity (GIS) iframe left pinned in a screen
+   corner (the floating green "G"). GIS injects these into <body> for the One Tap
+   prompt and the "Sign in with Google" button and doesn't always clean them up
+   when the React widget unmounts. ConnectGoogle.tsx also removes them in JS; this
+   hides any that slip through. Our own button uses .btn, so it's never matched. */
+#credential_picker_container,
+#credential_picker_iframe,
+div[id^="credential_picker"],
+iframe[src*="accounts.google.com/gsi"],
+iframe[title="Sign in with Google Button"],
+iframe[id^="gsi_"],
+.S9gUrf-YoZ4jf,
+[aria-label="Sign in with Google"][role="button"]:not(.btn):not(.settings-row) {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
 :root {
     --primary: #7C83FD;
     --primary-end: #9A8CFF;
