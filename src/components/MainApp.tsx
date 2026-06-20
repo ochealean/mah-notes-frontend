@@ -5,7 +5,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 import { repo } from '../lib/repo';
 import { isNative } from '../lib/nativeAuth';
 import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile, syncNow } from '../lib/sync';
@@ -32,7 +31,6 @@ const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', sch
 
 export default function MainApp() {
   const { user, logout } = useAuth();
-  const { effective, setTheme } = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // Returning from the Viewer (/view?...&from=plans) lands back on the tab the
@@ -247,10 +245,6 @@ export default function MainApp() {
           )}
         </div>
         <div className="appbar-actions">
-          <button className="icon-btn" title={effective === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            aria-label="Toggle theme" onClick={() => setTheme(effective === 'dark' ? 'light' : 'dark')}>
-            <i className={`fas ${effective === 'dark' ? 'fa-sun' : 'fa-moon'}`} />
-          </button>
           {tab !== 'settings' && tab !== 'view' && tab !== 'schedule' && (
             <button className={`icon-btn${allHidden ? ' active' : ''}`} title={allHidden ? 'Show all content' : 'Hide all content'}
               onClick={togglePrivacyAll}>

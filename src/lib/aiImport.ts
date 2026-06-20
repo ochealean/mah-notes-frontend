@@ -20,10 +20,14 @@ export async function scanPlanInput({ file, text }: { file?: File | null; text?:
   return res.days || {};
 }
 
-// Clean pasted text into a structured note. Returns { title, html }.
-export async function tidyNoteText(text: string) {
+// Clean a pasted note and/or a photo of a note into a structured note.
+// Returns { title, html }.
+export async function tidyNoteText(text: string, file?: File | null) {
   if (!navigator.onLine) throw new Error('AI needs an internet connection.');
-  const res = await api.post('/api/tidy-note', { text: String(text || '') });
+  const body: any = { text: String(text || '') };
+  if (file) { const { data, mediaType } = await toPayload(file); body.image = data; body.mediaType = mediaType; }
+  if (!body.text.trim() && !body.image) throw new Error('Add some text or a photo first.');
+  const res = await api.post('/api/tidy-note', body);
   return { title: res.title || '', html: res.html || '' };
 }
 
