@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth';
+import WebGoogleButton from './WebGoogleButton';
 
 const ERROR_MAP = {
   'Incorrect email or password.': 'Incorrect email or password.',
@@ -123,15 +123,19 @@ export default function AuthScreen() {
               )}
             </div>
           ) : (
-            <GoogleLogin
-              onSuccess={async (cred) => {
-                setError('');
-                try { await loginWithGoogle(cred.credential); }
-                catch (err) { setError(err.message); }
-              }}
-              onError={() => setError('Google sign-in failed.')}
-              useOneTap={false}
-            />
+            <div style={{ width: '100%' }}>
+              <WebGoogleButton
+                disabled={busy}
+                onCode={async (code) => {
+                  setError('');
+                  setBusy(true);
+                  try { await loginWithGoogle({ code }); }
+                  catch (err) { setError(err.message); }
+                  finally { setBusy(false); }
+                }}
+                onError={() => setError('Google sign-in failed.')}
+              />
+            </div>
           )}
         </div>
 

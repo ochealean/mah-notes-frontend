@@ -71,19 +71,21 @@ export function AuthProvider({ children }) {
     adopt(await api.post('/api/auth/register', { email, password, name }))
   ), [adopt]);
 
-  const loginWithGoogle = useCallback(async (credential) => {
-    const u = adopt(await api.post('/api/auth/google', { credential }));
-    clearGoogleIdentitySession(); // stop GIS leaving a lingering personalized button
-    return u;
+  // Accepts either an id token (native picker → { credential }) or a web
+  // auth-code (our own button → { code }). The backend handles both.
+  const loginWithGoogle = useCallback(async (payload) => {
+    const body = typeof payload === 'string' ? { credential: payload } : payload;
+    return adopt(await api.post('/api/auth/google', body));
   }, [adopt]);
 
   // Connect a Google account to the CURRENT signed-in account (keeps the same
-  // session/token — only the user record gains a googleId).
-  const linkGoogle = useCallback(async (credential) => {
-    const { user: u } = await api.post('/api/auth/link-google', { credential });
+  // session/token — only the user record gains a googleId). Accepts an id token
+  // (native) or a web auth-code, same as loginWithGoogle.
+  const linkGoogle = useCallback(async (payload) => {
+    const body = typeof payload === 'string' ? { credential: payload } : payload;
+    const { user: u } = await api.post('/api/auth/link-google', body);
     cacheUser(u);
     setUser(u);
-    clearGoogleIdentitySession(); // stop GIS leaving a lingering personalized button
     return u;
   }, []);
 
