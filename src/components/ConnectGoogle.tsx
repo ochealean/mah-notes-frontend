@@ -16,8 +16,12 @@ export default function ConnectGoogle() {
   const [busy, setBusy] = useState(false);
   if (!user) return null;
 
-  // Already linked → show a connected badge instead of the connect control.
-  if (user.hasGoogle) {
+  // Already linked (or clearly a Google-only account: it has no password) → show a
+  // connected badge, never the connect control. The `hasPassword === false` check
+  // also covers older cached user objects from before `hasGoogle` existed, so a
+  // Google sign-up never sees a stray "Connect Google" button.
+  const isGoogleAccount = user.hasGoogle || user.hasPassword === false;
+  if (isGoogleAccount) {
     return (
       <div className="settings-card">
         <div className="settings-section-label">Google</div>
@@ -51,21 +55,25 @@ export default function ConnectGoogle() {
         Connect a Google account so you can also sign in with one tap. You can link any Google account
         that isn’t already connected to another account.
       </p>
-      <div style={{ padding: '0 16px 14px' }}>
+      <div style={{ padding: '0 16px 14px', position: 'relative' }}>
         {isNative ? (
           <button className="btn btn-google btn-block" onClick={linkNative} disabled={busy}>
             {busy ? 'Connecting…' : 'Connect Google'}
           </button>
         ) : (
-          <GoogleLogin
-            onSuccess={async (cred) => {
-              try { await linkGoogle(cred.credential); notify('Google connected', 'success'); }
-              catch (err) { notify(err.message || 'Could not connect Google.', 'error'); }
-            }}
-            onError={() => notify('Google sign-in failed.', 'error')}
-            useOneTap={false}
-            text="continue_with"
-          />
+          // Keep the Google widget inside this card; without an explicit container
+          // it can render as a stray floating icon in the page corner.
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <GoogleLogin
+              onSuccess={async (cred) => {
+                try { await linkGoogle(cred.credential); notify('Google connected', 'success'); }
+                catch (err) { notify(err.message || 'Could not connect Google.', 'error'); }
+              }}
+              onError={() => notify('Google sign-in failed.', 'error')}
+              useOneTap={false}
+              text="continue_with"
+            />
+          </div>
         )}
       </div>
     </div>
