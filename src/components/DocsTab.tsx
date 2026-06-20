@@ -9,6 +9,7 @@ import { notify } from '../lib/notify';
 import { contentToHtml, escapeHtml, sanitizeHtml } from '../lib/richtext';
 import { loadDraft, clearDraft } from '../lib/drafts';
 import { timeAgo } from '../lib/timeAgo';
+import ImportDoc from './ImportDoc';
 
 // Plain-text preview of a saved draft's HTML body, for the resume banner.
 function draftPreview(d) {
@@ -121,6 +122,7 @@ export default function DocsTab({ notes, onOpen, onNew, onShare, onToggleHidden,
         <i className="fas fa-search" />
         <input type="text" placeholder="Search documents…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      <ImportDoc onImported={onChanged} />
       {draft && (
         <div className="docs-draft-banner">
           <div className="ddb-main">

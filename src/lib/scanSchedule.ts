@@ -12,7 +12,7 @@ const MAX_EDGE = 1600;   // px — plenty for reading a timetable
 const JPEG_QUALITY = 0.85;
 
 // Downscale + re-encode the picked file via canvas → { data, mediaType }.
-async function toPayload(file) {
+export async function toPayload(file) {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {

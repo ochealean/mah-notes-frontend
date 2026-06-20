@@ -9,6 +9,7 @@ import { APP_VERSION } from '../lib/appInfo';
 import { checkForUpdate, autoUpdateEnabled, setAutoUpdate } from '../lib/updates';
 import FriendsModal from './FriendsModal';
 import InboxModal from './InboxModal';
+import ConnectGoogle from './ConnectGoogle';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
 
@@ -304,6 +305,9 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
 
       {/* Native: account + sync controls. */}
       {isNative && <AccountSync reloadLists={reloadLists} />}
+
+      {/* Connect a Google account to an email/password account (web + native when signed in). */}
+      <ConnectGoogle />
 
       {/* Friends + sharing inbox — online features, need an account. */}
       {user && (

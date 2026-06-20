@@ -62,6 +62,15 @@ export function AuthProvider({ children }) {
     adopt(await api.post('/api/auth/google', { credential }))
   ), [adopt]);
 
+  // Connect a Google account to the CURRENT signed-in account (keeps the same
+  // session/token — only the user record gains a googleId).
+  const linkGoogle = useCallback(async (credential) => {
+    const { user: u } = await api.post('/api/auth/link-google', { credential });
+    cacheUser(u);
+    setUser(u);
+    return u;
+  }, []);
+
   // Edit the profile (display name). A blank name clears it server-side and the
   // returned user falls back to the email prefix.
   const updateProfile = useCallback(async (displayName) => {
@@ -88,7 +97,7 @@ export function AuthProvider({ children }) {
   }, [user?.id]);
 
   return (
-    <AuthContext.Provider value={{ user, ready, login, register, loginWithGoogle, updateProfile, logout }}>
+    <AuthContext.Provider value={{ user, ready, login, register, loginWithGoogle, linkGoogle, updateProfile, logout }}>
       {children}
     </AuthContext.Provider>
   );

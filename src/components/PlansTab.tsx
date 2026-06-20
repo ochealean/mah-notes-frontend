@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { repo } from '../lib/repo';
 import { notify } from '../lib/notify';
 import { timeAgo } from '../lib/timeAgo';
+import ScanPlan from './ScanPlan';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
@@ -126,6 +127,7 @@ export default function PlansTab({ plans, onEdit, onShare, onToggleHidden, onCha
 
   return (
     <section className="screen">
+      <ScanPlan onAdded={onChanged} />
       {plans.length > 0 && (
         <div className="list-bulk">
           <button className="bulk-delete-btn" onClick={deleteAll} disabled={bulkBusy}>
