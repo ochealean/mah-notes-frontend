@@ -379,7 +379,7 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
         )}
       </div>
 
-      <p className="settings-about">Mah Notes · MERN edition · build 15</p>
+      <p className="settings-about">Mah Notes · MERN edition · build 16</p>
 
       {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
       {update && <UpdateModal update={update} onClose={() => setUpdate(null)} />}

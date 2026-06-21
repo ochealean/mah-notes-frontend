@@ -7,20 +7,11 @@
 //  server explicitly rejects the token (401), not on a network error.
 // ============================================================
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { googleLogout } from '@react-oauth/google';
 import { api, setToken, getToken } from '../lib/api';
 import { isNative } from '../lib/nativeAuth';
 import { consumeGoogleRedirect } from '../lib/googleRedirect';
 import { notify } from '../lib/notify';
 import { connectRealtime, disconnectRealtime, onRealtime } from '../lib/realtime';
-
-// Tell Google Identity (web only) to drop its cached/auto-select session. This
-// does NOT sign the user out of our app — it only stops GIS from re-rendering a
-// lingering personalized "Sign in as you" button (the stray floating green G).
-function clearGoogleIdentitySession() {
-  if (isNative) return;
-  try { googleLogout(); } catch {}
-}
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -41,9 +32,6 @@ export function AuthProvider({ children }) {
       if (!getToken()) { setReady(true); return; }
       const cached = readCachedUser();
       if (cached && !cancelled) setUser(cached);
-      // Already signed in from a previous session → make sure GIS isn't keeping a
-      // lingering personalized button alive (the stray floating green G).
-      clearGoogleIdentitySession();
       try {
         const { user } = await api.get('/api/auth/me');
         if (!cancelled) { setUser(user); cacheUser(user); }
