@@ -26,6 +26,7 @@ import ShareModal from './ShareModal';
 import ReconcileModal from './ReconcileModal';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
+import { pushWidgetData, consumeWidgetOpen } from '../lib/widget';
 import logoUrl from '../images/mn_logo.png';
 
 const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', schedule: 'Schedule', settings: 'Settings' };
@@ -71,6 +72,33 @@ export default function MainApp() {
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // Native: keep the home-screen widget's data mirror in sync with the lists.
+  useEffect(() => {
+    if (!isNative) return;
+    pushWidgetData({ notes, plans, schedules });
+  }, [notes, plans, schedules]);
+
+  // Native: if the app was opened by tapping a widget, route to that item.
+  // Also refresh the widget mirror whenever the app comes back to the foreground.
+  useEffect(() => {
+    if (!isNative) return undefined;
+    const openFromWidget = async () => {
+      const t = await consumeWidgetOpen();
+      if (!t) return;
+      if (t.type === 'schedule') setTab('schedule');
+      else navigate(`/view?type=${t.type}&id=${encodeURIComponent(t.id)}&from=widget`);
+    };
+    openFromWidget();
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return;
+      openFromWidget();
+      pushWidgetData();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Show "What's new" once after an update (compare last-seen vs current
   // version). Skipped on a first-ever install — we just record the version.
