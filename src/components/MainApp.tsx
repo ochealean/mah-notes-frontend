@@ -297,7 +297,7 @@ export default function MainApp() {
       </main>
 
       {tab !== 'settings' && tab !== 'view' && (
-        <button className="fab" aria-label="Create" onClick={onFab}>
+        <button className="add-fab" aria-label="Create" onClick={onFab}>
           <i className="fas fa-plus" />
         </button>
       )}
