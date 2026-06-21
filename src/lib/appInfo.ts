@@ -6,11 +6,24 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.2.7';
+export const APP_VERSION = '1.2.8';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.2.8',
+    date: '2026-06-21',
+    title: 'Themes, new logo & more',
+    changes: [
+      'Customize your colors: pick a preset (Coffee, Ocean, Forest…) or set your own Primary & Accent colors with gradients (Settings → Appearance).',
+      'Fresh app logo throughout.',
+      'Connect your account to Google, import notes by pasting text or a photo in Docs, and build weekly plans with AI in Plans.',
+      'Tapping the checklist button now turns the current line into a checklist item instead of pushing your text to a new line.',
+      'Docs import can read a photo of a note and tidy it with AI.',
+      'Removed the light/dark toggle from the top bar — it lives in Settings.',
+    ],
+  },
   {
     version: '1.2.7',
     date: '2026-06-20',

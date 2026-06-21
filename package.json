@@ -1,6 +1,6 @@
 {
   "name": "mah-notes-frontend",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "description": "MERN frontend for Mah Notes — React + Vite.",
   "private": true,
   "type": "module",
