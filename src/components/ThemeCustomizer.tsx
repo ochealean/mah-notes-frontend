@@ -7,9 +7,11 @@
 import { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { PRESETS, colorOf, activePresetId, lighten } from '../lib/palette';
+import ColorField from './ColorField';
 
 export default function ThemeCustomizer() {
   const { palette, setPalette, resetPalette } = useTheme();
+  const [open, setOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const active = activePresetId(palette);
 
@@ -43,8 +45,12 @@ export default function ThemeCustomizer() {
 
   return (
     <div className="theme-custom">
-      <div className="settings-section-label" style={{ paddingLeft: 0 }}>Color theme</div>
+      <button className="theme-section-toggle" onClick={() => setOpen((s) => !s)}>
+        <span><i className="fas fa-palette" /> Color theme</span>
+        <i className={`fas fa-chevron-${open ? 'up' : 'down'}`} />
+      </button>
 
+      {!open ? null : (<>
       {/* Presets */}
       <div className="preset-grid">
         {PRESETS.map((p) => {
@@ -87,15 +93,16 @@ export default function ThemeCustomizer() {
           <p className="settings-hint-text" style={{ padding: '0 0 8px' }}>
             Surface &amp; text colors. These also apply in dark mode — if it looks off, tap Reset.
           </p>
-          <SwatchRow label="Surface tint" value={cur('light')} onChange={(v) => setKey('light', v)} />
-          <SwatchRow label="Text" value={cur('dark')} onChange={(v) => setKey('dark', v)} />
-          <SwatchRow label="Muted text" value={cur('muted')} onChange={(v) => setKey('muted', v)} />
+          <ColorField label="Surface tint" value={cur('light')} onChange={(v) => setKey('light', v)} />
+          <ColorField label="Text" value={cur('dark')} onChange={(v) => setKey('dark', v)} />
+          <ColorField label="Muted text" value={cur('muted')} onChange={(v) => setKey('muted', v)} />
         </div>
       )}
 
       <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={resetPalette}>
         <i className="fas fa-rotate-left" /> Reset to default
       </button>
+      </>)}
     </div>
   );
 }
@@ -104,7 +111,7 @@ export default function ThemeCustomizer() {
 function ColorControl({ label, value, onChange, gradient, endValue, onToggleGrad, onEndChange }) {
   return (
     <div className="color-control">
-      <SwatchRow label={label} value={value} onChange={onChange} />
+      <ColorField label={label} value={value} onChange={onChange} />
       <label className="grad-toggle">
         <span><i className="fas fa-fill-drip" /> Gradient</span>
         <span className="switch">
@@ -112,20 +119,7 @@ function ColorControl({ label, value, onChange, gradient, endValue, onToggleGrad
           <span className="slider" />
         </span>
       </label>
-      {gradient && <SwatchRow label="Gradient end" value={endValue} onChange={onEndChange} sub />}
+      {gradient && <ColorField label="Gradient end" value={endValue} onChange={onEndChange} sub />}
     </div>
-  );
-}
-
-// A label + hex + native color picker shown as a swatch.
-function SwatchRow({ label, value, onChange, sub = false }) {
-  return (
-    <label className={`color-row${sub ? ' color-row-sub' : ''}`}>
-      <span className="color-row-label">{label}</span>
-      <span className="color-row-val">{value.toUpperCase()}</span>
-      <span className="color-swatch" style={{ background: value }}>
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label} />
-      </span>
-    </label>
   );
 }

@@ -94,6 +94,13 @@
 
 /* ── Color-theme customizer ────────────────────────────── */
 .theme-custom { display: flex; flex-direction: column; }
+.theme-section-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    background: none; border: none; cursor: pointer; padding: 8px 0 4px;
+    font-size: 14px; font-weight: 600; color: var(--dark);
+}
+.theme-section-toggle > span { display: flex; align-items: center; gap: 9px; }
+.theme-section-toggle > span > i { color: var(--primary); }
 .preset-grid {
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0 14px;
 }
@@ -119,20 +126,45 @@
 }
 
 .color-control { border-top: 1px solid var(--border); padding-top: 4px; }
+.color-field { position: relative; }
+.color-field-sub { padding-left: 14px; }
 .color-row {
     display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer;
+    width: 100%; background: none; border: none; text-align: left;
 }
-.color-row-sub { padding-left: 14px; }
 .color-row-label { font-size: 14px; font-weight: 600; color: var(--dark); }
 .color-row-val { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .color-swatch {
-    width: 34px; height: 34px; border-radius: 9px; position: relative; overflow: hidden;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); flex: 0 0 auto;
+    width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.12);
 }
-.color-swatch input[type="color"] {
-    position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px);
-    border: none; padding: 0; background: none; cursor: pointer; opacity: 0;
+
+/* Custom color picker popover (saturation square + hue + hex/RGB).
+   Portalled to <body> and positioned with inline left/top (fixed). */
+.color-popover {
+    position: fixed; z-index: 2600; width: 232px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.28); padding: 12px; display: flex; flex-direction: column; gap: 10px;
 }
+.color-popover .react-colorful { width: 100%; height: 160px; }
+.color-popover .react-colorful__saturation { border-radius: 10px 10px 0 0; }
+.color-popover .react-colorful__hue { height: 18px; border-radius: 0 0 10px 10px; margin-top: 2px; }
+.color-popover .react-colorful__pointer { width: 18px; height: 18px; }
+.cp-hex {
+    display: flex; align-items: center; gap: 6px; border: 1.5px solid var(--border);
+    border-radius: 9px; padding: 7px 10px; background: var(--input-bg); color: var(--muted); font-weight: 700;
+}
+.cp-hex input {
+    flex: 1; border: none; background: none; color: var(--dark); font-size: 14px;
+    font-weight: 700; letter-spacing: .5px; text-transform: uppercase; outline: none; width: 100%;
+}
+.cp-rgb { display: flex; gap: 8px; }
+.cp-rgb-field { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.cp-rgb-field input {
+    width: 100%; text-align: center; border: 1.5px solid var(--border); border-radius: 9px;
+    padding: 7px 4px; background: var(--input-bg); color: var(--dark); font-size: 14px; font-weight: 600; outline: none;
+}
+.cp-rgb-field span { font-size: 11px; font-weight: 700; color: var(--muted); }
 .grad-toggle {
     display: flex; align-items: center; justify-content: space-between; padding: 4px 0 6px;
     font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer;

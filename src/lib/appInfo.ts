@@ -6,11 +6,20 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.2.8';
+export const APP_VERSION = '1.2.9';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.2.9',
+    date: '2026-06-21',
+    title: 'Better color picker',
+    changes: [
+      'The color theme picker now opens a full saturation + hue picker with hex and R/G/B inputs, right inside the app (matching the website).',
+      'The Color theme section is collapsible — tap to expand or hide it.',
+    ],
+  },
   {
     version: '1.2.8',
     date: '2026-06-21',
