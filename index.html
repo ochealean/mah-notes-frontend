@@ -8,12 +8,21 @@
     <meta name="theme-color" content="#7C83FD">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <script>
-        // Apply the saved theme before first paint to avoid a flash of light.
+        // Apply the saved theme + custom palette before first paint (no flash).
         (function () {
             try {
                 var p = localStorage.getItem('mahnotes_theme') || 'system';
                 var dark = p === 'dark' || (p === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
                 document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+            } catch (e) {}
+            try {
+                var pal = JSON.parse(localStorage.getItem('mahnotes_palette') || 'null');
+                if (pal) {
+                    var map = { primary: '--primary', primaryEnd: '--primary-end', accent: '--accent',
+                        accentEnd: '--accent-end', light: '--light', dark: '--dark', muted: '--muted' };
+                    var el = document.documentElement;
+                    for (var k in map) { if (pal[k]) el.style.setProperty(map[k], pal[k]); }
+                }
             } catch (e) {}
         })();
     </script>

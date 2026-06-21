@@ -92,6 +92,60 @@
     text-transform: uppercase; color: var(--muted);
 }
 
+/* ── Color-theme customizer ────────────────────────────── */
+.theme-custom { display: flex; flex-direction: column; }
+.preset-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0 14px;
+}
+.preset-chip {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer;
+    border: 1.5px solid var(--border); background: var(--input-bg); border-radius: 12px;
+    padding: 9px 4px; transition: border-color .15s ease, transform .12s ease;
+}
+.preset-chip:active { transform: scale(.95); }
+.preset-chip.active { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(124,131,253,.22); }
+.preset-swatch { width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.preset-name { font-size: 11px; font-weight: 600; color: var(--muted); }
+
+.theme-preview {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+    padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--input-bg);
+}
+.tp-btn { color: #fff; font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 20px; }
+.tp-dot {
+    margin-left: auto; width: 36px; height: 36px; border-radius: 12px; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+    box-shadow: 0 6px 14px rgba(47,211,182,.4);
+}
+
+.color-control { border-top: 1px solid var(--border); padding-top: 4px; }
+.color-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer;
+}
+.color-row-sub { padding-left: 14px; }
+.color-row-label { font-size: 14px; font-weight: 600; color: var(--dark); }
+.color-row-val { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.color-swatch {
+    width: 34px; height: 34px; border-radius: 9px; position: relative; overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); flex: 0 0 auto;
+}
+.color-swatch input[type="color"] {
+    position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px);
+    border: none; padding: 0; background: none; cursor: pointer; opacity: 0;
+}
+.grad-toggle {
+    display: flex; align-items: center; justify-content: space-between; padding: 4px 0 6px;
+    font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer;
+}
+.grad-toggle i { margin-right: 7px; }
+
+.theme-advanced-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    background: none; border: none; border-top: 1px solid var(--border); cursor: pointer;
+    padding: 12px 0 6px; font-size: 13.5px; font-weight: 600; color: var(--primary);
+}
+.theme-advanced { padding-top: 2px; }
+
 /* ── Native Google sign-in button (APK only) ───────────── */
 .btn-google {
     display: flex; align-items: center; justify-content: center; gap: 10px;

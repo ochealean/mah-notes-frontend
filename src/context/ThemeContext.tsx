@@ -1,10 +1,12 @@
 // ============================================================
-//  Theme: light / dark / system. Persists the preference and
-//  reflects the *effective* theme onto <html data-theme="…">.
-//  An inline script in index.html applies it before first paint
-//  to avoid a flash; this keeps it in sync afterwards.
+//  Theme: light / dark / system + a customizable color palette.
+//  Reflects the *effective* light/dark theme onto <html data-theme>
+//  and applies any custom palette as inline CSS variables. Inline
+//  scripts in index.html apply both before first paint (no flash);
+//  this keeps them in sync afterwards.
 // ============================================================
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { loadPalette, savePalette, applyPalette } from '../lib/palette';
 
 const ThemeContext = createContext(null);
 export const useTheme = () => useContext(ThemeContext);
@@ -17,6 +19,7 @@ const apply = (effective) => { document.documentElement.dataset.theme = effectiv
 
 export function ThemeProvider({ children }) {
   const [pref, setPref] = useState(() => localStorage.getItem(KEY) || 'system');
+  const [palette, setPaletteState] = useState(() => loadPalette());
 
   useEffect(() => {
     apply(resolve(pref));
@@ -27,8 +30,25 @@ export function ThemeProvider({ children }) {
     return () => media.removeEventListener('change', onChange);
   }, [pref]);
 
+  // Persist + apply the custom palette whenever it changes.
+  const setPalette = useCallback((next) => {
+    const value = next && Object.keys(next).length ? next : null;
+    setPaletteState(value);
+    savePalette(value);
+    applyPalette(value);
+  }, []);
+
+  const resetPalette = useCallback(() => setPalette(null), [setPalette]);
+
+  // Ensure the palette is applied on mount (covers the case where the index.html
+  // pre-paint script didn't run, e.g. an old cached shell).
+  useEffect(() => { applyPalette(palette); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <ThemeContext.Provider value={{ pref, setTheme: setPref, effective: resolve(pref) }}>
+    <ThemeContext.Provider value={{
+      pref, setTheme: setPref, effective: resolve(pref),
+      palette, setPalette, resetPalette,
+    }}>
       {children}
     </ThemeContext.Provider>
   );

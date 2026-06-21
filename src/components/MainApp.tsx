@@ -26,6 +26,7 @@ import ShareModal from './ShareModal';
 import ReconcileModal from './ReconcileModal';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
+import logoUrl from '../images/mn_logo.png';
 
 const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', schedule: 'Schedule', settings: 'Settings' };
 
@@ -234,9 +235,7 @@ export default function MainApp() {
     <div className="app">
       <header className="appbar">
         <div className="appbar-left">
-          <span className="appbar-logo" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-            <i className="fas fa-feather-pointed" />
-          </span>
+          <img className="appbar-logo" src={logoUrl} alt="Mah Notes" />
           <span className="appbar-title">{TAB_TITLES[tab]}</span>
           {busy && (
             <span className="appbar-busy" title={syncState.syncing ? 'Syncing…' : 'Loading…'}>

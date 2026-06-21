@@ -10,6 +10,7 @@ import { checkForUpdate, autoUpdateEnabled, setAutoUpdate } from '../lib/updates
 import FriendsModal from './FriendsModal';
 import InboxModal from './InboxModal';
 import ConnectGoogle from './ConnectGoogle';
+import ThemeCustomizer from './ThemeCustomizer';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
 
@@ -334,6 +335,9 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
             </button>
           ))}
         </div>
+        <div style={{ padding: '4px 16px 16px' }}>
+          <ThemeCustomizer />
+        </div>
       </div>
 
       <div className="settings-card">
@@ -379,7 +383,7 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
         )}
       </div>
 
-      <p className="settings-about">Mah Notes · MERN edition · build 17</p>
+      <p className="settings-about">Mah Notes · MERN edition · build 18</p>
 
       {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
       {update && <UpdateModal update={update} onClose={() => setUpdate(null)} />}

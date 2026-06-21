@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth';
 import WebGoogleButton from './WebGoogleButton';
+import logoUrl from '../images/mn_logo.png';
 
 const ERROR_MAP = {
   'Incorrect email or password.': 'Incorrect email or password.',
@@ -64,10 +65,7 @@ export default function AuthScreen() {
     <section className="auth-screen">
       <div className="auth-card">
         <div className="auth-brand">
-          <div className="auth-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'var(--grad-primary)', color: '#fff', fontSize: 34 }}>
-            <i className="fas fa-feather-pointed" />
-          </div>
+          <img className="auth-logo" src={logoUrl} alt="Mah Notes" />
           <h1 className="auth-name">Mah Notes</h1>
           <p className="auth-tag">Your notes, plans &amp; checklists — everywhere.</p>
         </div>
