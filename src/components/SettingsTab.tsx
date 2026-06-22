@@ -7,6 +7,7 @@ import { api, getToken } from '../lib/api';
 import { notify } from '../lib/notify';
 import { APP_VERSION } from '../lib/appInfo';
 import { checkForUpdate, autoUpdateEnabled, setAutoUpdate } from '../lib/updates';
+import { pushWidgetData } from '../lib/widget';
 import FriendsModal from './FriendsModal';
 import InboxModal from './InboxModal';
 import ConnectGoogle from './ConnectGoogle';
@@ -339,6 +340,23 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
           <ThemeCustomizer />
         </div>
       </div>
+
+      {isNative && (
+        <div className="settings-card">
+          <div className="settings-section-label">Home-screen widget</div>
+          <p className="settings-hint-text">
+            Add the Mah Notes widget from your launcher (long-press the home screen → Widgets).
+            If the picker doesn’t show your notes/plans, tap below to refresh its data.
+          </p>
+          <button className="settings-row" onClick={async () => {
+            const c = await pushWidgetData();
+            notify(`Widget updated — ${c.notes} notes, ${c.plans} plans, ${c.schedule} schedule items`, 'success');
+          }}>
+            <span><i className="fas fa-table-cells-large" /> Update home-screen widgets</span>
+            <i className="fas fa-rotate-right" />
+          </button>
+        </div>
+      )}
 
       <div className="settings-card">
         <button className="settings-row" onClick={onPrivacy}>

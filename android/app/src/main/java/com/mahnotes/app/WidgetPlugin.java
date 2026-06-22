@@ -37,8 +37,7 @@ public class WidgetPlugin extends Plugin {
         AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
         int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, NotesWidgetProvider.class));
         if (ids != null && ids.length > 0) {
-            // Refresh the scrollable lists, then push a full provider update.
-            mgr.notifyAppWidgetViewDataChanged(ids, R.id.widget_list);
+            // Rebuild every widget from the fresh data.
             Intent intent = new Intent(ctx, NotesWidgetProvider.class);
             intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
             intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);

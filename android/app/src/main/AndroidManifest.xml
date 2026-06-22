@@ -76,17 +76,12 @@
                 android:resource="@xml/notes_widget_info" />
         </receiver>
 
-        <!-- Supplies the widget's scrollable rows. -->
-        <service
-            android:name=".WidgetRemoteViewsService"
-            android:exported="false"
-            android:permission="android.permission.BIND_REMOTEVIEWS" />
-
         <!-- Picker shown when the widget is added (choose which item it displays). -->
         <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
-            android:theme="@style/AppTheme.NoActionBarLaunch">
+            android:label="Mah Notes widget"
+            android:theme="@style/WidgetConfigTheme">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

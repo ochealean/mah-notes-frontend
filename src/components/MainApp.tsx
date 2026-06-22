@@ -74,10 +74,12 @@ export default function MainApp() {
   useEffect(() => { reload(); }, [reload]);
 
   // Native: keep the home-screen widget's data mirror in sync with the lists.
+  // Fetch fresh from the store (not the initial empty render state) and only
+  // once the first load has finished, so the widget picker always sees real data.
   useEffect(() => {
-    if (!isNative) return;
-    pushWidgetData({ notes, plans, schedules });
-  }, [notes, plans, schedules]);
+    if (!isNative || loading) return;
+    pushWidgetData();
+  }, [notes, plans, schedules, loading]);
 
   // Native: if the app was opened by tapping a widget, route to that item.
   // Also refresh the widget mirror whenever the app comes back to the foreground.

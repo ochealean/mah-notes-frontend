@@ -8,7 +8,6 @@
     android:padding="12dp">
 
     <LinearLayout
-        android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -26,37 +25,33 @@
             android:ellipsize="end"
             android:textColor="#7C83FD" />
 
-        <ImageView
+        <TextView
             android:id="@+id/widget_add"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
-            android:src="@drawable/ic_add"
-            android:contentDescription="Open" />
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="+"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:paddingStart="10dp"
+            android:paddingEnd="2dp"
+            android:textColor="#7C83FD" />
     </LinearLayout>
 
-    <View
+    <!-- ImageView (not a plain View) — RemoteViews only supports specific view
+         classes, and a bare <View> makes the widget fail with "Can't load widget". -->
+    <ImageView
         android:id="@+id/widget_divider"
         android:layout_width="match_parent"
         android:layout_height="2dp"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="4dp"
-        android:background="#7C83FD"
-        android:alpha="0.35" />
+        android:scaleType="fitXY"
+        android:contentDescription="@null"
+        android:background="#7C83FD" />
 
-    <TextView
-        android:id="@+id/widget_empty"
+    <LinearLayout
+        android:id="@+id/widget_container"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
-        android:text="Nothing for today"
-        android:textColor="#8A86A8"
-        android:textSize="13sp"
-        android:visibility="gone" />
-
-    <ListView
-        android:id="@+id/widget_list"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:divider="@null"
-        android:dividerHeight="0dp" />
+        android:layout_height="wrap_content"
+        android:orientation="vertical" />
 </LinearLayout>

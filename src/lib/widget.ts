@@ -74,7 +74,9 @@ export async function pushWidgetData(pre?: { notes?: any[]; plans?: any[]; sched
 
     const data = { primary, items, notes: noteItems, plans: planItems, schedule: blocks };
     await Widget.setData({ json: JSON.stringify(data) });
+    return { notes: noteItems.length, plans: planItems.length, schedule: blocks.length };
   } catch { /* best-effort — never break the app over the widget */ }
+  return { notes: 0, plans: 0, schedule: 0 };
 }
 
 // What a tapped widget asked to open, consumed once. { type, id } | null.
