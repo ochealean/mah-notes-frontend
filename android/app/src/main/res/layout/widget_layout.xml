@@ -49,9 +49,28 @@
         android:contentDescription="@null"
         android:background="#7C83FD" />
 
-    <LinearLayout
-        android:id="@+id/widget_container"
+    <!-- Scrollable rows: a ListView is one of the few RemoteViews collection
+         containers, so the widget scrolls when it has more rows than fit. The
+         empty view shows when there's nothing for today. -->
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical" />
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/widget_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp" />
+
+        <TextView
+            android:id="@+id/widget_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="Tap to open Mah Notes"
+            android:textColor="#9A93C9"
+            android:textSize="13sp" />
+    </FrameLayout>
 </LinearLayout>

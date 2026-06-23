@@ -14,30 +14,34 @@ import Widget from './widgetPlugin';
 
 // Turn a note's stored content (HTML or plain text) into widget rows:
 // checklist items carry checked:true/false; plain lines carry checked:null.
+// `ck` is the checklist item's index among the note's check items (-1 for plain
+// lines) — the widget sends it back so a toggle hits the right item on save.
 function noteLines(content: string) {
   const holder = document.createElement('div');
   holder.innerHTML = contentToHtml(content || '');
-  const out: Array<{ text: string; checked: boolean | null }> = [];
+  const out: Array<{ text: string; checked: boolean | null; ck: number }> = [];
+  let checkIdx = 0;
   holder.childNodes.forEach((node: any) => {
     if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement;
       if (el.classList && el.classList.contains('doc-check-item')) {
+        const idx = checkIdx++;
         const text = (el.textContent || '').trim();
-        if (text) out.push({ text, checked: el.getAttribute('data-checked') === 'true' });
+        if (text) out.push({ text, checked: el.getAttribute('data-checked') === 'true', ck: idx });
         return;
       }
       if (el.tagName === 'UL' || el.tagName === 'OL') {
         el.querySelectorAll('li').forEach((li) => {
           const t = (li.textContent || '').trim();
-          if (t) out.push({ text: t, checked: null });
+          if (t) out.push({ text: t, checked: null, ck: -1 });
         });
         return;
       }
       const t = (el.textContent || '').trim();
-      if (t) out.push({ text: t, checked: null });
+      if (t) out.push({ text: t, checked: null, ck: -1 });
     } else if (node.nodeType === Node.TEXT_NODE) {
       const t = (node.nodeValue || '').trim();
-      if (t) out.push({ text: t, checked: null });
+      if (t) out.push({ text: t, checked: null, ck: -1 });
     }
   });
   return out.slice(0, 60);
@@ -77,6 +81,47 @@ export async function pushWidgetData(pre?: { notes?: any[]; plans?: any[]; sched
     return { notes: noteItems.length, plans: planItems.length, schedule: blocks.length };
   } catch { /* best-effort — never break the app over the widget */ }
   return { notes: 0, plans: 0, schedule: 0 };
+}
+
+// Apply any checkbox toggles the user made directly on a widget to the real
+// note/plan, so they persist (and sync). Returns true if anything changed, so
+// the caller can re-push a fresh snapshot. Best-effort: never throws.
+export async function consumeWidgetToggles(): Promise<boolean> {
+  if (!isNative) return false;
+  let toggles: any[] = [];
+  try {
+    const r = await Widget.consumeToggles();
+    toggles = Array.isArray(r?.toggles) ? r.toggles : [];
+  } catch { return false; }
+  if (!toggles.length) return false;
+
+  let changed = false;
+  let notesCache: any[] | null = null;
+  for (const t of toggles) {
+    try {
+      if (t.type === 'plan') {
+        await repo.checkPlan(t.id, { day: t.day, index: t.ck, checked: !!t.checked });
+        changed = true;
+      } else if (t.type === 'note') {
+        if (!notesCache) notesCache = await repo.listNotes();
+        const n = notesCache.find((x) => x.id === t.id);
+        if (!n) continue;
+        const div = document.createElement('div');
+        div.innerHTML = n.content || '';
+        // Match noteLines: only top-level checklist items, in order.
+        const items = Array.from(div.children).filter(
+          (c) => (c as HTMLElement).classList?.contains('doc-check-item'),
+        );
+        const el = items[t.ck] as HTMLElement | undefined;
+        if (!el) continue;
+        el.setAttribute('data-checked', t.checked ? 'true' : 'false');
+        n.content = div.innerHTML; // keep cache in step if the same note is toggled twice
+        await repo.updateNote(t.id, { content: div.innerHTML });
+        changed = true;
+      }
+    } catch { /* skip a bad toggle, keep going */ }
+  }
+  return changed;
 }
 
 // What a tapped widget asked to open, consumed once. { type, id } | null.

@@ -6,11 +6,21 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.3.1';
+export const APP_VERSION = '1.3.2';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.3.2',
+    date: '2026-06-24',
+    title: 'Widget: scroll & tick',
+    changes: [
+      'The home-screen widget now scrolls when an item has more rows than fit.',
+      'Tap a checkbox right on the widget to tick it off — it saves to your note or plan instead of opening the app.',
+      'A plan widget now shows today’s weekday in its title (e.g. “Leg Day · Monday”).',
+    ],
+  },
   {
     version: '1.3.1',
     date: '2026-06-22',

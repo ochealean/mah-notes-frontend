@@ -12,6 +12,8 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONArray;
+
 /**
  * Bridges the home-screen widget to JS.
  *   setData({ json })       → store the widget data snapshot + refresh every widget.
@@ -27,6 +29,7 @@ public class WidgetPlugin extends Plugin {
     static final String KEY_DATA = "data";
     static final String KEY_OPEN_TYPE = "open_type";
     static final String KEY_OPEN_ID = "open_id";
+    static final String KEY_PENDING = "pending_toggles";
 
     @PluginMethod
     public void setData(PluginCall call) {
@@ -44,6 +47,22 @@ public class WidgetPlugin extends Plugin {
             ctx.sendBroadcast(intent);
         }
         call.resolve();
+    }
+
+    // Checkbox toggles the user made on a widget, queued for the app to persist
+    // to the real note/plan. Returned (and cleared) on the next app resume.
+    @PluginMethod
+    public void consumeToggles(PluginCall call) {
+        SharedPreferences sp = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String raw = sp.getString(KEY_PENDING, "[]");
+        sp.edit().remove(KEY_PENDING).apply();
+        JSObject ret = new JSObject();
+        try {
+            ret.put("toggles", new JSONArray(raw));
+        } catch (Exception e) {
+            ret.put("toggles", new JSONArray());
+        }
+        call.resolve(ret);
     }
 
     @PluginMethod

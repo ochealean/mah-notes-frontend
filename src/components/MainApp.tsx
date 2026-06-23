@@ -26,7 +26,7 @@ import ShareModal from './ShareModal';
 import ReconcileModal from './ReconcileModal';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
-import { pushWidgetData, consumeWidgetOpen } from '../lib/widget';
+import { pushWidgetData, consumeWidgetOpen, consumeWidgetToggles } from '../lib/widget';
 import logoUrl from '../images/mn_logo.png';
 
 const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', schedule: 'Schedule', settings: 'Settings' };
@@ -91,11 +91,19 @@ export default function MainApp() {
       if (t.type === 'schedule') setTab('schedule');
       else navigate(`/view?type=${t.type}&id=${encodeURIComponent(t.id)}&from=widget`);
     };
+    // Persist any checkbox the user ticked on a widget, then refresh the lists
+    // and re-push so app and widget agree.
+    const syncWidgetToggles = async () => {
+      const changed = await consumeWidgetToggles();
+      if (changed) reload();
+      else pushWidgetData();
+    };
     openFromWidget();
+    syncWidgetToggles();
     const onVis = () => {
       if (document.visibilityState !== 'visible') return;
       openFromWidget();
-      pushWidgetData();
+      syncWidgetToggles();
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
