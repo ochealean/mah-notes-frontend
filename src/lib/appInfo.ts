@@ -6,11 +6,19 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.3.2';
+export const APP_VERSION = '1.3.3';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.3.3',
+    date: '2026-06-25',
+    title: 'Widget rolls over at midnight',
+    changes: [
+      'Plan and schedule widgets now switch to the new day automatically at midnight — no need to open the app first.',
+    ],
+  },
   {
     version: '1.3.2',
     date: '2026-06-24',

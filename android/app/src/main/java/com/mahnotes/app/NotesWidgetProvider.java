@@ -1,5 +1,6 @@
 package com.mahnotes.app;
 
+import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
@@ -9,6 +10,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.widget.RemoteViews;
 
 import org.json.JSONArray;
@@ -37,6 +39,10 @@ public class NotesWidgetProvider extends AppWidgetProvider {
             { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
 
     static final String ACTION_CLICK = "com.mahnotes.app.WIDGET_CLICK";
+    // Fired by AlarmManager just after midnight so plan/schedule widgets roll
+    // over to the new day without the app being opened.
+    static final String ACTION_DAILY_REFRESH = "com.mahnotes.app.WIDGET_DAILY_REFRESH";
+    private static final int MIDNIGHT_REQUEST = 7001;
 
     static class Row {
         String text;
@@ -48,11 +54,31 @@ public class NotesWidgetProvider extends AppWidgetProvider {
     @Override
     public void onUpdate(Context ctx, AppWidgetManager mgr, int[] ids) {
         for (int id : ids) updateWidget(ctx, mgr, id);
+        scheduleMidnightRefresh(ctx); // keep the day-rollover alarm armed
+    }
+
+    @Override
+    public void onEnabled(Context ctx) {
+        scheduleMidnightRefresh(ctx); // first widget added → start the daily refresh
+    }
+
+    @Override
+    public void onDisabled(Context ctx) {
+        cancelMidnightRefresh(ctx); // last widget removed → stop it
     }
 
     @Override
     public void onReceive(Context ctx, Intent intent) {
         super.onReceive(ctx, intent);
+
+        if (ACTION_DAILY_REFRESH.equals(intent.getAction())) {
+            AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
+            int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, NotesWidgetProvider.class));
+            if (ids != null) for (int id : ids) updateWidget(ctx, mgr, id);
+            scheduleMidnightRefresh(ctx); // arm for the next midnight
+            return;
+        }
+
         if (!ACTION_CLICK.equals(intent.getAction())) return;
 
         int appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
@@ -272,5 +298,61 @@ public class NotesWidgetProvider extends AppWidgetProvider {
 
     private static String todayKey() {
         return DAY_KEYS[todayIndex()];
+    }
+
+    // ── Day-rollover refresh ─────────────────────────────────────────────
+    // The widget recomputes "today" only when it's rebuilt, and we never poll
+    // (updatePeriodMillis=0). So we set an AlarmManager alarm just after the
+    // next midnight to rebuild every widget; each fire re-arms the following day.
+    // Self-healing: with no widgets present it cancels itself instead of arming.
+    static void scheduleMidnightRefresh(Context ctx) {
+        AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
+        int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, NotesWidgetProvider.class));
+        if (ids == null || ids.length == 0) { cancelMidnightRefresh(ctx); return; }
+
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+
+        Calendar c = Calendar.getInstance();
+        c.add(Calendar.DAY_OF_YEAR, 1);
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 10);
+        c.set(Calendar.MILLISECOND, 0);
+        long at = c.getTimeInMillis();
+
+        PendingIntent pi = midnightPi(ctx);
+        // RTC (not RTC_WAKEUP): no need to wake a sleeping phone — the refresh
+        // is delivered the moment the screen next comes on, before it's seen.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
+                am.setAndAllowWhileIdle(AlarmManager.RTC, at, pi);
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC, at, pi);
+            } else {
+                am.setExact(AlarmManager.RTC, at, pi);
+            }
+        } catch (SecurityException e) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC, at, pi);
+        }
+    }
+
+    static void cancelMidnightRefresh(Context ctx) {
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am != null) am.cancel(midnightPi(ctx));
+    }
+
+    // Rebuild every widget now (e.g. after a reboot, where the date may have changed).
+    static void refreshAll(Context ctx) {
+        AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
+        int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, NotesWidgetProvider.class));
+        if (ids != null) for (int id : ids) updateWidget(ctx, mgr, id);
+    }
+
+    private static PendingIntent midnightPi(Context ctx) {
+        Intent i = new Intent(ctx, NotesWidgetProvider.class).setAction(ACTION_DAILY_REFRESH);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+        return PendingIntent.getBroadcast(ctx, MIDNIGHT_REQUEST, i, flags);
     }
 }

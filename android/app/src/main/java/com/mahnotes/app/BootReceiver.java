@@ -13,6 +13,8 @@ public class BootReceiver extends BroadcastReceiver {
                 || "android.intent.action.QUICKBOOT_POWERON".equals(action)) {
             AlarmScheduler.restoreAll(context);
             AlarmGuardService.startIfEnabled(context); // resume keep-alive after reboot
+            NotesWidgetProvider.scheduleMidnightRefresh(context); // re-arm widget day-rollover
+            NotesWidgetProvider.refreshAll(context); // and rebuild now (date may have changed)
         }
     }
 }
