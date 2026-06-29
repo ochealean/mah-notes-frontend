@@ -7,6 +7,7 @@
 //  Needs sign-in + internet (the AI runs on the server).
 // ============================================================
 import { api } from './api';
+import { rateGate } from './rateLimit';
 
 const MAX_EDGE = 1600;   // px — plenty for reading a timetable
 const JPEG_QUALITY = 0.85;
@@ -41,6 +42,7 @@ export async function toPayload(file) {
 // message on failure; returns [] when the AI found no timetable.
 export async function scanScheduleImage(file) {
   if (!navigator.onLine) throw new Error('Scanning needs an internet connection.');
+  rateGate('ai', { limit: 8, windowMs: 60_000, message: 'You’re using AI very fast — give it a moment and try again.' });
   const { data, mediaType } = await toPayload(file);
   const res = await api.post('/api/scan-schedule', { image: data, mediaType });
   return res.blocks || [];

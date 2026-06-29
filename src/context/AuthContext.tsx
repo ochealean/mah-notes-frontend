@@ -11,7 +11,15 @@ import { api, setToken, getToken } from '../lib/api';
 import { isNative } from '../lib/nativeAuth';
 import { consumeGoogleRedirect } from '../lib/googleRedirect';
 import { notify } from '../lib/notify';
+import { rateGate } from '../lib/rateLimit';
 import { connectRealtime, disconnectRealtime, onRealtime } from '../lib/realtime';
+
+// Throttle sign-in attempts (login / register / Google) so a stuck button or
+// retry loop can't spam the auth endpoint. The server enforces a hard limit too.
+const authGate = () => rateGate('auth', {
+  limit: 8, windowMs: 60_000,
+  message: 'Too many sign-in attempts — wait a moment and try again.',
+});
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -53,17 +61,20 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const login = useCallback(async (email, password) => (
-    adopt(await api.post('/api/auth/login', { email, password }))
-  ), [adopt]);
+  const login = useCallback(async (email, password) => {
+    authGate();
+    return adopt(await api.post('/api/auth/login', { email, password }));
+  }, [adopt]);
 
-  const register = useCallback(async (email, password, name) => (
-    adopt(await api.post('/api/auth/register', { email, password, name }))
-  ), [adopt]);
+  const register = useCallback(async (email, password, name) => {
+    authGate();
+    return adopt(await api.post('/api/auth/register', { email, password, name }));
+  }, [adopt]);
 
   // Accepts either an id token (native picker → { credential }) or a web
   // auth-code (our own button → { code }). The backend handles both.
   const loginWithGoogle = useCallback(async (payload) => {
+    authGate();
     const body = typeof payload === 'string' ? { credential: payload } : payload;
     return adopt(await api.post('/api/auth/google', body));
   }, [adopt]);

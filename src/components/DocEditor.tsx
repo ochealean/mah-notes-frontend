@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { repo } from '../lib/repo';
 import { notify } from '../lib/notify';
+import { rateGate } from '../lib/rateLimit';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
 import { saveDraft, loadDraft, clearDraft } from '../lib/drafts';
 import UnsavedChangesModal from './UnsavedChangesModal';
@@ -236,6 +237,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     const payload = { title: (title || '').trim() || 'Untitled', content, schedule: schedule || null };
     setSaving(true);
     try {
+      rateGate('save', { limit: 20, windowMs: 10_000, message: 'You’re saving too fast — slow down a moment.' });
       if (initial?.id) {
         await repo.updateNote(initial.id, payload);
         notify('Document updated', 'success');

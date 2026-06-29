@@ -6,6 +6,7 @@
 import { useRef, useState } from 'react';
 import { repo } from '../lib/repo';
 import { notify } from '../lib/notify';
+import { rateGate } from '../lib/rateLimit';
 import UnsavedChangesModal from './UnsavedChangesModal';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -60,6 +61,7 @@ export default function PlanEditor({ initial, onClose, onSaved }) {
 
     setSaving(true);
     try {
+      rateGate('save', { limit: 20, windowMs: 10_000, message: 'You’re saving too fast — slow down a moment.' });
       if (initial?.id) {
         await repo.updatePlan(initial.id, { title: (title || '').trim() || 'Workout Plan', days });
         notify('Plan updated', 'success');

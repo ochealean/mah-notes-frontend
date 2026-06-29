@@ -35,7 +35,13 @@ public class WidgetPlugin extends Plugin {
     public void setData(PluginCall call) {
         String json = call.getString("json", "{}");
         Context ctx = getContext();
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_DATA, json).apply();
+        // commit() (synchronous) — not apply() — so the snapshot is durably on
+        // disk before this resolves. The widget-config picker can be launched in
+        // a FRESH process (the WebView/app isn't running), which loads prefs from
+        // disk; an async apply() can lose its write if the app process is killed
+        // first, leaving the picker showing a stale list that's missing the
+        // newest note/plan. commit() guarantees the picker always sees the latest.
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_DATA, json).commit();
 
         AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
         int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, NotesWidgetProvider.class));

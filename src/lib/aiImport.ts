@@ -8,10 +8,19 @@
 import { api } from './api';
 import { toPayload } from './scanSchedule';
 import { escapeHtml } from './richtext';
+import { rateGate } from './rateLimit';
+
+// Shared AI cooldown across all AI features (plan scan, note tidy, schedule
+// scan) — these are the expensive, server-side LLM calls.
+const aiGate = () => rateGate('ai', {
+  limit: 8, windowMs: 60_000,
+  message: 'You’re using AI very fast — give it a moment and try again.',
+});
 
 // Build a weekly plan from a photo and/or text. Returns { monday: [strings], … }.
 export async function scanPlanInput({ file, text }: { file?: File | null; text?: string }) {
   if (!navigator.onLine) throw new Error('AI needs an internet connection.');
+  aiGate();
   const body: any = {};
   if (file) { const { data, mediaType } = await toPayload(file); body.image = data; body.mediaType = mediaType; }
   if (text && text.trim()) body.text = text.trim();
@@ -24,6 +33,7 @@ export async function scanPlanInput({ file, text }: { file?: File | null; text?:
 // Returns { title, html }.
 export async function tidyNoteText(text: string, file?: File | null) {
   if (!navigator.onLine) throw new Error('AI needs an internet connection.');
+  aiGate();
   const body: any = { text: String(text || '') };
   if (file) { const { data, mediaType } = await toPayload(file); body.image = data; body.mediaType = mediaType; }
   if (!body.text.trim() && !body.image) throw new Error('Add some text or a photo first.');

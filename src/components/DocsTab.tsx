@@ -9,7 +9,9 @@ import { notify } from '../lib/notify';
 import { contentToHtml, escapeHtml, sanitizeHtml } from '../lib/richtext';
 import { loadDraft, clearDraft } from '../lib/drafts';
 import { timeAgo } from '../lib/timeAgo';
+import { sortItems, loadSort, saveSort } from '../lib/sortItems';
 import ImportDoc from './ImportDoc';
+import SortControl from './SortControl';
 
 // Plain-text preview of a saved draft's HTML body, for the resume banner.
 function draftPreview(d) {
@@ -94,6 +96,7 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onTogglePin, onChange
 
 export default function DocsTab({ notes, onOpen, onNew, onShare, onToggleHidden, onTogglePin, onChanged }) {
   const [q, setQ] = useState('');
+  const [sort, setSort] = useState(() => loadSort('docs'));
   const [bulkBusy, setBulkBusy] = useState(false);
   // A new-doc draft (app closed mid-typing before the first save). Re-check on
   // mount and whenever the list changes (saving a doc clears its own draft).
@@ -102,8 +105,10 @@ export default function DocsTab({ notes, onOpen, onNew, onShare, onToggleHidden,
   const query = q.toLowerCase().trim();
   const matched = !query ? notes : notes.filter((n) =>
     `${n.title} ${n.content}`.toLowerCase().includes(query));
-  // Pinned docs float to the top; order within each group is unchanged (stable sort).
-  const filtered = [...matched].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  // Apply the chosen sort, then float pinned docs to the top (stable, so the
+  // sort order is preserved within the pinned and unpinned groups).
+  const filtered = [...sortItems(matched, sort)].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  function changeSort(k) { setSort(k); saveSort('docs', k); }
 
   async function deleteAll() {
     if (bulkBusy || notes.length === 0) return;
@@ -137,7 +142,8 @@ export default function DocsTab({ notes, onOpen, onNew, onShare, onToggleHidden,
         </div>
       )}
       {notes.length > 0 && (
-        <div className="list-bulk">
+        <div className="list-toolbar">
+          <SortControl value={sort} onChange={changeSort} />
           <button className="bulk-delete-btn" onClick={deleteAll} disabled={bulkBusy}>
             <i className={`fas ${bulkBusy ? 'fa-spinner fa-spin' : 'fa-trash'}`} /> {bulkBusy ? 'Deleting…' : `Delete all (${notes.length})`}
           </button>

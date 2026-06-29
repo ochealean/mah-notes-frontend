@@ -7,7 +7,9 @@ import { useNavigate } from 'react-router-dom';
 import { repo } from '../lib/repo';
 import { notify } from '../lib/notify';
 import { timeAgo } from '../lib/timeAgo';
+import { sortItems, loadSort, saveSort } from '../lib/sortItems';
 import ScanPlan from './ScanPlan';
+import SortControl from './SortControl';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
@@ -101,6 +103,9 @@ function PlanCard({ plan, today, onEdit, onShare, onToggleHidden, onChanged, onT
 export default function PlansTab({ plans, onEdit, onShare, onToggleHidden, onChanged, setPlans }) {
   const today = todayName();
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [sort, setSort] = useState(() => loadSort('plans'));
+  function changeSort(k) { setSort(k); saveSort('plans', k); }
+  const sortedPlans = sortItems(plans, sort);
 
   async function deleteAll() {
     if (bulkBusy || plans.length === 0) return;
@@ -129,7 +134,8 @@ export default function PlansTab({ plans, onEdit, onShare, onToggleHidden, onCha
     <section className="screen">
       <ScanPlan onAdded={onChanged} />
       {plans.length > 0 && (
-        <div className="list-bulk">
+        <div className="list-toolbar">
+          <SortControl value={sort} onChange={changeSort} />
           <button className="bulk-delete-btn" onClick={deleteAll} disabled={bulkBusy}>
             <i className={`fas ${bulkBusy ? 'fa-spinner fa-spin' : 'fa-trash'}`} /> {bulkBusy ? 'Deleting…' : `Delete all (${plans.length})`}
           </button>
@@ -142,7 +148,7 @@ export default function PlansTab({ plans, onEdit, onShare, onToggleHidden, onCha
             <p>No plans yet. Tap <b>+</b> to build a day-by-day routine (like a workout split). Each day shows its own checklist and resets daily.</p>
           </div>
         ) : (
-          plans.map((plan) => (
+          sortedPlans.map((plan) => (
             <PlanCard key={plan.id} plan={plan} today={today} onEdit={onEdit} onShare={onShare}
               onToggleHidden={onToggleHidden} onChanged={onChanged} onToggleCheck={onToggleCheck} />
           ))
