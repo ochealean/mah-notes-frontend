@@ -6,11 +6,21 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.3.3';
+export const APP_VERSION = '1.3.4';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.3.4',
+    date: '2026-06-30',
+    title: 'Sort your lists + widget fix',
+    changes: [
+      'Sort Documents and Plans by recently updated, recently created, or title (A–Z / Z–A) — your choice is remembered per list.',
+      'Fixed the home-screen widget picker sometimes missing your most recently created note or plan.',
+      'Added gentle rate limits so rapid or heavy use (AI, sign-in, saving) stays smooth and reliable.',
+    ],
+  },
   {
     version: '1.3.3',
     date: '2026-06-25',
