@@ -41,6 +41,29 @@
 }
 .ref-note i { color: var(--primary); margin-right: 4px; }
 
+/* Public "get the app / sign in" CTA under a shared link (web only) */
+.view-cta {
+    margin-top: 18px; text-align: center;
+    background: rgba(255,255,255,.78); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.7); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 18px; animation: fadeUp .3s ease;
+}
+.view-cta-head .logo {
+    font-weight: 800; font-size: 17px;
+    background: var(--grad-primary); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.view-cta-head p { color: var(--muted); font-size: 13px; margin: 4px 0 14px; }
+.view-cta-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.vcta-btn {
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    font-weight: 700; font-size: 14px; padding: 11px 18px; border-radius: 999px; cursor: pointer;
+}
+.vcta-btn.primary { background: var(--grad-primary); color: #fff; border: none; }
+.vcta-btn.ghost {
+    background: transparent; color: var(--primary);
+    border: 1.5px solid color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
 /* Reading-view rich content */
 .v-card .doc-content { font-size: 16px; line-height: 1.75; color: var(--dark); word-break: break-word; }
 .v-card .doc-content h1 { font-size: 24px; margin: .5em 0; }

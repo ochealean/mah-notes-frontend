@@ -25,6 +25,35 @@ const refKey = (tok) => 'mahnotes_ref_' + tok;
 const refLoad = (tok) => { try { return JSON.parse(localStorage.getItem(refKey(tok)) || '{}'); } catch { return {}; } };
 const refSave = (tok, state) => { try { localStorage.setItem(refKey(tok), JSON.stringify(state)); } catch {} };
 
+// The Android APK ships as an asset on the latest GitHub release (same public
+// repo as UPDATE_REPO in lib/updates.ts). /releases/latest always points at the
+// newest build, so this link never needs bumping per release.
+const APP_DOWNLOAD_URL = 'https://github.com/ochealean/mah-notes-frontend/releases/latest';
+
+// Public acquisition CTA shown under a shared link on the web: get the app, and
+// sign in / sign up. Hidden inside the native app and for signed-in owners.
+function ViewerCta() {
+  const signedIn = !!getToken();
+  return (
+    <div className="view-cta">
+      <div className="view-cta-head">
+        <span className="logo">Mah Notes</span>
+        <p>Your notes, plans &amp; checklists — everywhere.</p>
+      </div>
+      <div className="view-cta-btns">
+        <a className="vcta-btn primary" href={APP_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
+          <i className="fas fa-download" /> Download the app
+        </a>
+        {!signedIn && (
+          <Link className="vcta-btn ghost" to="/">
+            <i className="fas fa-right-to-bracket" /> Sign in / Sign up
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Message({ icon, title, desc, extra }: any) {
   return (
     <div className="view-page">
@@ -218,6 +247,9 @@ export default function Viewer() {
           <div className="ref-note"><i className="fas fa-circle-info" /> This is your own copy — ticks are saved only on this device and don't change the owner's list.</div>
         )}
       </div>
+
+      {/* Public share on the web → offer the app + sign-in. */}
+      {!isNative && data.mode !== 'owner' && <ViewerCta />}
     </div>
   );
 }
