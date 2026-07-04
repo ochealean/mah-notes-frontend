@@ -12,6 +12,7 @@ import { isNative } from '../lib/nativeAuth';
 import { consumeGoogleRedirect } from '../lib/googleRedirect';
 import { notify } from '../lib/notify';
 import { rateGate } from '../lib/rateLimit';
+import { clearCache } from '../lib/webCache';
 import { connectRealtime, disconnectRealtime, onRealtime } from '../lib/realtime';
 
 // Throttle sign-in attempts (login / register / Google) so a stuck button or
@@ -46,7 +47,7 @@ export function AuthProvider({ children }) {
       } catch (err) {
         // Only sign out on an explicit auth rejection; keep the session on
         // network failures (offline) so the device stays logged in.
-        if (err?.status === 401) { setToken(null); cacheUser(null); if (!cancelled) setUser(null); }
+        if (err?.status === 401) { setToken(null); cacheUser(null); clearCache(); if (!cancelled) setUser(null); }
       } finally {
         if (!cancelled) setReady(true);
       }
@@ -126,6 +127,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     setToken(null);
     cacheUser(null);
+    clearCache();
     setUser(null);
   }, []);
 

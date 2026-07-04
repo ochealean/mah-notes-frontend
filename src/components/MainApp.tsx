@@ -27,6 +27,7 @@ import ReconcileModal from './ReconcileModal';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
 import { pushWidgetData, consumeWidgetOpen, consumeWidgetToggles } from '../lib/widget';
+import { readCache, writeCache } from '../lib/webCache';
 import logoUrl from '../images/mn_logo.png';
 
 const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', schedule: 'Schedule', settings: 'Settings' };
@@ -41,10 +42,15 @@ export default function MainApp() {
     const t = searchParams.get('tab');
     return TAB_TITLES[t] ? t : 'docs';
   });
-  const [notes, setNotes] = useState([]);
-  const [plans, setPlans] = useState([]);
-  const [schedules, setSchedules] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Web: seed from the localStorage cache so a revisit paints instantly, then
+  // reload() refreshes in the background. Native returns null here (it reads its
+  // own IndexedDB), so it keeps the normal first-load path.
+  const cached = useState(() => readCache(user?.id))[0];
+  const [notes, setNotes] = useState(() => cached?.notes || []);
+  const [plans, setPlans] = useState(() => cached?.plans || []);
+  const [schedules, setSchedules] = useState(() => cached?.schedules || []);
+  // With a cache in hand there's nothing to "load" — show it immediately.
+  const [loading, setLoading] = useState(!cached);
 
   const [docEditor, setDocEditor] = useState(null);   // { note } | { } (new) | null
   const [planEditor, setPlanEditor] = useState(null); // { plan } | { } | null
@@ -80,6 +86,14 @@ export default function MainApp() {
     if (!isNative || loading) return;
     pushWidgetData();
   }, [notes, plans, schedules, loading]);
+
+  // Web: keep the instant-load cache in step with the lists (including optimistic
+  // edits like pin/hide), so the next visit renders the latest without waiting on
+  // the network. Skipped while the first load is still in flight.
+  useEffect(() => {
+    if (isNative || loading) return;
+    writeCache(user?.id, { notes, plans, schedules });
+  }, [notes, plans, schedules, loading, user?.id]);
 
   // Native: if the app was opened by tapping a widget, route to that item.
   // Also refresh the widget mirror whenever the app comes back to the foreground.
