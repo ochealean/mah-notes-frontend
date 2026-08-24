@@ -6,11 +6,17 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.3.4';
+export const APP_VERSION = '1.3.5';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.3.5',
+    date: '2026-08-25',
+    title: '...',
+    changes: ['...'],
+  },
   {
     version: '1.3.4',
     date: '2026-06-30',
