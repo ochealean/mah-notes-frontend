@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node drive2.js)",
+      "Bash(node drive3.js)",
+      "Bash(sed \"s#'Buy groceries<br>Call mom<br>Walk dog'#['Buy groceries','Call mom','Walk dog'].map\\(l => '<div>'+l+'</div>'\\).join\\(''\\)#\" drive3.js)",
+      "Bash(node drive3_fixed.js)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

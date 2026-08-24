@@ -8,7 +8,11 @@ const ALLOWED_TAGS = new Set([
   'P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE',
   'H1', 'H2', 'H3', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'DIV', 'SPAN',
 ]);
-const ALLOWED_CLASSES = ['doc-check-item', 'doc-check-box', 'doc-check-text'];
+const ALLOWED_CLASSES = [
+  'doc-check-item', 'doc-check-box', 'doc-check-text',
+  'doc-text-sm', 'doc-text-lg',
+  'doc-indent-1', 'doc-indent-2', 'doc-indent-3', 'doc-indent-4', 'doc-indent-5', 'doc-indent-6',
+];
 
 export function escapeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -32,6 +36,14 @@ function cleanChildren(node) {
       const clean = document.createElement(tag.toLowerCase());
       const keptClasses = [...child.classList].filter((c) => ALLOWED_CLASSES.includes(c));
       if (keptClasses.length) clean.className = keptClasses.join(' ');
+      // The only inline style the editor's text-size control writes — validate
+      // and clamp it rather than trusting the string, everything else in
+      // `style` is dropped.
+      const fontSizeMatch = /^(\d{1,3})px$/.exec(child.style && child.style.fontSize);
+      if (fontSizeMatch) {
+        const px = Math.max(8, Math.min(200, parseInt(fontSizeMatch[1], 10)));
+        clean.style.fontSize = `${px}px`;
+      }
       if (child.hasAttribute('data-checked')) {
         clean.setAttribute('data-checked', child.getAttribute('data-checked') === 'true' ? 'true' : 'false');
       }
@@ -74,5 +86,11 @@ export function normalizeChecklists(html) {
 export function contentToHtml(content) {
   if (!content) return '';
   if (looksLikeHtml(content)) return sanitizeHtml(normalizeChecklists(content));
-  return escapeHtml(content).replace(/\n/g, '<br>');
+  // One <div> per line, matching the per-line block shape the editor itself
+  // produces when a user types and presses Enter. A flat `<br>`-joined string
+  // left bare text/<br> nodes as direct children of the editor, which broke
+  // the checklist toolbar's line-detection (it only wraps the caret's text
+  // node, leaving orphaned <br> siblings that render as a stray blank line
+  // next to the newly inserted block-level checklist row).
+  return content.split('\n').map((line) => `<div>${escapeHtml(line) || '<br>'}</div>`).join('');
 }

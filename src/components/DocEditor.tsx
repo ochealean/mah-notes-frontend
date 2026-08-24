@@ -14,6 +14,10 @@ import UnsavedChangesModal from './UnsavedChangesModal';
 export default function DocEditor({ initial, onClose, onSaved }) {
   const editorRef = useRef(null);
   const toolbarRef = useRef(null);
+  // The text-size input lives outside the contentEditable surface, so
+  // focusing it loses the caret's position. This remembers which line was
+  // last active so the size can still be applied to the right place.
+  const lastBlockRef = useRef(null);
   const [title, setTitle] = useState(initial?.title || '');
   const [schedule, setSchedule] = useState(initial?.schedule || '');
   const [saving, setSaving] = useState(false);
@@ -131,8 +135,53 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     }
     return node.nodeType === Node.ELEMENT_NODE ? node : null;
   }
+  // Older docs may still carry the size as a class (from before the size
+  // input replaced the small/large text buttons); clear both forms.
+  const LEGACY_TEXT_SIZE_CLASSES = ['doc-text-sm', 'doc-text-lg'];
+  const FONT_SIZE_MIN = 8;
+  const FONT_SIZE_MAX = 72;
+  function applyFontSize(raw) {
+    const block = lastBlockRef.current || getCurrentBlock();
+    if (!block) return;
+    LEGACY_TEXT_SIZE_CLASSES.forEach((c) => block.classList.remove(c));
+    if (raw === '') { block.style.fontSize = ''; markChanged(); return; }
+    const n = Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, parseInt(raw, 10) || 16));
+    block.style.fontSize = `${n}px`;
+    markChanged();
+  }
+  const MAX_INDENT = 6;
+  function indentBlock(increase) {
+    const block = getCurrentBlock();
+    if (!block) return;
+    const current = [...block.classList].find((c) => /^doc-indent-\d$/.test(c));
+    let level = current ? parseInt(current.slice('doc-indent-'.length), 10) : 0;
+    if (current) block.classList.remove(current);
+    level = increase ? Math.min(level + 1, MAX_INDENT) : Math.max(level - 1, 0);
+    if (level > 0) block.classList.add(`doc-indent-${level}`);
+  }
+  // Carries a line's indent/text-size formatting over to a new or converted
+  // block, so it doesn't get lost when a line becomes a checklist item or
+  // when a checklist item spawns the next one via Enter.
+  function copyLineClasses(from, to) {
+    if (!from) return;
+    if (from.style && from.style.fontSize) to.style.fontSize = from.style.fontSize;
+    if (!from.classList) return;
+    [...from.classList].forEach((c) => {
+      if (/^doc-indent-\d$/.test(c) || c === 'doc-text-sm' || c === 'doc-text-lg') to.classList.add(c);
+    });
+  }
   const isCheckItem = (el) => !!(el && el.classList && el.classList.contains('doc-check-item'));
   const isEmptyBlock = (el) => el.textContent.replace(/​/g, '').trim() === '';
+  function isCaretAtStartOfItem(item) {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return false;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed) return false;
+    const preRange = document.createRange();
+    preRange.selectNodeContents(item);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    return preRange.toString().length === 0;
+  }
   function getCheckItemAtCaret() {
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) return null;
@@ -147,17 +196,20 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     if (isCheckItem(block)) {
       // Already a checklist line → add a new empty one after it.
       const item = makeCheckItem();
+      copyLineClasses(block, item);
       block.after(item);
       placeCaretAtStart(item);
     } else if (block && isEmptyBlock(block)) {
       // Empty line → turn it into an empty checklist item.
       const item = makeCheckItem();
+      copyLineClasses(block, item);
       block.replaceWith(item);
       placeCaretAtStart(item);
     } else if (block) {
       // Line has text (caret anywhere in it) → convert that whole line into a
       // checklist item, keeping its content. No more empty box + text pushed away.
       const item = makeCheckItem(block.innerHTML);
+      copyLineClasses(block, item);
       block.replaceWith(item);
       placeCaretAtStart(item);
     } else {
@@ -186,6 +238,18 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     editorRef.current.focus();
     markChanged();
     if (btn.dataset.action === 'checklist') { insertChecklistItem(); return; }
+    if (btn.dataset.action === 'indent') { indentBlock(true); updateToolbarState(); return; }
+    if (btn.dataset.action === 'outdent') { indentBlock(false); updateToolbarState(); return; }
+    if (btn.dataset.cmd === 'formatBlock' && btn.dataset.val === 'p') {
+      document.execCommand('formatBlock', false, 'p');
+      const block = getCurrentBlock();
+      if (block) {
+        LEGACY_TEXT_SIZE_CLASSES.forEach((c) => block.classList.remove(c));
+        block.style.fontSize = '';
+      }
+      updateToolbarState();
+      return;
+    }
     document.execCommand(btn.dataset.cmd, false, btn.dataset.val || null);
     updateToolbarState();
   }
@@ -209,17 +273,17 @@ export default function DocEditor({ initial, onClose, onSaved }) {
       e.preventDefault();
       if (isEmptyBlock(item)) {
         const line = document.createElement('div'); line.innerHTML = '<br>';
+        copyLineClasses(item, line);
         item.replaceWith(line); placeCaretAtStart(line);
       } else {
-        const next = makeCheckItem(); item.after(next); placeCaretAtStart(next);
+        const next = makeCheckItem(); copyLineClasses(item, next); item.after(next); placeCaretAtStart(next);
       }
-    } else if (e.key === 'Backspace' && isEmptyBlock(item)) {
-      const sel = window.getSelection();
-      if (sel.rangeCount && sel.getRangeAt(0).startOffset === 0) {
-        e.preventDefault();
-        const line = document.createElement('div'); line.innerHTML = '<br>';
-        item.replaceWith(line); placeCaretAtStart(line);
-      }
+    } else if (e.key === 'Backspace' && isCaretAtStartOfItem(item)) {
+      e.preventDefault();
+      const line = document.createElement('div');
+      line.innerHTML = isEmptyBlock(item) ? '<br>' : item.innerHTML;
+      copyLineClasses(item, line);
+      item.replaceWith(line); placeCaretAtStart(line);
     }
     markChanged();
     refreshChecklist();
@@ -305,16 +369,17 @@ export default function DocEditor({ initial, onClose, onSaved }) {
         <button type="button" className="tb-btn" data-cmd="underline" title="Underline"><i className="fas fa-underline" /></button>
         <button type="button" className="tb-btn" data-cmd="strikeThrough" title="Strikethrough"><i className="fas fa-strikethrough" /></button>
         <span className="tb-sep" />
-        <button type="button" className="tb-btn" data-cmd="formatBlock" data-val="h1" title="Heading 1"><b>H1</b></button>
-        <button type="button" className="tb-btn" data-cmd="formatBlock" data-val="h2" title="Heading 2"><b>H2</b></button>
         <button type="button" className="tb-btn" data-cmd="formatBlock" data-val="p" title="Normal"><i className="fas fa-paragraph" /></button>
+        <input type="number" className="tb-size-input" title="Text size (px)" min={8} max={72} placeholder="16"
+          onPointerDown={() => { const b = getCurrentBlock(); if (b) lastBlockRef.current = b; }}
+          onChange={(e) => applyFontSize(e.target.value)} />
         <span className="tb-sep" />
         <button type="button" className="tb-btn" data-cmd="insertUnorderedList" title="Bullets"><i className="fas fa-list-ul" /></button>
         <button type="button" className="tb-btn" data-cmd="insertOrderedList" title="Numbered"><i className="fas fa-list-ol" /></button>
         <button type="button" className="tb-btn" data-action="checklist" title="Checklist"><i className="fas fa-square-check" /></button>
         <button type="button" className="tb-btn" data-cmd="formatBlock" data-val="blockquote" title="Quote"><i className="fas fa-quote-right" /></button>
-        <span className="tb-sep" />
-        <button type="button" className="tb-btn" data-cmd="removeFormat" title="Clear"><i className="fas fa-eraser" /></button>
+        <button type="button" className="tb-btn" data-action="outdent" title="Outdent"><i className="fas fa-outdent" /></button>
+        <button type="button" className="tb-btn" data-action="indent" title="Indent"><i className="fas fa-indent" /></button>
       </div>
     </div>
     {confirmLeave && (

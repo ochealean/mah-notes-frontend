@@ -71,3 +71,11 @@
 .v-card .doc-content h3 { font-size: 17px; margin: .5em 0; }
 .v-card .doc-content ul, .v-card .doc-content ol { margin: .5em 0 .5em 1.4em; }
 .v-card .doc-content blockquote { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--muted); margin: .6em 0; }
+.v-card .doc-content .doc-text-sm { font-size: 13px; }
+.v-card .doc-content .doc-text-lg { font-size: 21px; }
+.v-card .doc-content .doc-indent-1 { margin-left: 24px; }
+.v-card .doc-content .doc-indent-2 { margin-left: 48px; }
+.v-card .doc-content .doc-indent-3 { margin-left: 72px; }
+.v-card .doc-content .doc-indent-4 { margin-left: 96px; }
+.v-card .doc-content .doc-indent-5 { margin-left: 120px; }
+.v-card .doc-content .doc-indent-6 { margin-left: 144px; }

@@ -377,6 +377,14 @@ a { color: var(--primary); }
 .doc-editor ul, .doc-editor ol { margin: 6px 0 6px 22px; }
 .doc-editor blockquote { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--muted); margin: 8px 0; }
 .doc-editor p { margin: 4px 0; }
+.doc-editor .doc-text-sm { font-size: 13px; }
+.doc-editor .doc-text-lg { font-size: 21px; }
+.doc-editor .doc-indent-1 { margin-left: 24px; }
+.doc-editor .doc-indent-2 { margin-left: 48px; }
+.doc-editor .doc-indent-3 { margin-left: 72px; }
+.doc-editor .doc-indent-4 { margin-left: 96px; }
+.doc-editor .doc-indent-5 { margin-left: 120px; }
+.doc-editor .doc-indent-6 { margin-left: 144px; }
 
 /* Sticky toolbar at bottom of editor sheet */
 .doc-toolbar {
@@ -392,6 +400,10 @@ a { color: var(--primary); }
 .tb-btn:active { background: var(--light); }
 .tb-btn.active { background: var(--light); color: var(--primary); }
 .tb-sep { width: 1px; height: 24px; background: #e7e5f7; margin: 0 4px; flex-shrink: 0; }
+.tb-size-input {
+    flex-shrink: 0; width: 52px; height: 34px; border: 1px solid #e3e1f5; border-radius: 8px;
+    background: #fff; color: var(--dark); font-size: 13px; text-align: center;
+}
 
 /* ── Plan editor specifics ──────────────────────────── */
 .hint { font-size: 13px; color: var(--muted); background: var(--light); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; }
