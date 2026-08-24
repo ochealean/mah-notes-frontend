@@ -14,8 +14,13 @@ export const CHANGELOG = [
   {
     version: '1.3.5',
     date: '2026-08-25',
-    title: '...',
-    changes: ['...'],
+    title: 'Editor: indent, text size, and checklist fixes',
+    changes: [
+      'Added indent/outdent buttons to the document editor toolbar.',
+      'Replaced the Heading 1/2 and eraser buttons with a text-size input.',
+      'Fixed Backspace next to a checklist box sometimes deleting the line instead of the checkbox.',
+      'Indent and text size now carry over correctly when converting a line to a checklist item or adding a new checklist row.',
+    ],
   },
   {
     version: '1.3.4',
