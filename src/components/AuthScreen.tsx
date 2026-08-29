@@ -127,6 +127,14 @@ export default function AuthScreen() {
                 <p className="auth-hint">
                   Enter your email and we’ll send you a link to choose a new password.
                 </p>
+                {/* Shown to everyone, never conditionally — the server won't
+                    reveal whether an address has an account or which sign-in it
+                    uses, so this explains the "no email arrived" case without
+                    leaking anything. */}
+                <p className="auth-hint">
+                  Signed up with Google and never set a password? There’s nothing to reset —
+                  use <b>Continue with Google</b> instead.
+                </p>
                 <div className="field">
                   <i className="fas fa-envelope field-icon" />
                   <input type="email" className="field-input" placeholder="Email" autoComplete="email"

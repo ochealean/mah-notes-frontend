@@ -30,7 +30,7 @@ const THEME_OPTIONS = [
 
 // ── Native-only: connect an account and control sync ──
 function AccountSync({ reloadLists }) {
-  const { user, login, register, loginWithGoogle, logout } = useAuth();
+  const { user, login, register, loginWithGoogle, forgotPassword, logout } = useAuth();
   const sync = useSync();
   const [mode, setMode] = useState('signin');
   const [name, setName] = useState('');
@@ -46,10 +46,40 @@ function AccountSync({ reloadLists }) {
   // account — see EmailCautionModal. Re-armed whenever the email is edited.
   const [emailAcked, setEmailAcked] = useState(false);
   const [showEmailWarn, setShowEmailWarn] = useState(false);
+  // Forgot-password: the reset LINK lands on the website (the server builds it
+  // from CLIENT_ORIGIN), so the flow here is "request the email" only — the
+  // user taps the link on their phone, sets a new password in the browser,
+  // then comes back and signs in here. Nothing to handle in-app beyond asking.
+  const [forgot, setForgot] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   function onEmailChange(v) {
     setEmail(v);
     setEmailAcked(false);
+  }
+
+  // Leaving the forgot view (either direction) resets it, so reopening never
+  // shows a stale "email sent" confirmation from a previous attempt.
+  function closeForgot() {
+    setForgot(false);
+    setResetSent(false);
+    setError('');
+  }
+
+  async function onForgotSubmit(e) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true); setError('');
+    try {
+      await forgotPassword(email.trim());
+      // The server deliberately won't say whether the address exists, so this
+      // confirmation is worded to be true either way.
+      setResetSent(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function afterAuth(account) {
@@ -117,6 +147,59 @@ function AccountSync({ reloadLists }) {
     } finally { setBusy(false); }
   }
 
+  // ── Signed out: forgot-password (request a reset email) ──
+  if (!user && forgot) {
+    return (
+      <div className="settings-card">
+        <div className="settings-section-label">Reset your password</div>
+        {resetSent ? (
+          <>
+            <p className="settings-hint-text">
+              <i className="fas fa-envelope-circle-check" style={{ marginRight: 6, color: 'var(--success)' }} />
+              If that email has an account, a reset link is on its way. It expires in an hour.
+            </p>
+            <p className="settings-hint-text">
+              Open the link on this phone, choose a new password in your browser, then come back
+              here and sign in with it.
+            </p>
+            <div style={{ padding: '0 16px 14px' }}>
+              <button type="button" className="btn btn-primary btn-block" onClick={closeForgot}>
+                Back to sign in
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="settings-hint-text">
+              Enter your email and we’ll send you a link to choose a new password.
+            </p>
+            {/* Shown to everyone, never conditionally — the server won't reveal
+                whether an address has an account or which sign-in it uses, so
+                this explains the "no email arrived" case without leaking. */}
+            <p className="settings-hint-text">
+              Signed up with Google and never set a password? There’s nothing to reset —
+              use <b>Continue with Google</b> instead.
+            </p>
+            <form className="auth-form" style={{ padding: '0 16px 12px' }} onSubmit={onForgotSubmit}>
+              <div className="field">
+                <i className="fas fa-envelope field-icon" />
+                <input className="field-input" type="email" placeholder="Email" autoComplete="email"
+                  value={email} onChange={(e) => onEmailChange(e.target.value)} required />
+              </div>
+              <button className="btn btn-primary btn-block" disabled={busy}>
+                {busy ? 'Please wait…' : 'Send reset link'}
+              </button>
+              {error && <div className="auth-error">{error}</div>}
+            </form>
+            <button className="settings-row" onClick={closeForgot}>
+              <span><i className="fas fa-arrow-left" /> Back to sign in</span>
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
   // ── Signed out: offer sign in / sign up ──
   if (!user) {
     return (
@@ -165,6 +248,13 @@ function AccountSync({ reloadLists }) {
           <button className="btn btn-primary btn-block" disabled={busy}>
             {busy ? 'Please wait…' : mode === 'signup' ? 'Create account & sync' : 'Sign in & sync'}
           </button>
+          {mode !== 'signup' && (
+            <p className="auth-toggle">
+              <a href="#" onClick={(e) => { e.preventDefault(); setError(''); setResetSent(false); setForgot(true); }}>
+                Forgot password?
+              </a>
+            </p>
+          )}
           {error && <div className="auth-error">{error}</div>}
         </form>
         <div className="auth-divider" style={{ margin: '0 16px' }}><span>or</span></div>
