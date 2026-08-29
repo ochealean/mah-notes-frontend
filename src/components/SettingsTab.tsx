@@ -8,9 +8,16 @@ import { notify } from '../lib/notify';
 import { APP_VERSION } from '../lib/appInfo';
 import { checkForUpdate, autoUpdateEnabled, setAutoUpdate } from '../lib/updates';
 import { pushWidgetData } from '../lib/widget';
+import { clearStrayAlarms } from '../lib/alarm';
+import { listSchedules } from '../lib/scheduleStore';
 import FriendsModal from './FriendsModal';
 import InboxModal from './InboxModal';
 import ConnectGoogle from './ConnectGoogle';
+import SetAccountPassword from './SetAccountPassword';
+import AccountUsername from './AccountUsername';
+import DeleteAccount from './DeleteAccount';
+import EmailCautionModal from './EmailCautionModal';
+import DownloadAppModal from './DownloadAppModal';
 import ThemeCustomizer from './ThemeCustomizer';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
@@ -28,11 +35,22 @@ function AccountSync({ reloadLists }) {
   const [mode, setMode] = useState('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [signOut, setSignOut] = useState(null);   // { notes, plans } counts | null
   const [signingOut, setSigningOut] = useState(false);
+  // One-time "are you sure this address is right" gate before creating an
+  // account — see EmailCautionModal. Re-armed whenever the email is edited.
+  const [emailAcked, setEmailAcked] = useState(false);
+  const [showEmailWarn, setShowEmailWarn] = useState(false);
+
+  function onEmailChange(v) {
+    setEmail(v);
+    setEmailAcked(false);
+  }
 
   async function afterAuth(account) {
     // If a DIFFERENT account's synced data is still on this device, isolate it
@@ -69,15 +87,22 @@ function AccountSync({ reloadLists }) {
     } finally { setSigningOut(false); setSignOut(null); }
   }
 
-  async function submit(e) {
-    e.preventDefault();
+  async function doSubmit() {
     setBusy(true); setError('');
     try {
       const u = mode === 'signup'
-        ? await register(email.trim(), password, name.trim())
+        ? await register(email.trim(), password, name.trim(), username.trim())
         : await login(email.trim(), password);
       await afterAuth(u?.email || email.trim());
     } catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+
+  function submit(e) {
+    e.preventDefault();
+    // Signing up: pause once per address to make sure it's really the inbox
+    // they can read — the only way "Forgot password" will ever reach them.
+    if (mode === 'signup' && !emailAcked) { setShowEmailWarn(true); return; }
+    doSubmit();
   }
 
   async function google() {
@@ -111,18 +136,30 @@ function AccountSync({ reloadLists }) {
           )}
           <div className="field">
             <i className="fas fa-envelope field-icon" />
-            <input className="field-input" type="email" placeholder="Email" autoComplete="email"
-              value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input className="field-input" type={mode === 'signup' ? 'email' : 'text'}
+              placeholder={mode === 'signup' ? 'Email' : 'Email or username'}
+              autoComplete={mode === 'signup' ? 'email' : 'username'}
+              value={email} onChange={(e) => onEmailChange(e.target.value)} required />
           </div>
+          {mode === 'signup' && (
+            <div className="field">
+              <i className="fas fa-at field-icon" />
+              <input className="field-input" type="text" placeholder="Username (optional)" autoComplete="username"
+                value={username} onChange={(e) => setUsername(e.target.value)} maxLength={20} />
+            </div>
+          )}
           <div className="field">
             <i className="fas fa-lock field-icon" />
-            <input className="field-input" type="password" placeholder="Password"
+            <input className="field-input" type={showPw ? 'text' : 'password'} placeholder="Password"
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
               value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <button type="button" className="field-eye" aria-label="Show password" onClick={() => setShowPw((s) => !s)}>
+              <i className={`fas ${showPw ? 'fa-eye-slash' : 'fa-eye'}`} />
+            </button>
           </div>
           {mode === 'signup' && (
             <p className="signup-warn">
-              <i className="fas fa-triangle-exclamation" /> There’s no password reset — if you forget this password, the account <b>can’t be recovered</b>. Save it somewhere safe (or use Google instead).
+              <i className="fas fa-circle-info" /> Use an email you can actually access — it’s the only way to reset this password if you forget it.
             </p>
           )}
           <button className="btn btn-primary btn-block" disabled={busy}>
@@ -140,6 +177,15 @@ function AccountSync({ reloadLists }) {
           <span><i className="fas fa-user-plus" /> {mode === 'signup' ? 'Have an account? Sign in' : 'New here? Create an account'}</span>
           <i className="fas fa-chevron-right" />
         </button>
+
+        {showEmailWarn && (
+          <EmailCautionModal
+            email={email.trim()}
+            busy={busy}
+            onCancel={() => setShowEmailWarn(false)}
+            onConfirm={() => { setEmailAcked(true); setShowEmailWarn(false); doSubmit(); }}
+          />
+        )}
       </div>
     );
   }
@@ -216,9 +262,17 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showDownload, setShowDownload] = useState(false);
   const [update, setUpdate] = useState(null);
   const [checking, setChecking] = useState(false);
   const [autoUpd, setAutoUpd] = useState(autoUpdateEnabled());
+  // Recovery actions, collapsed by default: they only matter when something has
+  // already gone wrong, so they shouldn't take up room in everyday settings.
+  const [showMaintenance, setShowMaintenance] = useState(false);
+  // Account Info starts collapsed to just the identity row (avatar/name/email) —
+  // password, username, and Google linking are settled-once, rarely-revisited
+  // controls that don't need to sit open on every visit to Settings.
+  const [accountExpanded, setAccountExpanded] = useState(false);
 
   function toggleAuto(on) { setAutoUpd(on); setAutoUpdate(on); }
   async function checkUpdates() {
@@ -262,13 +316,27 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
 
   return (
     <section className="screen" style={{ maxWidth: 640, margin: '0 auto' }}>
-      {/* Identity card — only when there's an account (web always; native when signed in). */}
+      {/* Account Info — identity is always visible; password, username, and
+          Google linking retract behind it (web always; native when signed in). */}
       {user && (
         <div className="settings-card">
-          <div className="settings-user">
-            <div className="settings-avatar">{initial}</div>
+          <div className="settings-section-label">Account Info</div>
+          <div
+            className="settings-user settings-user-toggle"
+            role="button"
+            tabIndex={0}
+            aria-expanded={accountExpanded}
+            onClick={() => { if (!editingName) setAccountExpanded((v) => !v); }}
+            onKeyDown={(e) => {
+              if (editingName) return;
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAccountExpanded((v) => !v); }
+            }}
+          >
+            {user.avatar
+              ? <img className="settings-avatar" src={user.avatar} alt="" />
+              : <div className="settings-avatar">{initial}</div>}
             {editingName ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
                 <input
                   className="field-input"
                   type="text"
@@ -294,22 +362,40 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
               <>
                 <div style={{ minWidth: 0 }}>
                   <div className="settings-name">{name}</div>
-                  <div className="settings-email">{user?.email || ''}</div>
+                  {/* A username, once set, is the more useful line here — it's what
+                      they'd actually type to sign in, and it doesn't reveal the
+                      backing Gmail/email address at a glance. */}
+                  <div className="settings-email">{user?.username ? `@${user.username}` : (user?.email || '')}</div>
                 </div>
-                <button className="icon-btn" title="Edit name" style={{ marginLeft: 'auto' }} onClick={startEditName}>
+                <button className="icon-btn" title="Edit name" style={{ marginLeft: 'auto' }}
+                  onClick={(e) => { e.stopPropagation(); startEditName(); }}>
                   <i className="fas fa-pen" />
                 </button>
+                <i className={`fas fa-chevron-${accountExpanded ? 'up' : 'down'} settings-user-chevron`} />
               </>
             )}
           </div>
+
+          {accountExpanded && (
+            <>
+              {/* Set a password (Google-only accounts) or change the existing one. */}
+              <SetAccountPassword />
+
+              {/* Add or change the login username. */}
+              <AccountUsername />
+
+              {/* Connect a Google account to an email/password account (web + native when signed in). */}
+              <ConnectGoogle />
+
+              {/* Irreversible — deliberately last, and styled as a danger row. */}
+              <DeleteAccount />
+            </>
+          )}
         </div>
       )}
 
       {/* Native: account + sync controls. */}
       {isNative && <AccountSync reloadLists={reloadLists} />}
-
-      {/* Connect a Google account to an email/password account (web + native when signed in). */}
-      <ConnectGoogle />
 
       {/* Friends + sharing inbox — online features, need an account. */}
       {user && (
@@ -343,18 +429,41 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
 
       {isNative && (
         <div className="settings-card">
-          <div className="settings-section-label">Home-screen widget</div>
-          <p className="settings-hint-text">
-            Add the Mah Notes widget from your launcher (long-press the home screen → Widgets).
-            If the picker doesn’t show your notes/plans, tap below to refresh its data.
-          </p>
-          <button className="settings-row" onClick={async () => {
-            const c = await pushWidgetData();
-            notify(`Widget updated — ${c.notes} notes, ${c.plans} plans, ${c.schedule} schedule items`, 'success');
-          }}>
-            <span><i className="fas fa-table-cells-large" /> Update home-screen widgets</span>
-            <i className="fas fa-rotate-right" />
+          <button className="settings-row" onClick={() => setShowMaintenance((v) => !v)}>
+            <span><i className="fas fa-screwdriver-wrench" /> Troubleshooting</span>
+            <i className={`fas fa-chevron-${showMaintenance ? 'up' : 'down'}`} />
           </button>
+          {showMaintenance && (
+            <>
+              <p className="settings-hint-text">
+                Only needed if something looks wrong — the app keeps both of these in
+                step on its own.
+              </p>
+              <button className="settings-row" onClick={async () => {
+                const c = await pushWidgetData();
+                notify(`Widget updated — ${c.notes} notes, ${c.plans} plans, ${c.schedule} schedule items`, 'success');
+              }}>
+                <span><i className="fas fa-table-cells-large" /> Refresh widget data</span>
+                <i className="fas fa-rotate-right" />
+              </button>
+              <button className="settings-row" onClick={async () => {
+                try {
+                  const blocks = await listSchedules();
+                  const removed = await clearStrayAlarms(blocks);
+                  notify(
+                    removed ? `Cleared ${removed} stray alarm${removed === 1 ? '' : 's'}`
+                      : 'No stray alarms found',
+                    'success',
+                  );
+                } catch (err) {
+                  notify(err.message, 'error');
+                }
+              }}>
+                <span><i className="fas fa-bell-slash" /> Clear stray alarms</span>
+                <i className="fas fa-broom" />
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -378,6 +487,13 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
           <span><i className="fas fa-gift" /> What’s new</span>
           <span className="settings-sub">v{APP_VERSION}</span>
         </button>
+        {/* Web only: you're already running the app if this is native. */}
+        {!isNative && (
+          <button className="settings-row" onClick={() => setShowDownload(true)}>
+            <span><i className="fas fa-mobile-screen-button" /> Get the Android app</span>
+            <i className="fas fa-chevron-right" />
+          </button>
+        )}
         {/* Native only: the APK self-updates from GitHub Releases (the web auto-updates on deploy). */}
         {isNative && (
           <>
@@ -404,6 +520,7 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
       <p className="settings-about">Mah Notes · MERN edition</p>
 
       {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
+      {showDownload && <DownloadAppModal onClose={() => setShowDownload(false)} />}
       {update && <UpdateModal update={update} onClose={() => setUpdate(null)} />}
       {showFriends && <FriendsModal me={user} onClose={() => setShowFriends(false)} />}
       {showInbox && (

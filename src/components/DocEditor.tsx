@@ -170,6 +170,57 @@ export default function DocEditor({ initial, onClose, onSaved }) {
       if (/^doc-indent-\d$/.test(c) || c === 'doc-text-sm' || c === 'doc-text-lg') to.classList.add(c);
     });
   }
+  // ── Links ──
+  // Same scheme allow-list as richtext.ts's sanitizer (which still re-checks
+  // this on save) — kept in sync so a rejected link is rejected consistently,
+  // not silently stripped later with no explanation.
+  const SAFE_HREF = /^(https?:|mailto:)/i;
+  function normalizeUrl(raw) {
+    const v = (raw || '').trim();
+    if (!v) return null;
+    if (SAFE_HREF.test(v)) return v;
+    // No recognizable scheme at all → assume the user meant a plain website
+    // and meant to type "https://". A scheme we don't allow (javascript:,
+    // data:, ftp:, …) is rejected outright rather than "fixed".
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(v)) return `https://${v}`;
+    return null;
+  }
+  function getSelectionAnchor() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return null;
+    let node: any = sel.getRangeAt(0).startContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    return node && node.closest ? node.closest('a') : null;
+  }
+  // One button, two behaviors: caret already inside a link → remove it
+  // (toggle off); otherwise wrap the current selection in a new one.
+  function insertLink() {
+    const editor = editorRef.current;
+    editor.focus();
+    if (getSelectionAnchor()) {
+      document.execCommand('unlink');
+      markChanged();
+      return;
+    }
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) {
+      notify('Select some text first, then add the link.', 'info');
+      return;
+    }
+    const raw = window.prompt('Link URL (e.g. https://example.com)');
+    if (raw === null) return; // cancelled
+    const url = normalizeUrl(raw);
+    if (!url) { notify('That doesn’t look like a valid link.', 'error'); return; }
+    document.execCommand('createLink', false, url);
+    // createLink only sets href — force the same target/rel the sanitizer
+    // would anyway, so the doc already matches what a reload produces.
+    editor.querySelectorAll('a:not([target])').forEach((a) => {
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer nofollow';
+    });
+    markChanged();
+  }
+
   const isCheckItem = (el) => !!(el && el.classList && el.classList.contains('doc-check-item'));
   const isEmptyBlock = (el) => el.textContent.replace(/​/g, '').trim() === '';
   function isCaretAtStartOfItem(item) {
@@ -230,6 +281,8 @@ export default function DocEditor({ initial, onClose, onSaved }) {
       try { on = document.queryCommandState(cmd); } catch {}
       btn.classList.toggle('active', on);
     });
+    const linkBtn = tb.querySelector('.tb-btn[data-action="link"]');
+    if (linkBtn) linkBtn.classList.toggle('active', !!getSelectionAnchor());
   }
 
   function onToolbarClick(e) {
@@ -238,6 +291,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     editorRef.current.focus();
     markChanged();
     if (btn.dataset.action === 'checklist') { insertChecklistItem(); return; }
+    if (btn.dataset.action === 'link') { insertLink(); updateToolbarState(); return; }
     if (btn.dataset.action === 'indent') { indentBlock(true); updateToolbarState(); return; }
     if (btn.dataset.action === 'outdent') { indentBlock(false); updateToolbarState(); return; }
     if (btn.dataset.cmd === 'formatBlock' && btn.dataset.val === 'p') {
@@ -368,6 +422,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
         <button type="button" className="tb-btn" data-cmd="italic" title="Italic"><i className="fas fa-italic" /></button>
         <button type="button" className="tb-btn" data-cmd="underline" title="Underline"><i className="fas fa-underline" /></button>
         <button type="button" className="tb-btn" data-cmd="strikeThrough" title="Strikethrough"><i className="fas fa-strikethrough" /></button>
+        <button type="button" className="tb-btn" data-action="link" title="Add/remove link (select text first)"><i className="fas fa-link" /></button>
         <span className="tb-sep" />
         <button type="button" className="tb-btn" data-cmd="formatBlock" data-val="p" title="Normal"><i className="fas fa-paragraph" /></button>
         <input type="number" className="tb-size-input" title="Text size (px)" min={8} max={72} placeholder="16"

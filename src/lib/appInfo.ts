@@ -6,11 +6,27 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.3.5';
+export const APP_VERSION = '1.4.0';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.4.0',
+    date: '2026-08-29',
+    title: 'Password reset, account controls & clickable links',
+    changes: [
+      'Forgot your password? You can now reset it by email instead of losing the account.',
+      'Delete your account from Settings, whenever you want to.',
+      'Account Info is now collapsible, and changing your password, username, or connecting Google opens in its own popup instead of expanding the page.',
+      'Add a username to sign in with instead of your email — it now shows in Settings once set.',
+      'Signing up warns you to double-check your email address, since it’s the only way to get a password-reset link.',
+      'Links in documents are now clickable, and the editor has a button to turn selected text into a link.',
+      'Settings → About & updates has a “Get the Android app” button — download the latest APK or browse past versions.',
+      'Signing in with Google now shows a “Signing you in…” screen instead of silently sitting on the login page while it finishes.',
+      'Faster loading after signing in — your notes, plans, and schedule load in one wave, and a returning visit no longer waits on a server round trip before showing your account.',
+    ],
+  },
   {
     version: '1.3.5',
     date: '2026-08-25',

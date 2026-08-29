@@ -16,7 +16,7 @@ import { notify } from '../lib/notify';
 import WebGoogleButton from './WebGoogleButton';
 
 export default function ConnectGoogle() {
-  const { user, linkGoogle } = useAuth();
+  const { user, linkGoogle, googlePending } = useAuth();
   const [busy, setBusy] = useState(false);
 
   if (!user) return null;
@@ -27,12 +27,9 @@ export default function ConnectGoogle() {
   const isGoogleAccount = user.hasGoogle || user.hasPassword === false;
   if (isGoogleAccount) {
     return (
-      <div className="settings-card">
-        <div className="settings-section-label">Google</div>
-        <div className="settings-row" style={{ cursor: 'default' }}>
-          <span><i className="fab fa-google" style={{ color: '#4285F4' }} /> Connected to Google</span>
-          <i className="fas fa-circle-check" style={{ color: 'var(--success)' }} />
-        </div>
+      <div className="settings-row" style={{ cursor: 'default' }}>
+        <span><i className="fab fa-google" style={{ color: '#4285F4' }} /> Connected to Google</span>
+        <i className="fas fa-circle-check" style={{ color: 'var(--success)' }} />
       </div>
     );
   }
@@ -53,8 +50,7 @@ export default function ConnectGoogle() {
   }
 
   return (
-    <div className="settings-card">
-      <div className="settings-section-label">Google</div>
+    <>
       <p className="settings-hint-text">
         Connect a Google account so you can also sign in with one tap. You can link any Google account
         that isn’t already connected to another account.
@@ -66,9 +62,10 @@ export default function ConnectGoogle() {
           </button>
         ) : (
           // Redirect flow: navigates to Google; AuthContext finishes the link on return.
-          <WebGoogleButton intent="link" label="Connect Google" />
+          <WebGoogleButton intent="link" disabled={googlePending === 'link'}
+            label={googlePending === 'link' ? 'Connecting…' : 'Connect Google'} />
         )}
       </div>
-    </div>
+    </>
   );
 }

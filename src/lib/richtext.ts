@@ -6,8 +6,12 @@
 
 const ALLOWED_TAGS = new Set([
   'P', 'BR', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE',
-  'H1', 'H2', 'H3', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'DIV', 'SPAN',
+  'H1', 'H2', 'H3', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'DIV', 'SPAN', 'A',
 ]);
+// Only these URL schemes may ever end up in a stored href — mirrors the
+// server's SAFE_HREF (the server re-sanitizes on save regardless, but the
+// editor and previews should already agree on what a "safe" link is).
+const SAFE_HREF = /^(https?:|mailto:)/i;
 const ALLOWED_CLASSES = [
   'doc-check-item', 'doc-check-box', 'doc-check-text',
   'doc-text-sm', 'doc-text-lg',
@@ -32,10 +36,25 @@ function cleanChildren(node) {
     const tag = child.tagName;
     if (tag === 'SCRIPT' || tag === 'STYLE') return;
 
+    // An unsafe/missing href (javascript:, data:, a bare "//host", …) means
+    // this isn't a real link — unwrap it and keep just the text, same as any
+    // other disallowed element, rather than a dead or dangerous <a>.
+    if (tag === 'A' && !SAFE_HREF.test((child.getAttribute('href') || '').trim())) {
+      frag.appendChild(cleanChildren(child));
+      return;
+    }
+
     if (ALLOWED_TAGS.has(tag)) {
       const clean = document.createElement(tag.toLowerCase());
       const keptClasses = [...child.classList].filter((c) => ALLOWED_CLASSES.includes(c));
       if (keptClasses.length) clean.className = keptClasses.join(' ');
+      if (tag === 'A') {
+        // Forced, never taken verbatim from the input — target/rel aren't
+        // attacker-chosen here either (see the server-side sanitizer).
+        clean.setAttribute('href', child.getAttribute('href').trim());
+        clean.setAttribute('target', '_blank');
+        clean.setAttribute('rel', 'noopener noreferrer nofollow');
+      }
       // The only inline style the editor's text-size control writes — validate
       // and clamp it rather than trusting the string, everything else in
       // `style` is dropped.

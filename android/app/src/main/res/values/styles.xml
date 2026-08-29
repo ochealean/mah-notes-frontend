@@ -20,8 +20,11 @@
         <item name="android:background">@drawable/splash</item>
     </style>
 
-    <!-- Plain light theme for the widget configuration picker (NOT the splash). -->
-    <style name="WidgetConfigTheme" parent="@android:style/Theme.Material.Light.DarkActionBar">
+    <!-- Plain light theme for the widget configuration picker (NOT the splash).
+         NoActionBar: the picker draws its own "Show in this widget" header, and
+         with targetSdk 36 (edge-to-edge enforced) a platform action bar overlaps
+         the list's first row instead of sitting above it. -->
+    <style name="WidgetConfigTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
     </style>
 </resources>

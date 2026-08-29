@@ -9,7 +9,7 @@ import { repo } from '../lib/repo';
 import { isNative } from '../lib/nativeAuth';
 import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile, syncNow } from '../lib/sync';
 import { listSchedules } from '../lib/scheduleStore';
-import { rearmAlarms, rearmReminders, ensureKeepAlive } from '../lib/alarm';
+import { rearmAlarms, rearmReminders, ensureKeepAlive, pruneOrphanAlarms } from '../lib/alarm';
 import { api, getToken } from '../lib/api';
 import { notify } from '../lib/notify';
 import { APP_VERSION } from '../lib/appInfo';
@@ -28,6 +28,7 @@ import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
 import { pushWidgetData, consumeWidgetOpen, consumeWidgetToggles } from '../lib/widget';
 import { readCache, writeCache } from '../lib/webCache';
+import { useSlowHint } from '../lib/useSlowHint';
 import logoUrl from '../images/mn_logo.png';
 
 const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', schedule: 'Schedule', settings: 'Settings' };
@@ -60,18 +61,30 @@ export default function MainApp() {
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [update, setUpdate] = useState(null);             // prompt currently shown | null
   const [updateAvailable, setUpdateAvailable] = useState(null); // an update exists → red dot
+  // Signed in via Google with no password set → can't log in if Google sign-in
+  // ever breaks. `hasPassword === false` also covers accounts created before
+  // `hasGoogle` existed (see ConnectGoogle.tsx).
+  const needsPassword = !!user && user.hasPassword === false;
   const syncState = useSync();
+  // A cold backend can hold the first fetch for tens of seconds — say so rather
+  // than spinning silently.
+  const slowLoad = useSlowHint(loading);
 
   const reload = useCallback(async () => {
     try {
-      const [n, p] = await Promise.all([repo.listNotes(), repo.listPlans()]);
+      // All three in ONE wave. Schedules used to be awaited after the other two,
+      // which cost an extra round trip on every load — painful when the backend
+      // is cold. They don't depend on each other, so they go out together.
+      // (Web → API, app → local + sync. The app adds native alarms on top; the
+      // web is a plain timetable.)
+      const [n, p, s] = await Promise.all([repo.listNotes(), repo.listPlans(), listSchedules()]);
       setNotes(n);
       setPlans(p);
-      // Schedules sync like notes/plans (web → API, app → local + sync).
-      // The app adds native alarms on top; the web is a plain timetable.
-      setSchedules(await listSchedules());
+      setSchedules(s);
     } catch (err) {
-      notify(err.message, 'error');
+      // A 401 means the session is gone; AuthContext already signs us out and
+      // shows the login screen, so don't pile a scary toast on top of that.
+      if (err?.status !== 401) notify(err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -159,6 +172,9 @@ export default function MainApp() {
         const blocks = await listSchedules();
         await rearmReminders(blocks); // gentle reminders (exact, native)
         await rearmAlarms(blocks);    // ringing alarms (safety net)
+        // listSchedules() resolved, so this list is complete → safe to prune
+        // alarms whose schedule is gone (deleted elsewhere / wiped by logout).
+        await pruneOrphanAlarms(blocks, { loadOk: true });
         await ensureKeepAlive();      // resume keep-alive service if user enabled it
       } catch { /* best-effort */ }
     })();
@@ -175,6 +191,9 @@ export default function MainApp() {
         const blocks = await listSchedules();
         await rearmReminders(blocks);
         await rearmAlarms(blocks);
+        // A pull that merged a deletion from another device is exactly when an
+        // orphan alarm appears — clear it here rather than waiting for a restart.
+        await pruneOrphanAlarms(blocks, { loadOk: true });
       } catch { /* best-effort */ }
     });
     initSync();
@@ -309,7 +328,7 @@ export default function MainApp() {
         {loading ? (
           <div className="screen-loading">
             <i className="fas fa-circle-notch fa-spin" />
-            <span>Loading…</span>
+            <span>{slowLoad ? 'Waking up the server — this can take a moment…' : 'Loading…'}</span>
           </div>
         ) : (
         <>
@@ -341,7 +360,7 @@ export default function MainApp() {
           <ScheduleTab schedules={schedules} onEdit={(block) => setScheduleEditor({ block })} onChanged={reload} />
         )}
         {tab === 'settings' && (
-          <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} reloadLists={reload} updateAvailable={updateAvailable} />
+          <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} reloadLists={reload} updateAvailable={updateAvailable} needsPassword={needsPassword} />
         )}
         </>
         )}
@@ -367,7 +386,11 @@ export default function MainApp() {
           <i className="fas fa-clock" /><span>Schedule</span>
         </button>
         <button className={`nav-item${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>
-          <i className="fas fa-gear" />{updateAvailable && <span className="nav-dot" />}<span>Settings</span>
+          <span className="nav-icon-wrap">
+            <i className="fas fa-gear" />
+            {(updateAvailable || needsPassword) && <span className="nav-dot" />}
+          </span>
+          <span>Settings</span>
         </button>
       </nav>
 

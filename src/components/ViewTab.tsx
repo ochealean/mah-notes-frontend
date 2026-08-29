@@ -13,8 +13,10 @@ const todayName = () => JS_DAY[new Date().getDay()];
 
 function NoteRow({ note, onOpen }) {
   const preview = contentToHtml(note.content) || '<span class="note-preview-empty">Empty document</span>';
+  // A link inside the preview should navigate, not also open the read-only view.
+  function onClick(e) { if (e.target.closest('a')) return; onOpen('note', note); }
   return (
-    <div className={`note-card view-card${note.hidden ? ' content-hidden' : ''}`} onClick={() => onOpen('note', note)}>
+    <div className={`note-card view-card${note.hidden ? ' content-hidden' : ''}`} onClick={onClick}>
       <div className="note-card-top">
         <div className="note-card-title">
           <span dangerouslySetInnerHTML={{ __html: escapeHtml(note.title || 'Untitled') }} />

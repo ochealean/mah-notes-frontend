@@ -14,11 +14,25 @@ async function request(method: string, path: string, body?: any) {
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  // Generous enough to cover a cold server waking up, short enough that a truly
+  // dead connection surfaces an error instead of spinning forever.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60_000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
+    });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new Error('The server took too long to respond. Please try again.');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   let data = null;
   const text = await res.text();
@@ -37,7 +51,7 @@ export const api = {
   post: (p: string, b?: any) => request('POST', p, b ?? {}),
   put: (p: string, b?: any) => request('PUT', p, b ?? {}),
   patch: (p: string, b?: any) => request('PATCH', p, b ?? {}),
-  del: (p: string) => request('DELETE', p),
+  del: (p: string, b?: any) => request('DELETE', p, b),
 };
 
 export const API_BASE = BASE;

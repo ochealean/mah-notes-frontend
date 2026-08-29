@@ -69,11 +69,14 @@ export async function pushWidgetData(pre?: { notes?: any[]; plans?: any[]; sched
       day: s.day, start: s.start, end: s.end, title: s.title, sub: s.sub || '',
     }));
 
-    // Flat index for the widget's configuration picker.
+    // Flat index for the widget's configuration picker. "Today's schedule" is a
+    // synthetic entry (no underlying record), so it's only offered when there's
+    // actually a timetable to show — otherwise it looks like a stray item the
+    // user can't account for or delete.
     const items = [
       ...noteItems.map((n) => ({ type: 'note', id: n.id, title: n.title })),
       ...planItems.map((p) => ({ type: 'plan', id: p.id, title: p.title })),
-      { type: 'schedule', id: 'today', title: "Today's schedule" },
+      ...(blocks.length ? [{ type: 'schedule', id: 'today', title: "Today's schedule" }] : []),
     ];
 
     const data = { primary, items, notes: noteItems, plans: planItems, schedule: blocks };

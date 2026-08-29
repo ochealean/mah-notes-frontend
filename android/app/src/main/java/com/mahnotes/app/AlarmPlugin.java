@@ -55,6 +55,35 @@ public class AlarmPlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * Cancel persisted alarms that are no longer backed by a schedule.
+     * `ids` is the COMPLETE set of alarm ids that should survive; anything else
+     * (bar one-shot test alarms) is cancelled. Rejects on a missing/empty list
+     * so a bad caller can never wipe every alarm — unless `force` is set, which
+     * the user-invoked "Clear stray alarms" action uses to cover the legitimate
+     * zero-schedules case.
+     */
+    @PluginMethod
+    public void pruneExcept(PluginCall call) {
+        JSArray ids = call.getArray("ids");
+        boolean force = Boolean.TRUE.equals(call.getBoolean("force", false));
+        if ((ids == null || ids.length() == 0) && !force) {
+            call.reject("pruneExcept requires a non-empty ids array");
+            return;
+        }
+        if (ids == null) ids = new JSArray();
+        java.util.Set<Integer> keep = new java.util.HashSet<>();
+        try {
+            for (int i = 0; i < ids.length(); i++) keep.add(ids.getInt(i));
+        } catch (Exception e) {
+            call.reject("pruneExcept: ids must all be numbers");
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("removed", AlarmScheduler.pruneExcept(getContext(), keep));
+        call.resolve(ret);
+    }
+
     @PluginMethod
     public void stop(PluginCall call) {
         AlarmService.stop(getContext());

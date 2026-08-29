@@ -35,8 +35,10 @@ function NoteCard({ note, onOpen, onShare, onToggleHidden, onTogglePin, onChange
     onTogglePin(note.id, !note.pinned); // optimistic in the parent — instant UI
   }
 
-  // Tap inside the checkbox gutter → toggle + save; tap elsewhere → open editor.
+  // Tap inside the checkbox gutter → toggle + save; tap a link → let it
+  // navigate instead of opening the editor; tap elsewhere → open editor.
   async function onPreviewClick(e) {
+    if (e.target.closest('a')) return;
     const item = e.target.closest('.doc-check-item');
     if (item) {
       const rect = item.getBoundingClientRect();

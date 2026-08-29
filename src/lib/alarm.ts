@@ -180,3 +180,38 @@ export async function rearmReminders(blocks = []) {
     else await cancelReminder(b.id); // eslint-disable-line no-await-in-loop
   }
 }
+
+// Cancel alarms left behind by schedules that no longer exist. Deleting a block
+// on THIS device cancels its alarm, but a block deleted elsewhere (synced down)
+// or wiped by a logout leaves its native alarm armed — and it re-arms itself
+// weekly forever, so a long-deleted schedule keeps ringing.
+//
+// GUARDED: only prunes when the caller vouches that `blocks` is a complete,
+// successfully-loaded list AND it's non-empty. A failed/partial load must never
+// reach the native side, which would read it as "keep nothing".
+export async function pruneOrphanAlarms(blocks = [], { loadOk = false } = {}) {
+  if (!alarmSupported) return 0;
+  if (!loadOk || !Array.isArray(blocks) || blocks.length === 0) return 0;
+  // Every id that legitimately belongs to a current block. Ids are kept for
+  // blocks with the trigger switched off too — those are cancelled by the
+  // rearm pass above, which is precise; prune only handles true orphans.
+  const keep = blocks.flatMap((b) => [ringId(b.id), reminderId(b.id)]);
+  if (!keep.length) return 0;
+  try {
+    const r = await Alarm.pruneExcept({ ids: keep });
+    return r?.removed || 0;
+  } catch { return 0; }
+}
+
+// User-invoked cleanup (Settings → "Clear stray alarms"). Same prune, but it
+// runs even with zero schedules — the case the automatic guard deliberately
+// refuses, since it can't tell "you have none" from "the list failed to load".
+// Here the user is asserting it, so an empty list is taken at face value.
+export async function clearStrayAlarms(blocks = []) {
+  if (!alarmSupported) return 0;
+  const keep = Array.isArray(blocks) ? blocks.flatMap((b) => [ringId(b.id), reminderId(b.id)]) : [];
+  try {
+    const r = await Alarm.pruneExcept({ ids: keep, force: true });
+    return r?.removed || 0;
+  } catch { return 0; }
+}

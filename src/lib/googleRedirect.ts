@@ -32,6 +32,21 @@ export function startGoogleRedirect(intent /* 'login' | 'link' */) {
   window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 }
 
+// Is this page load the return leg of a Google redirect? Peeks ONLY — it does
+// not consume the code or the stored nonce (consumeGoogleRedirect does that).
+// Must stay synchronous so the first render already knows an exchange is coming
+// and can show a spinner instead of flashing the login form.
+// Returns the intent ('login' | 'link') or null.
+export function pendingGoogleRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  // An ?error= return resolves instantly (just a toast) — not worth a spinner.
+  if (!params.get('code')) return null;
+  let stored = null;
+  try { stored = JSON.parse(sessionStorage.getItem(STATE_KEY) || 'null'); } catch {}
+  if (!stored || stored.nonce !== params.get('state')) return null;
+  return stored.intent === 'link' ? 'link' : 'login';
+}
+
 // On app load, if we came back from Google, return { code, intent } once and
 // clean the URL + stored state. Returns null when there's nothing to handle.
 export function consumeGoogleRedirect() {

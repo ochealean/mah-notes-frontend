@@ -12,6 +12,7 @@ import { isNative } from '../lib/nativeAuth';
 import { repo } from '../lib/repo';
 import { localdb } from '../lib/localdb';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
+import { APP_DOWNLOAD_URL } from '../lib/updates';
 
 const KNOWN_TABS = ['docs', 'plans', 'view', 'schedule', 'settings'];
 
@@ -25,10 +26,6 @@ const refKey = (tok) => 'mahnotes_ref_' + tok;
 const refLoad = (tok) => { try { return JSON.parse(localStorage.getItem(refKey(tok)) || '{}'); } catch { return {}; } };
 const refSave = (tok, state) => { try { localStorage.setItem(refKey(tok), JSON.stringify(state)); } catch {} };
 
-// The Android APK ships as an asset on the latest GitHub release (same public
-// repo as UPDATE_REPO in lib/updates.ts). /releases/latest always points at the
-// newest build, so this link never needs bumping per release.
-const APP_DOWNLOAD_URL = 'https://github.com/ochealean/mah-notes-frontend/releases/latest';
 
 // Public acquisition CTA shown under a shared link on the web: get the app, and
 // sign in / sign up. Hidden inside the native app and for signed-in owners.

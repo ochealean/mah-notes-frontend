@@ -19,6 +19,10 @@ const APK_MIME = 'application/vnd.android.package-archive';
 
 // owner/repo of the public repo that holds your APK releases.
 export const UPDATE_REPO = 'ochealean/mah-notes-frontend';
+// /releases/latest always points at the newest build, so this never needs
+// bumping per release. Shared by the Viewer's public download CTA and
+// Settings → About & updates.
+export const APP_DOWNLOAD_URL = `https://github.com/${UPDATE_REPO}/releases/latest`;
 const AUTO_KEY = 'mahnotes:autoUpdateCheck';
 const DISMISS_KEY = 'mahnotes:updateDismissedVersion'; // last version the prompt was shown for
 const MUTE_KEY = 'mahnotes:updateMuted';               // user ticked "don't remind me again"
@@ -67,10 +71,10 @@ export function markUpdateDismissed(version) {
   try { localStorage.setItem(DISMISS_KEY, String(version || '')); } catch { /* ignore */ }
 }
 
-// Returns { version, notes, apkUrl, htmlUrl } when a newer release exists,
-// or null (already current / offline / not configured / web). Never throws.
-export async function checkForUpdate() {
-  if (!isNative) return null;
+// Shared by checkForUpdate() (native, "is this newer than what's installed")
+// and fetchLatestRelease() (web, "what's the direct .apk link right now") —
+// same GitHub call, different question asked of the result.
+async function fetchRelease() {
   try {
     const res = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json' },
@@ -79,7 +83,7 @@ export async function checkForUpdate() {
     const rel = await res.json();
     if (rel.draft || rel.prerelease) return null;
     const version = String(rel.tag_name || rel.name || '').replace(/^v/i, '');
-    if (!version || cmp(version, APP_VERSION) <= 0) return null;
+    if (!version) return null;
     const apk = (rel.assets || []).find((a) => /\.apk$/i.test(a.name || ''));
     return {
       version,
@@ -90,6 +94,23 @@ export async function checkForUpdate() {
   } catch {
     return null; // offline or blocked — stay silent
   }
+}
+
+// Returns { version, notes, apkUrl, htmlUrl } when a newer release exists,
+// or null (already current / offline / not configured / web). Never throws.
+export async function checkForUpdate() {
+  if (!isNative) return null;
+  const rel = await fetchRelease();
+  if (!rel || cmp(rel.version, APP_VERSION) <= 0) return null;
+  return rel;
+}
+
+// Web's "Get the Android app" download link needs the CURRENT latest release
+// regardless of what's installed (there's nothing installed to compare
+// against) — same shape as checkForUpdate()'s result, no "is it newer" gate,
+// and works on web too (checkForUpdate() is native-only by design).
+export async function fetchLatestRelease() {
+  return fetchRelease();
 }
 
 // Reliable path: open the APK download in the REAL external browser (e.g.

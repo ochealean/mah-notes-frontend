@@ -143,6 +143,28 @@ public class AlarmScheduler {
         schedule(ctx, a);
     }
 
+    /**
+     * Cancel every persisted alarm whose id isn't in {@code keep} — alarms left
+     * behind by schedules that no longer exist (deleted on another device and
+     * synced down, or wiped by a logout), which would otherwise re-arm weekly
+     * forever. One-shot alarms (the in-app test alarm) are never pruned: they
+     * clear themselves once they fire. Returns how many were cancelled.
+     */
+    static int pruneExcept(Context ctx, java.util.Set<Integer> keep) {
+        SharedPreferences p = prefs(ctx);
+        int removed = 0;
+        for (String key : new java.util.ArrayList<>(p.getAll().keySet())) {
+            int id;
+            try { id = Integer.parseInt(key); } catch (NumberFormatException e) { continue; }
+            if (keep.contains(id)) continue;
+            AlarmItem a = AlarmItem.parse(id, p.getString(key, ""));
+            if (a != null && a.oneShot) continue; // pending test alarm — leave alone
+            cancel(ctx, id);
+            removed++;
+        }
+        return removed;
+    }
+
     /** Re-arm every persisted alarm (used after a reboot). */
     static void restoreAll(Context ctx) {
         SharedPreferences p = prefs(ctx);

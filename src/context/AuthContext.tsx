@@ -9,7 +9,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api, setToken, getToken } from '../lib/api';
 import { isNative } from '../lib/nativeAuth';
-import { consumeGoogleRedirect } from '../lib/googleRedirect';
+import { consumeGoogleRedirect, pendingGoogleRedirect } from '../lib/googleRedirect';
 import { notify } from '../lib/notify';
 import { rateGate } from '../lib/rateLimit';
 import { clearCache } from '../lib/webCache';
@@ -32,6 +32,11 @@ const readCachedUser = () => { try { return JSON.parse(localStorage.getItem(USER
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false); // false until we've checked the stored token
+  // 'login' | 'link' | null — set synchronously on the FIRST render when we've just
+  // come back from Google, so the UI can show "signing you in" for the whole code
+  // exchange instead of silently re-rendering the login form (which made users
+  // click Google again and cancel the in-flight attempt).
+  const [googlePending, setGooglePending] = useState(() => (isNative ? null : pendingGoogleRedirect()));
 
   // On first load, restore the cached user (instant, works offline) then
   // validate the token in the background.
@@ -40,7 +45,14 @@ export function AuthProvider({ children }) {
     (async () => {
       if (!getToken()) { setReady(true); return; }
       const cached = readCachedUser();
-      if (cached && !cancelled) setUser(cached);
+      // A cached user means we can render the app RIGHT NOW and validate the
+      // token in the background. Previously `ready` waited on /api/auth/me, so
+      // every visit sat on a spinner for a full round trip before the data
+      // fetches could even start — three sequential waves before first paint,
+      // and on a cold backend that first wave is the expensive one.
+      // A 401 below still signs us out, so this only ever costs a brief render
+      // of stale data in the rare case the token has been revoked.
+      if (cached && !cancelled) { setUser(cached); setReady(true); }
       try {
         const { user } = await api.get('/api/auth/me');
         if (!cancelled) { setUser(user); cacheUser(user); }
@@ -62,14 +74,29 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const login = useCallback(async (email, password) => {
+  // `identifier` is an email OR a username — the server tries both.
+  const login = useCallback(async (identifier, password) => {
     authGate();
-    return adopt(await api.post('/api/auth/login', { email, password }));
+    return adopt(await api.post('/api/auth/login', { login: identifier, password }));
   }, [adopt]);
 
-  const register = useCallback(async (email, password, name) => {
+  const register = useCallback(async (email, password, name, username) => {
     authGate();
-    return adopt(await api.post('/api/auth/register', { email, password, name }));
+    return adopt(await api.post('/api/auth/register', { email, password, name, username }));
+  }, [adopt]);
+
+  // Ask for a reset link. The server always reports success (it won't reveal
+  // whether an account exists), so there's nothing to branch on here.
+  const forgotPassword = useCallback(async (email) => {
+    authGate();
+    return api.post('/api/auth/forgot-password', { email });
+  }, []);
+
+  // Swap a reset token for a new password. On success the server signs us in,
+  // so adopt() puts us straight into the app.
+  const resetPassword = useCallback(async (token, password) => {
+    authGate();
+    return adopt(await api.post('/api/auth/reset-password', { token, password }));
   }, [adopt]);
 
   // Accepts either an id token (native picker → { credential }) or a web
@@ -96,14 +123,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (isNative) return;
     const r = consumeGoogleRedirect();
-    if (!r) return;
+    if (!r) { setGooglePending(null); return; }
     (async () => {
-      if (r.error) {
-        if (r.error !== 'state_mismatch') notify('Google sign-in was cancelled or failed.', 'error');
-        return;
-      }
       try {
-        if (r.intent === 'link') {
+        if (r.error) {
+          if (r.error !== 'state_mismatch') notify('Google sign-in was cancelled or failed.', 'error');
+        } else if (r.intent === 'link') {
           await linkGoogle({ code: r.code, redirectUri: r.redirectUri });
           notify('Google connected', 'success');
         } else {
@@ -111,6 +136,10 @@ export function AuthProvider({ children }) {
         }
       } catch (err) {
         notify(err?.message || 'Could not complete Google sign-in.', 'error');
+      } finally {
+        // Always drop the spinner — success, cancel, or failure — so the user
+        // lands back on a usable screen instead of a stuck loader.
+        setGooglePending(null);
       }
     })();
   }, [loginWithGoogle, linkGoogle]);
@@ -122,6 +151,39 @@ export function AuthProvider({ children }) {
     cacheUser(u);
     setUser(u);
     return u;
+  }, []);
+
+  // Add a password to a Google-only account, or change an existing one
+  // (currentPassword required only when one is already set — the server
+  // enforces this). Keeps the session; only the user record changes.
+  const setPassword = useCallback(async (password, currentPassword) => {
+    authGate();
+    const { user: u } = await api.post('/api/auth/set-password', { password, currentPassword });
+    cacheUser(u);
+    setUser(u);
+    return u;
+  }, []);
+
+  // Add or change the account's login username (a separate handle from email).
+  const setUsername = useCallback(async (username) => {
+    const { user: u } = await api.post('/api/auth/set-username', { username });
+    cacheUser(u);
+    setUser(u);
+    return u;
+  }, []);
+
+  // Permanently delete the account (notes, plans, schedules, share links,
+  // friends — everything server-side, cascaded on the backend). `password` is
+  // required only when the account has one; a Google-only account has nothing
+  // to check there, so the caller's typed-email confirmation is the safeguard.
+  // On success we're signed out locally — there's no account left to hold a
+  // session for.
+  const deleteAccount = useCallback(async (password) => {
+    await api.del('/api/auth/me', password ? { password } : undefined);
+    setToken(null);
+    cacheUser(null);
+    clearCache();
+    setUser(null);
   }, []);
 
   const logout = useCallback(() => {
@@ -142,7 +204,7 @@ export function AuthProvider({ children }) {
   }, [user?.id]);
 
   return (
-    <AuthContext.Provider value={{ user, ready, login, register, loginWithGoogle, linkGoogle, updateProfile, logout }}>
+    <AuthContext.Provider value={{ user, ready, googlePending, login, register, loginWithGoogle, linkGoogle, forgotPassword, resetPassword, setPassword, setUsername, updateProfile, deleteAccount, logout }}>
       {children}
     </AuthContext.Provider>
   );
