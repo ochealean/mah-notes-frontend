@@ -12,7 +12,7 @@ import { isNative } from '../lib/nativeAuth';
 import { repo } from '../lib/repo';
 import { localdb } from '../lib/localdb';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
-import { APP_DOWNLOAD_URL } from '../lib/updates';
+import { APP_DOWNLOAD_URL, fetchLatestRelease } from '../lib/updates';
 import { isInAppBrowser } from '../lib/inAppBrowser';
 
 const KNOWN_TABS = ['docs', 'plans', 'view', 'schedule', 'settings'];
@@ -37,6 +37,19 @@ function ViewerCta() {
   // path — their embedded WebView, not real Chrome, can't finish an APK
   // download (it just sits at 100% forever). Warn before they try.
   const inApp = isInAppBrowser();
+  // Resolve the direct .apk so "Download the app" actually downloads, instead
+  // of dropping the user on the GitHub releases page to hunt for the asset.
+  // Falls back to that page until this resolves (or if it fails).
+  const [apkUrl, setApkUrl] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const rel = await fetchLatestRelease();
+      if (!cancelled && rel?.apkUrl) setApkUrl(rel.apkUrl);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className="view-cta">
       <div className="view-cta-head">
@@ -50,7 +63,15 @@ function ViewerCta() {
         </p>
       )}
       <div className="view-cta-btns">
-        <a className="vcta-btn primary" href={APP_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
+        {/* Direct .apk → same tab (Content-Disposition: attachment starts the
+            download and keeps this page put; a new blank tab is what stalls
+            Android Chrome at 100%). Releases-page fallback → new tab, since
+            that IS a page and would otherwise navigate the reader away. */}
+        <a
+          className="vcta-btn primary"
+          href={apkUrl || APP_DOWNLOAD_URL}
+          {...(apkUrl ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+        >
           <i className="fas fa-download" /> Download the app
         </a>
         {!signedIn && (

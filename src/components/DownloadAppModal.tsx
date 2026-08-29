@@ -29,6 +29,12 @@ export default function DownloadAppModal({ onClose }) {
   // doesn't have one attached) → the releases page is still a safe fallback,
   // since users can grab any asset from there themselves.
   const downloadUrl = release?.apkUrl || RELEASES_URL;
+  // A real .apk responds with Content-Disposition: attachment, so same-tab is
+  // safe AND is the reliable path (see the comment on the link below). The
+  // fallback releases PAGE is an ordinary document though — navigating the
+  // current tab there would kick the user out of the app, so that one still
+  // opens in a new tab.
+  const isDirectApk = !!release?.apkUrl;
   const inApp = isInAppBrowser();
 
   return (
@@ -55,7 +61,19 @@ export default function DownloadAppModal({ onClose }) {
               : 'Downloads as an APK — Android may ask you to allow installs from your browser the first time.'}
         </p>
 
-        <a className="btn btn-primary btn-block" href={downloadUrl} target="_blank" rel="noopener noreferrer" onClick={onClose}>
+        {/* NO target="_blank" — deliberate. The asset responds with
+            Content-Disposition: attachment, so a SAME-TAB navigation starts the
+            download and leaves this page exactly where it is. Opening it in a
+            fresh blank tab instead is what made Android Chrome sit at
+            "100% / 5.80 MB of 5.80 MB" forever until the user manually
+            refreshed — the new tab has no page to fall back to and never
+            finalises the handoff to the download manager. */}
+        <a
+          className="btn btn-primary btn-block"
+          href={downloadUrl}
+          {...(isDirectApk ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+          onClick={onClose}
+        >
           <i className="fas fa-download" /> Download
         </a>
         <a className="btn btn-ghost btn-block" style={{ marginTop: 9 }} href={RELEASES_URL} target="_blank" rel="noopener noreferrer" onClick={onClose}>
