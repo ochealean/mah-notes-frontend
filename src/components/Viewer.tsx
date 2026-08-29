@@ -13,6 +13,7 @@ import { repo } from '../lib/repo';
 import { localdb } from '../lib/localdb';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
 import { APP_DOWNLOAD_URL } from '../lib/updates';
+import { isInAppBrowser } from '../lib/inAppBrowser';
 
 const KNOWN_TABS = ['docs', 'plans', 'view', 'schedule', 'settings'];
 
@@ -31,12 +32,23 @@ const refSave = (tok, state) => { try { localStorage.setItem(refKey(tok), JSON.s
 // sign in / sign up. Hidden inside the native app and for signed-in owners.
 function ViewerCta() {
   const signedIn = !!getToken();
+  // Shared links land here from Messenger/Instagram/etc. often enough that
+  // this is the single most common place someone hits the broken-download
+  // path — their embedded WebView, not real Chrome, can't finish an APK
+  // download (it just sits at 100% forever). Warn before they try.
+  const inApp = isInAppBrowser();
   return (
     <div className="view-cta">
       <div className="view-cta-head">
         <span className="logo">Mah Notes</span>
         <p>Your notes, plans &amp; checklists — everywhere.</p>
       </div>
+      {inApp && (
+        <p className="vcta-warn">
+          <i className="fas fa-triangle-exclamation" /> Downloads can get stuck here — tap <b>⋮</b> / <b>···</b> and choose
+          <b> “Open in Chrome”</b> first.
+        </p>
+      )}
       <div className="view-cta-btns">
         <a className="vcta-btn primary" href={APP_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
           <i className="fas fa-download" /> Download the app

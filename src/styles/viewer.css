@@ -53,6 +53,13 @@
     background: var(--grad-primary); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
 .view-cta-head p { color: var(--muted); font-size: 13px; margin: 4px 0 14px; }
+.vcta-warn {
+    display: flex; gap: 8px; align-items: flex-start; text-align: left;
+    background: rgba(245,166,35,.13); border: 1px solid rgba(245,166,35,.32);
+    color: #a96f08; border-radius: 12px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45;
+    margin-bottom: 14px;
+}
+.vcta-warn i { margin-top: 2px; flex-shrink: 0; }
 .view-cta-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .vcta-btn {
     display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
