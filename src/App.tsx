@@ -5,6 +5,7 @@ import AuthScreen from './components/AuthScreen';
 import MainApp from './components/MainApp';
 import Viewer from './components/Viewer';
 import ResetPassword from './components/ResetPassword';
+import DownloadPage from './components/DownloadPage';
 import Loader from './components/Loader';
 
 function Home() {
@@ -27,6 +28,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/view" element={<Viewer />} />
+      <Route path="/download" element={<DownloadPage />} />
       <Route path="/reset-password" element={<ResetPassword />} />
     </Routes>
   );

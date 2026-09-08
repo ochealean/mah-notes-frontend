@@ -61,23 +61,17 @@ export default function DownloadAppModal({ onClose }) {
               : 'Downloads as an APK — Android may ask you to allow installs from your browser the first time.'}
         </p>
 
-        {/* NO target="_blank" — deliberate. The asset responds with
-            Content-Disposition: attachment, so a SAME-TAB navigation starts the
-            download and leaves this page exactly where it is. Opening it in a
-            fresh blank tab instead is what made Android Chrome sit at
-            "100% / 5.80 MB of 5.80 MB" forever until the user manually
-            refreshed — the new tab has no page to fall back to and never
-            finalises the handoff to the download manager. */}
-        {/* NO onClick={onClose} on the direct .apk either. Closing the modal
-            unmounts this subtree in the same tick the browser is starting the
-            download handoff; pasting the identical URL into the address bar
-            works precisely because nothing tears down underneath it. Leave the
-            modal open and let the navigation finish on its own. The releases
-            PAGE below still closes, since that genuinely navigates away. */}
+        {/* New tab → /download, which paints a real page and THEN starts the
+            transfer. Pointing a new tab straight at the .apk is what sat at
+            "5.81 MB / 5.81 MB" forever: that tab holds no document, so Android
+            never finalises the handoff to the download manager. Pasting the
+            same URL by hand works because that tab does end up with a page. */}
         <a
           className="btn btn-primary btn-block"
-          href={downloadUrl}
-          {...(isDirectApk ? {} : { target: '_blank', rel: 'noopener noreferrer', onClick: onClose })}
+          href={isDirectApk ? '/download' : downloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={onClose}
         >
           <i className="fas fa-download" /> Download
         </a>

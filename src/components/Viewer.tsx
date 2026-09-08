@@ -63,14 +63,14 @@ function ViewerCta() {
         </p>
       )}
       <div className="view-cta-btns">
-        {/* Direct .apk → same tab (Content-Disposition: attachment starts the
-            download and keeps this page put; a new blank tab is what stalls
-            Android Chrome at 100%). Releases-page fallback → new tab, since
-            that IS a page and would otherwise navigate the reader away. */}
+        {/* New tab → /download, which paints a real page before starting the
+            transfer. A new tab aimed straight at the .apk holds no document,
+            and Android leaves that download at 100% forever. */}
         <a
           className="vcta-btn primary"
-          href={apkUrl || APP_DOWNLOAD_URL}
-          {...(apkUrl ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+          href={apkUrl ? '/download' : APP_DOWNLOAD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
         >
           <i className="fas fa-download" /> Download the app
         </a>
