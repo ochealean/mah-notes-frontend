@@ -13,7 +13,7 @@ import { repo } from '../lib/repo';
 import { localdb } from '../lib/localdb';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
 import { APP_DOWNLOAD_URL, fetchLatestRelease } from '../lib/updates';
-import { isInAppBrowser } from '../lib/inAppBrowser';
+import { isInAppBrowser, isAndroid, chromeIntentUrl } from '../lib/inAppBrowser';
 
 const KNOWN_TABS = ['docs', 'plans', 'view', 'schedule', 'settings'];
 
@@ -78,6 +78,14 @@ function ViewerCta() {
           <Link className="vcta-btn ghost" to="/">
             <i className="fas fa-right-to-bracket" /> Sign in / Sign up
           </Link>
+        )}
+        {/* Shown to everyone, not just when the sniff above fires — a Custom
+            Tab looks exactly like Chrome in the UA yet stalls the same way,
+            and this page is the most common place people meet that stall. */}
+        {apkUrl && isAndroid() && chromeIntentUrl(apkUrl) && (
+          <a className="vcta-btn ghost" href={chromeIntentUrl(apkUrl)}>
+            <i className="fab fa-chrome" /> Stuck at 100%? Open in Chrome
+          </a>
         )}
       </div>
     </div>

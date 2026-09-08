@@ -15,6 +15,11 @@
 //  catches the large majority of real traffic.
 // ============================================================
 const SIGNATURES = [
+  // Every Android WebView tags itself "; wv)" in the UA, whichever app is
+  // embedding it. This catches the long tail the named checks below miss —
+  // Discord, Reddit, Slack, Gmail, LinkedIn, and anything else that opens
+  // links internally — so a user in an unlisted app still gets warned.
+  /;\s*wv[;)]/i,
   /FBAN|FBAV|FB_IAB/i,     // Facebook / Messenger
   /Instagram/i,
   /Line\//i,
@@ -30,5 +35,30 @@ export function isInAppBrowser() {
     return SIGNATURES.some((re) => re.test(navigator.userAgent || ''));
   } catch {
     return false;
+  }
+}
+
+export function isAndroid() {
+  try { return /Android/i.test(navigator.userAgent || ''); } catch { return false; }
+}
+
+// Hand a URL to real Chrome, escaping whatever WebView we're trapped in.
+// Android resolves an "intent://" navigation against the named package, so
+// this opens Chrome proper — the one browser we know finishes an APK
+// download — and falls back to the plain https URL if Chrome isn't installed.
+//
+// This exists because detection can never be complete: a Chrome Custom Tab is
+// byte-for-byte identical to Chrome in the UA, so isInAppBrowser() cannot see
+// it, yet it stalls downloads the same way. So the escape hatch is offered
+// unconditionally rather than only when the sniff above fires.
+export function chromeIntentUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return null;
+    return `intent://${u.host}${u.pathname}${u.search}`
+      + '#Intent;scheme=https;package=com.android.chrome'
+      + `;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+  } catch {
+    return null;
   }
 }
