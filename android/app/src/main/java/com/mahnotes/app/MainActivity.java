@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(AlarmPlugin.class);  // native ringing alarm
         registerPlugin(WidgetPlugin.class); // home-screen widget bridge
+        registerPlugin(ClipboardPlugin.class); // text-selection clipboard bridge
         super.onCreate(savedInstanceState);
         handleWidgetIntent(getIntent());
     }

@@ -5,15 +5,17 @@
 //    notes     : note documents
 //    plans     : weekly plans
 //    schedules : weekly time blocks (Schedule tab; synced like notes/plans)
+//    clips     : text captured from Android's selection toolbar (device-local)
 //    meta      : small key/value rows (syncEnabled, pendingDeletes, lastSync)
 //
 //  This is the source of truth for the app on a device. The sync engine
 //  mirrors notes, plans AND schedules to/from the backend when an account
 //  is connected; the app additionally arms native reminders/alarms locally.
+//  `clips` is the exception — it never leaves the device.
 // ============================================================
 const DB_NAME = 'mahnotes';
-const DB_VERSION = 2;
-const STORES = ['notes', 'plans', 'schedules', 'meta'];
+const DB_VERSION = 3;
+const STORES = ['notes', 'plans', 'schedules', 'clips', 'meta'];
 
 let dbPromise = null;
 
@@ -26,6 +28,7 @@ function openDB() {
       if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('plans')) db.createObjectStore('plans', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('schedules')) db.createObjectStore('schedules', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('clips')) db.createObjectStore('clips', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
     };
     req.onsuccess = () => resolve(req.result);

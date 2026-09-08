@@ -28,6 +28,42 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- "Mah Notes" in the text-selection toolbar (copy / paste / select all).
+             ACTION_PROCESS_TEXT puts us there for a selection in ANY app. No UI:
+             it saves the highlighted text, toasts, and gets out of the way.
+             The android:label is what the toolbar shows. -->
+        <activity
+            android:name=".SaveClipActivity"
+            android:label="Mah Notes"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- "Mah Notes Clipboard" in the same toolbar: pick a saved clip and it
+             replaces the current selection. No noHistory here — the picker has to
+             survive while the dialog is up. -->
+        <activity
+            android:name=".PasteClipActivity"
+            android:label="Mah Notes Clipboard"
+            android:theme="@android:style/Theme.Material.Dialog"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <!-- Ringing alarm: full-screen screen shown over the lock screen. -->
         <activity
             android:name=".AlarmActivity"

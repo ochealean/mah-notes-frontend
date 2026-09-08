@@ -314,11 +314,18 @@ a { color: var(--primary); }
     border-top: 1px solid #eceafb; display: flex;
 }
 .nav-item {
-    flex: 1; border: none; background: none; cursor: pointer; color: var(--muted);
+    /* min-width:0 matters: with six tabs the flex items must be allowed to
+       shrink below their label width, or the bar overflows on narrow phones. */
+    flex: 1 1 0; min-width: 0; padding: 0 2px;
+    border: none; background: none; cursor: pointer; color: var(--muted);
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-    font-size: 11px; font-weight: 600; transition: color .15s ease;
+    font-size: 10px; font-weight: 600; transition: color .15s ease;
 }
-.nav-item i { font-size: 19px; }
+/* Labels stay on one line and ellipsis rather than wrapping into the icon. */
+.nav-item > span:not(.nav-icon-wrap) {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nav-item i { font-size: 18px; }
 .nav-item.active { color: var(--primary); }
 .nav-item.active i { transform: translateY(-1px); }
 
@@ -500,6 +507,15 @@ a { color: var(--primary); }
 .view-card .note-preview { max-height: 88px; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent); mask-image: linear-gradient(180deg, #000 60%, transparent); }
 .view-go { color: var(--accent); font-size: 15px; flex-shrink: 0; padding: 2px 4px; }
 .view-back { margin-right: 2px; }
+
+/* ═══════════ CLIPBOARD ═══════════ */
+/* Clips are raw text, not rich content — keep the author's line breaks and
+   wrap long unbroken strings (URLs) instead of blowing out the card. */
+.clip-text {
+    white-space: pre-wrap; overflow-wrap: anywhere;
+    max-height: 120px; color: var(--dark); font-size: 13.5px;
+}
+.clip-count { color: var(--muted); font-size: 12.5px; font-weight: 700; }
 
 /* ═══════════ FRIENDS ═══════════ */
 .friend-myid { background: var(--light); border-radius: 12px; padding: 11px 13px; margin-bottom: 12px; }

@@ -6,11 +6,24 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.4.0';
+export const APP_VERSION = '1.5.0';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '1.5.0',
+    date: '2026-08-30',
+    title: 'Clip text from any app',
+    changes: [
+      'Highlight text in any app on your phone and tap “Mah Notes” in the copy/paste bar — it’s saved instantly, without leaving what you were reading. (If you don’t see it, check the ⋮ menu in that bar.)',
+      'New Clipboard tab holds everything you’ve clipped, with the app it came from and when.',
+      'Copy any clip back to your clipboard — it then shows up in your keyboard’s clipboard panel too.',
+      'Turn a clip into a real document with one tap.',
+      'The copy/paste bar also gets a “Mah Notes Clipboard” entry: select some text, pick a saved clip, and it replaces the selection.',
+      'Clips stay on your phone — they aren’t uploaded or synced.',
+    ],
+  },
   {
     version: '1.4.0',
     date: '2026-08-29',

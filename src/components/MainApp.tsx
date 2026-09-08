@@ -17,6 +17,7 @@ import { checkForUpdate, autoUpdateEnabled, shouldAutoPrompt } from '../lib/upda
 import DocsTab from './DocsTab';
 import PlansTab from './PlansTab';
 import ViewTab from './ViewTab';
+import ClipboardTab from './ClipboardTab';
 import ScheduleTab from './ScheduleTab';
 import SettingsTab from './SettingsTab';
 import DocEditor from './DocEditor';
@@ -27,11 +28,12 @@ import ReconcileModal from './ReconcileModal';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
 import { pushWidgetData, consumeWidgetOpen, consumeWidgetToggles } from '../lib/widget';
+import { listClips, drainPendingClips, pushClipSnapshot } from '../lib/clips';
 import { readCache, writeCache } from '../lib/webCache';
 import { useSlowHint } from '../lib/useSlowHint';
 import logoUrl from '../images/mn_logo.png';
 
-const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', schedule: 'Schedule', settings: 'Settings' };
+const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', clipboard: 'Clipboard', schedule: 'Schedule', settings: 'Settings' };
 
 export default function MainApp() {
   const { user, logout } = useAuth();
@@ -50,6 +52,9 @@ export default function MainApp() {
   const [notes, setNotes] = useState(() => cached?.notes || []);
   const [plans, setPlans] = useState(() => cached?.plans || []);
   const [schedules, setSchedules] = useState(() => cached?.schedules || []);
+  // Clips are device-local (never synced, never cached for the web), so they
+  // load on their own rather than through reload()/readCache.
+  const [clips, setClips] = useState([]);
   // With a cache in hand there's nothing to "load" — show it immediately.
   const [loading, setLoading] = useState(!cached);
 
@@ -92,6 +97,23 @@ export default function MainApp() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Pull in anything the Android selection toolbar captured while we were closed
+  // or backgrounded, then re-read the store. Safe on web: the drain no-ops and
+  // listClips() just returns an empty list.
+  const reloadClips = useCallback(async () => {
+    await drainPendingClips();
+    setClips(await listClips());
+  }, []);
+
+  useEffect(() => { reloadClips(); }, [reloadClips]);
+
+  // Native: mirror the list back down so the "Mah Notes Clipboard" entry in the
+  // selection toolbar can offer these clips from its own (WebView-less) process.
+  useEffect(() => {
+    if (!isNative) return;
+    pushClipSnapshot(clips);
+  }, [clips]);
+
   // Native: keep the home-screen widget's data mirror in sync with the lists.
   // Fetch fresh from the store (not the initial empty render state) and only
   // once the first load has finished, so the widget picker always sees real data.
@@ -131,6 +153,9 @@ export default function MainApp() {
       if (document.visibilityState !== 'visible') return;
       openFromWidget();
       syncWidgetToggles();
+      // Clipping happens while we're backgrounded — pick it up on the way back
+      // in so the Clipboard tab is current without an app restart.
+      reloadClips();
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
@@ -315,7 +340,7 @@ export default function MainApp() {
           )}
         </div>
         <div className="appbar-actions">
-          {tab !== 'settings' && tab !== 'view' && tab !== 'schedule' && (
+          {tab !== 'settings' && tab !== 'view' && tab !== 'schedule' && tab !== 'clipboard' && (
             <button className={`icon-btn${allHidden ? ' active' : ''}`} title={allHidden ? 'Show all content' : 'Hide all content'}
               onClick={togglePrivacyAll}>
               <i className={`fas ${allHidden ? 'fa-eye' : 'fa-eye-slash'}`} />
@@ -356,6 +381,9 @@ export default function MainApp() {
         {tab === 'view' && (
           <ViewTab notes={notes} plans={plans} onOpen={openView} />
         )}
+        {tab === 'clipboard' && (
+          <ClipboardTab clips={clips} onChanged={reloadClips} />
+        )}
         {tab === 'schedule' && (
           <ScheduleTab schedules={schedules} onEdit={(block) => setScheduleEditor({ block })} onChanged={reload} />
         )}
@@ -366,7 +394,7 @@ export default function MainApp() {
         )}
       </main>
 
-      {tab !== 'settings' && tab !== 'view' && (
+      {tab !== 'settings' && tab !== 'view' && tab !== 'clipboard' && (
         <button className="add-fab" aria-label="Create" onClick={onFab}>
           <i className="fas fa-plus" />
         </button>
@@ -381,6 +409,9 @@ export default function MainApp() {
         </button>
         <button className={`nav-item${tab === 'view' ? ' active' : ''}`} onClick={() => setTab('view')}>
           <i className="fas fa-eye" /><span>View</span>
+        </button>
+        <button className={`nav-item${tab === 'clipboard' ? ' active' : ''}`} onClick={() => setTab('clipboard')}>
+          <i className="fas fa-clipboard" /><span>Clipboard</span>
         </button>
         <button className={`nav-item${tab === 'schedule' ? ' active' : ''}`} onClick={() => setTab('schedule')}>
           <i className="fas fa-clock" /><span>Schedule</span>
