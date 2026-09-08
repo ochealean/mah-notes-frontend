@@ -8,8 +8,7 @@
 // ============================================================
 import { useEffect, useState } from 'react';
 import { UPDATE_REPO, fetchLatestRelease } from '../lib/updates';
-import { isInAppBrowser, isAndroid, chromeIntentUrl } from '../lib/inAppBrowser';
-import { notify } from '../lib/notify';
+import { isInAppBrowser } from '../lib/inAppBrowser';
 
 const RELEASES_URL = `https://github.com/${UPDATE_REPO}/releases`;
 
@@ -37,19 +36,6 @@ export default function DownloadAppModal({ onClose }) {
   // opens in a new tab.
   const isDirectApk = !!release?.apkUrl;
   const inApp = isInAppBrowser();
-  // Offered whether or not the sniff fires: Custom Tabs are invisible to UA
-  // detection but stall downloads identically, so the way out has to be on
-  // screen for everyone, not just the browsers we happen to recognise.
-  const intentUrl = isAndroid() && isDirectApk ? chromeIntentUrl(downloadUrl) : null;
-
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(downloadUrl);
-      notify('Link copied — paste it into Chrome', 'success');
-    } catch {
-      notify('Could not copy — long-press the Download button to copy the link', 'error');
-    }
-  }
 
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -82,11 +68,16 @@ export default function DownloadAppModal({ onClose }) {
             "100% / 5.80 MB of 5.80 MB" forever until the user manually
             refreshed — the new tab has no page to fall back to and never
             finalises the handoff to the download manager. */}
+        {/* NO onClick={onClose} on the direct .apk either. Closing the modal
+            unmounts this subtree in the same tick the browser is starting the
+            download handoff; pasting the identical URL into the address bar
+            works precisely because nothing tears down underneath it. Leave the
+            modal open and let the navigation finish on its own. The releases
+            PAGE below still closes, since that genuinely navigates away. */}
         <a
           className="btn btn-primary btn-block"
           href={downloadUrl}
-          {...(isDirectApk ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
-          onClick={onClose}
+          {...(isDirectApk ? {} : { target: '_blank', rel: 'noopener noreferrer', onClick: onClose })}
         >
           <i className="fas fa-download" /> Download
         </a>
@@ -94,27 +85,6 @@ export default function DownloadAppModal({ onClose }) {
           <i className="fas fa-list" /> View versions
         </a>
 
-        {/* Recovery path, always visible. The stall it addresses is silent —
-            the bar reads 100% and simply never completes — so a user has no
-            way to know the browser is at fault or what to do next. */}
-        {isDirectApk && (
-          <>
-            <p className="reconcile-intro" style={{ marginTop: 16, marginBottom: 8 }}>
-              Stuck at 100%, or nothing happened? Some apps’ built-in browsers can’t
-              finish an APK download. Open it in Chrome instead:
-            </p>
-            <div style={{ display: 'flex', gap: 9 }}>
-              {intentUrl && (
-                <a className="btn btn-ghost" style={{ flex: 1 }} href={intentUrl}>
-                  <i className="fab fa-chrome" /> Open in Chrome
-                </a>
-              )}
-              <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={copyLink}>
-                <i className="fas fa-link" /> Copy link
-              </button>
-            </div>
-          </>
-        )}
       </div>
     </div>
   );
