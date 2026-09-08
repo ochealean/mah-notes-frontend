@@ -16,6 +16,11 @@ import { Link } from 'react-router-dom';
 import { UPDATE_REPO, fetchLatestRelease } from '../lib/updates';
 
 const RELEASES_URL = `https://github.com/${UPDATE_REPO}/releases`;
+// Same-origin on purpose. It 302s to release-assets.githubusercontent.com,
+// so the browser never navigates to github.com — which is a verified Android
+// App Link that the GitHub app steals into its own embedded browser, where
+// the download stalls at 100%. See api/download.js.
+const APK_ENDPOINT = '/api/download';
 
 export default function DownloadPage() {
   // undefined = still asking GitHub, null = asked and failed.
@@ -34,7 +39,7 @@ export default function DownloadPage() {
       // braces version for browsers that throttle rAF in a fresh tab.
       requestAnimationFrame(() => requestAnimationFrame(() => {
         timer = setTimeout(() => {
-          if (!cancelled) window.location.href = rel.apkUrl;
+          if (!cancelled) window.location.href = APK_ENDPOINT;
         }, 350);
       }));
     })();
@@ -62,7 +67,7 @@ export default function DownloadPage() {
           </p>
 
           {apkUrl && (
-            <a className="btn btn-primary btn-block" style={{ marginTop: 18 }} href={apkUrl}>
+            <a className="btn btn-primary btn-block" style={{ marginTop: 18 }} href={APK_ENDPOINT}>
               <i className="fas fa-download" /> Tap here if it didn’t start
             </a>
           )}
