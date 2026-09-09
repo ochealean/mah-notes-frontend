@@ -47,15 +47,23 @@ import { useSlowHint } from '../lib/useSlowHint';
 import logoUrl from '../images/mn_logo.png';
 
 const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', clipboard: 'Clipboard', schedule: 'Schedule', settings: 'Settings' };
-const TABS = [
+
+const ALL_TABS = [
   { key: 'docs', label: 'Docs', icon: 'fa-book-open' },
   { key: 'plans', label: 'Plans', icon: 'fa-calendar-week' },
   { key: 'clipboard', label: 'Clips', icon: 'fa-clipboard' },
   { key: 'schedule', label: 'Time', icon: 'fa-clock' },
   { key: 'settings', label: 'Settings', icon: 'fa-gear' },
 ];
+// Clips are captured by the Android selection toolbar and never leave the
+// device, so on the web the tab could only ever show an empty state explaining
+// why it is empty. It isn't offered there at all. `isNative` is settled once at
+// module load (Capacitor.isNativePlatform()), so this list never changes after.
+const TABS = ALL_TABS.filter((t) => t.key !== 'clipboard' || isNative);
+const isTab = (t) => TABS.some((x) => x.key === t);
+
 // Tabs that own a list in the rail. Schedule and Settings fill the pane instead.
-const LIST_TABS = ['docs', 'plans', 'clipboard'];
+const LIST_TABS = TABS.filter((t) => ['docs', 'plans', 'clipboard'].includes(t.key)).map((t) => t.key);
 const SEARCH_PLACEHOLDER = { docs: 'Search documents', plans: 'Search plans', clipboard: 'Search clips' };
 
 const RAIL_KEY = 'mahnotes_rail_w';
@@ -126,7 +134,7 @@ export default function MainApp() {
   // ?tab=view from a v1 link falls back to Docs — that tab no longer exists.
   const [tab, setTab] = useState(() => {
     const t = searchParams.get('tab');
-    return TAB_TITLES[t] ? t : 'docs';
+    return isTab(t) ? t : 'docs';
   });
 
   // Web: seed from the localStorage cache so a revisit paints instantly, then
@@ -200,6 +208,7 @@ export default function MainApp() {
   // or backgrounded, then re-read the store. Safe on web: the drain no-ops and
   // listClips() just returns an empty list.
   const reloadClips = useCallback(async () => {
+    if (!isNative) return;
     await drainPendingClips();
     setClips(await listClips());
   }, []);

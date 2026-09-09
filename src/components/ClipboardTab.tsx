@@ -5,12 +5,14 @@
 //
 //  Rows in the rail, the full clip in the pane. Copy back to the
 //  system clipboard or promote a clip into a real document.
-//  Clips are device-local; they never sync.
+//
+//  Clips are device-local: they never sync, and they only exist on the
+//  phone that captured them. The web build therefore does not offer this
+//  tab at all (see TABS in MainApp), so everything here is native-only.
 // ============================================================
 import { useState } from 'react';
 import { repo } from '../lib/repo';
 import { notify } from '../lib/notify';
-import { isNative } from '../lib/nativeAuth';
 import { escapeHtml } from '../lib/richtext';
 import { timeAgo } from '../lib/timeAgo';
 import { copyClip, deleteClip } from '../lib/clips';
@@ -32,17 +34,10 @@ export default function ClipboardTab({ clips, selectedId, onSelect, searching, s
     ) : (
       <div className="empty-state">
         <i className="fas fa-clipboard" />
-        {isNative ? (
-          <p>
-            Nothing clipped yet. Highlight text in <b>any</b> app, then tap <b>Mah Notes</b> in
-            the copy/paste bar (it may be under the <b>⋮</b> menu) and it lands here.
-          </p>
-        ) : (
-          <p>
-            Clips are captured on your phone: highlight text in any app and tap <b>Mah Notes</b> in
-            the copy/paste bar. They stay on that device, so they don&rsquo;t appear here on the web.
-          </p>
-        )}
+        <p>
+          Nothing clipped yet. Highlight text in <b>any</b> app, then tap <b>Mah Notes</b> in
+          the copy/paste bar (it may be under the <b>⋮</b> menu) and it lands here.
+        </p>
       </div>
     );
   }
