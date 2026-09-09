@@ -9,7 +9,7 @@
 //
 //  Needs an account + internet; the API key lives on the server only.
 // ============================================================
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getToken } from '../lib/api';
 import { scanScheduleImage } from '../lib/scanSchedule';
 import { createSchedule } from '../lib/scheduleStore';
@@ -24,12 +24,16 @@ function fmt(t) {
   return `${((h + 11) % 12) + 1}:${String(m || 0).padStart(2, '0')} ${ap}`;
 }
 
-export default function ScanSchedule({ onAdded }) {
+export default function ScanSchedule({ onAdded, openToken = 0, hideTrigger = false }) {
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rows, setRows] = useState(null); // [{...block, include}] | null
   const [group, setGroup] = useState('');
+
+  // v2: opened from the rail's overflow menu by bumping a token.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (openToken) start(); }, [openToken]);
 
   function start() {
     if (!getToken()) {
@@ -87,10 +91,12 @@ export default function ScanSchedule({ onAdded }) {
 
   return (
     <>
-      <button className="scan-btn" onClick={start} disabled={busy}>
-        <i className={`fas ${busy ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles'}`} />
-        <span>{busy ? 'Reading your timetable…' : <>Scan a photo of your schedule <b>· AI</b></>}</span>
-      </button>
+      {!hideTrigger && (
+        <button className="scan-btn" onClick={start} disabled={busy}>
+          <i className={`fas ${busy ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles'}`} />
+          <span>{busy ? 'Reading your timetable…' : <>Scan a photo of your schedule <b>· AI</b></>}</span>
+        </button>
+      )}
       <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFile} />
 
       {rows && (

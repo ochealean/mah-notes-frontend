@@ -122,7 +122,7 @@ export default function ReconcileModal({ data, onApply, onClose }) {
         </div>
 
         <button className="btn-primary reconcile-apply" onClick={apply} disabled={busy}>
-          {busy ? <><i className="fas fa-spinner fa-spin" /> Applying…</>
+          {busy ? <><i className="fas fa-circle-notch fa-spin" /> Applying…</>
             : <>Apply — keep {keptCount}, delete {delCount}</>}
         </button>
       </div>

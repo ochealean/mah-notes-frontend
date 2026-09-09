@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { UPDATE_REPO, fetchLatestRelease } from '../lib/updates';
+import logoUrl from '../images/mn_logo.png';
 
 const RELEASES_URL = `https://github.com/${UPDATE_REPO}/releases`;
 // Same-origin on purpose. It 302s to release-assets.githubusercontent.com,
@@ -51,10 +52,13 @@ export default function DownloadPage() {
 
   return (
     <div className="view-page">
-      <div className="view-bar"><span className="logo">Mah Notes</span></div>
+      <div className="view-bar">
+        <img className="view-logo" src={logoUrl} alt="" />
+        <span className="logo">Mah Notes</span>
+      </div>
       <div className="v-card">
         <div className="empty-state">
-          <i className={`fas ${loading ? 'fa-spinner fa-spin' : apkUrl ? 'fa-download' : 'fa-triangle-exclamation'}`} />
+          <i className={`fas ${loading ? 'fa-circle-notch fa-spin' : apkUrl ? 'fa-download' : 'fa-triangle-exclamation'}`} />
           <h2 style={{ marginBottom: 8, color: 'var(--dark)' }}>
             {loading ? 'Getting the latest version…' : apkUrl ? 'Your download is starting' : 'Couldn’t reach GitHub'}
           </h2>

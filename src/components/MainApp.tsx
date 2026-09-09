@@ -1,8 +1,20 @@
 // ============================================================
-//  App shell: app bar, tabs, FAB, bottom nav. Owns the notes &
-//  plans data and the editor/share modal state.
+//  App shell, v2 "Modernist".
+//
+//  One layout for both platforms:
+//    .rail  — brand, five tabs, search + sort, and the list
+//    .pane  — the one thing you are reading
+//
+//  On a desktop they sit side by side. On a phone the rail IS the
+//  screen and the pane takes over when you open an item (CSS does
+//  the switching; `has-detail` is the only signal).
+//
+//  Changes from v1: the View tab is gone (opening an item already
+//  shows it — the /view route still works for permanent links), and
+//  the per-card action row is gone (verbs live in the pane cluster).
+//  Import and scan moved into the rail's overflow menu.
 // ============================================================
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { repo } from '../lib/repo';
@@ -14,10 +26,10 @@ import { api, getToken } from '../lib/api';
 import { notify } from '../lib/notify';
 import { APP_VERSION } from '../lib/appInfo';
 import { checkForUpdate, autoUpdateEnabled, shouldAutoPrompt } from '../lib/updates';
-import DocsTab from './DocsTab';
-import PlansTab from './PlansTab';
-import ViewTab from './ViewTab';
-import ClipboardTab from './ClipboardTab';
+import { sortItems, loadSort, saveSort, SORT_OPTIONS } from '../lib/sortItems';
+import DocsTab, { DocPane } from './DocsTab';
+import PlansTab, { PlanPane } from './PlansTab';
+import ClipboardTab, { ClipPane } from './ClipboardTab';
 import ScheduleTab from './ScheduleTab';
 import SettingsTab from './SettingsTab';
 import DocEditor from './DocEditor';
@@ -27,24 +39,96 @@ import ShareModal from './ShareModal';
 import ReconcileModal from './ReconcileModal';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
+import AiMenu from './AiMenu';
 import { pushWidgetData, consumeWidgetOpen, consumeWidgetToggles } from '../lib/widget';
-import { listClips, drainPendingClips, pushClipSnapshot } from '../lib/clips';
+import { listClips, drainPendingClips, pushClipSnapshot, deleteClip } from '../lib/clips';
 import { readCache, writeCache } from '../lib/webCache';
 import { useSlowHint } from '../lib/useSlowHint';
 import logoUrl from '../images/mn_logo.png';
 
-const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', view: 'View', clipboard: 'Clipboard', schedule: 'Schedule', settings: 'Settings' };
+const TAB_TITLES = { docs: 'Documents', plans: 'Weekly Plans', clipboard: 'Clipboard', schedule: 'Schedule', settings: 'Settings' };
+const TABS = [
+  { key: 'docs', label: 'Docs', icon: 'fa-book-open' },
+  { key: 'plans', label: 'Plans', icon: 'fa-calendar-week' },
+  { key: 'clipboard', label: 'Clips', icon: 'fa-clipboard' },
+  { key: 'schedule', label: 'Time', icon: 'fa-clock' },
+  { key: 'settings', label: 'Settings', icon: 'fa-gear' },
+];
+// Tabs that own a list in the rail. Schedule and Settings fill the pane instead.
+const LIST_TABS = ['docs', 'plans', 'clipboard'];
+const SEARCH_PLACEHOLDER = { docs: 'Search documents', plans: 'Search plans', clipboard: 'Search clips' };
+
+const RAIL_KEY = 'mahnotes_rail_w';
+const RAIL_MIN = 260;
+const RAIL_MAX = 620;
+
+// The desktop breakpoint, matched to app.css.
+function useDesktop() {
+  const [wide, setWide] = useState(() => window.matchMedia('(min-width: 900px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 900px)');
+    const on = (e) => setWide(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
 
 export default function MainApp() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isDesktop = useDesktop();
+
+  // Rail width is a device preference, not account state — it depends on the
+  // screen you are sitting at, so it never syncs.
+  const [railW, setRailW] = useState(() => {
+    try {
+      const n = parseInt(localStorage.getItem(RAIL_KEY) || '', 10);
+      return n >= RAIL_MIN && n <= RAIL_MAX ? n : 0;
+    } catch { return 0; }
+  });
+  const railRef = useRef(null);
+  const railWRef = useRef(railW);
+  const [dragging, setDragging] = useState(false);
+
+  function startResize(e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = railRef.current?.offsetWidth || RAIL_MIN;
+    setDragging(true);
+    document.body.classList.add('rail-resizing');
+    const onMove = (ev) => {
+      const w = Math.min(RAIL_MAX, Math.max(RAIL_MIN, startW + ev.clientX - startX));
+      railWRef.current = w;
+      setRailW(w);
+    };
+    const onUp = () => {
+      setDragging(false);
+      document.body.classList.remove('rail-resizing');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      try { localStorage.setItem(RAIL_KEY, String(railWRef.current)); } catch { /* ignore */ }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  function resetRail() {
+    railWRef.current = 0;
+    setRailW(0);
+    try { localStorage.removeItem(RAIL_KEY); } catch { /* ignore */ }
+  }
+
   // Returning from the Viewer (/view?...&from=plans) lands back on the tab the
-  // user was on (?tab=plans) instead of always resetting to Docs.
+  // user was on (?tab=plans) instead of always resetting to Docs. A stale
+  // ?tab=view from a v1 link falls back to Docs — that tab no longer exists.
   const [tab, setTab] = useState(() => {
     const t = searchParams.get('tab');
     return TAB_TITLES[t] ? t : 'docs';
   });
+
   // Web: seed from the localStorage cache so a revisit paints instantly, then
   // reload() refreshes in the background. Native returns null here (it reads its
   // own IndexedDB), so it keeps the normal first-load path.
@@ -58,6 +142,16 @@ export default function MainApp() {
   // With a cache in hand there's nothing to "load" — show it immediately.
   const [loading, setLoading] = useState(!cached);
 
+  // ── Rail: one search box and one sort, shared by the list tabs ──
+  const [q, setQ] = useState('');
+  const [sortDocs, setSortDocs] = useState(() => loadSort('docs'));
+  const [sortPlans, setSortPlans] = useState(() => loadSort('plans'));
+
+  // ── Selection: which item the pane is showing, per tab ──
+  const [selDoc, setSelDoc] = useState(null);
+  const [selPlan, setSelPlan] = useState(null);
+  const [selClip, setSelClip] = useState(null);
+
   const [docEditor, setDocEditor] = useState(null);   // { note } | { } (new) | null
   const [planEditor, setPlanEditor] = useState(null); // { plan } | { } | null
   const [scheduleEditor, setScheduleEditor] = useState(null); // { block } | { } | null
@@ -66,6 +160,11 @@ export default function MainApp() {
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [update, setUpdate] = useState(null);             // prompt currently shown | null
   const [updateAvailable, setUpdateAvailable] = useState(null); // an update exists → red dot
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // Multi-select replaces the old "Delete all": you choose what goes, and
+  // Select all is there when you really do mean everything.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   // Signed in via Google with no password set → can't log in if Google sign-in
   // ever breaks. `hasPassword === false` also covers accounts created before
   // `hasGoogle` existed (see ConnectGoogle.tsx).
@@ -272,7 +371,115 @@ export default function MainApp() {
     setReconcile(null);
   }
 
+  // ── Search + sort, applied once for the rail ──
+  const query = q.toLowerCase().trim();
+
+  const visibleNotes = useMemo(() => {
+    const matched = !query ? notes
+      : notes.filter((n) => `${n.title} ${n.content}`.toLowerCase().includes(query));
+    // Pinned float above a stable sort, so order is preserved within each group.
+    return [...sortItems(matched, sortDocs)].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  }, [notes, query, sortDocs]);
+
+  const visiblePlans = useMemo(() => {
+    const matched = !query ? plans
+      : plans.filter((p) => (p.title || '').toLowerCase().includes(query));
+    return sortItems(matched, sortPlans);
+  }, [plans, query, sortPlans]);
+
+  const visibleClips = useMemo(() => (
+    !query ? clips : clips.filter((c) => (c.text || '').toLowerCase().includes(query))
+  ), [clips, query]);
+
+  // The item the pane shows. On a desktop, fall back to the first row so the
+  // pane is never blank next to a full list; on a phone, nothing is open until
+  // you tap something.
+  const pick = (list, id) => list.find((x) => x.id === id) || null;
+  const curDoc = pick(visibleNotes, selDoc) || (isDesktop ? visibleNotes[0] : null) || null;
+  const curPlan = pick(visiblePlans, selPlan) || (isDesktop ? visiblePlans[0] : null) || null;
+  const curClip = pick(visibleClips, selClip) || (isDesktop ? visibleClips[0] : null) || null;
+
+  // On a phone the pane replaces the rail. Schedule and Settings have no list,
+  // so they always fill the pane.
+  const isListTab = LIST_TABS.includes(tab);
+  const openItem = tab === 'docs' ? selDoc && curDoc : tab === 'plans' ? selPlan && curPlan : tab === 'clipboard' ? selClip && curClip : null;
+  const hasDetail = !isListTab || (!isDesktop && !!openItem);
+
+  // The rows currently on screen — what "Select all" actually means.
+  const visibleForTab = tab === 'plans' ? visiblePlans : tab === 'clipboard' ? visibleClips : visibleNotes;
+  const allSelected = visibleForTab.length > 0 && visibleForTab.every((i) => selected.has(i.id));
+
+  function toggleSelect(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set(visibleForTab.map((i) => i.id)));
+  }
+  function startSelecting() { setSelected(new Set()); setSelecting(true); }
+  function stopSelecting() { setSelected(new Set()); setSelecting(false); }
+
+  async function deleteSelected() {
+    if (bulkBusy || !selected.size) return;
+    const ids = [...selected];
+    const noun = tab === 'plans' ? 'plan' : tab === 'clipboard' ? 'clip' : 'document';
+    const label = `${ids.length} ${noun}${ids.length > 1 ? 's' : ''}`;
+    if (!confirm(`Delete ${label}? This cannot be undone.`)) return;
+    setBulkBusy(true);
+    try {
+      for (const id of ids) {
+        // eslint-disable-next-line no-await-in-loop
+        if (tab === 'plans') await repo.deletePlan(id);
+        else if (tab === 'clipboard') await deleteClip(id);
+        else await repo.deleteNote(id);
+      }
+      notify(`Deleted ${label}`, 'success');
+    } catch (err) { notify(err.message || 'Could not delete everything', 'error'); }
+    finally {
+      setBulkBusy(false);
+      stopSelecting();
+      closeDetail();
+      if (tab === 'clipboard') reloadClips(); else reload();
+    }
+  }
+
+  function goTab(next) {
+    setTab(next);
+    setQ('');
+    stopSelecting();
+    // Leaving an item open across tabs would strand the phone in the pane.
+    setSelDoc(null); setSelPlan(null); setSelClip(null);
+  }
+
+  const closeDetail = () => { setSelDoc(null); setSelPlan(null); setSelClip(null); };
+
+  // Phone: opening an item replaces the list in place rather than navigating,
+  // so Back would otherwise leave the app entirely. Push a throwaway history
+  // entry while the pane is up and pop it on Back — Capacitor maps Android's
+  // hardware Back onto history.back(), so this covers the app and the browser.
+  const detailOpen = !isDesktop && !!openItem;
+  const detailPushed = useRef(false);
+  useEffect(() => {
+    if (detailOpen && !detailPushed.current) {
+      detailPushed.current = true;
+      window.history.pushState({ mnDetail: true }, '');
+    } else if (!detailOpen && detailPushed.current) {
+      detailPushed.current = false;
+      if (window.history.state?.mnDetail) window.history.back();
+    }
+  }, [detailOpen]);
+  useEffect(() => {
+    const onPop = () => { detailPushed.current = false; setSelDoc(null); setSelPlan(null); setSelClip(null); };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   // ── Privacy: hide/show every item on the active content tab ──
+  // Hiding blanks the RAIL rows only. Opening an item always shows it in
+  // full — the point is that nobody reads your notes while you scroll.
   const items = tab === 'plans' ? plans : notes;
   const allHidden = items.length > 0 && items.every((i) => i.hidden);
 
@@ -285,7 +492,7 @@ export default function MainApp() {
     setter((arr) => arr.map((i) => ({ ...i, hidden: shouldHide })));
     try {
       await Promise.all(list.map((i) => updateFn(i.id, { hidden: shouldHide })));
-      notify(shouldHide ? 'Content hidden' : 'Content shown', 'info');
+      notify(shouldHide ? 'Hidden from the list' : 'Shown in the list', 'info');
     } catch (err) { notify(err.message, 'error'); reload(); }
   }
 
@@ -305,17 +512,23 @@ export default function MainApp() {
     catch (err) { notify(err.message, 'error'); reload(); }
   }
 
-  function onFab() {
+  async function onTogglePlanCheck(planId, day, index, checked) {
+    setPlans((arr) => arr.map((p) => {
+      if (p.id !== planId) return p;
+      const days = { ...p.days };
+      days[day] = (days[day] || []).map((it, i) => (i === index ? { ...it, checked } : it));
+      return { ...p, days };
+    }));
+    try { await repo.checkPlan(planId, { day, index, checked }); }
+    catch (err) { notify(err.message, 'error'); reload(); }
+  }
+
+  function onNew() {
     if (tab === 'docs') setDocEditor({});
     else if (tab === 'plans') setPlanEditor({});
     else if (tab === 'schedule') setScheduleEditor({});
+    else setDocEditor({});
   }
-
-  // Open an item's permanent, read-only view. Same URL on web and app
-  // (/view?type=&id=) — never expires; the app reads it from local storage.
-  const openView = useCallback((kind, item) => {
-    navigate(`/view?type=${kind}&id=${encodeURIComponent(item.id)}&from=view`);
-  }, [navigate]);
 
   // After saving a friend-shared item into my account: web refetches; the app
   // pulls it down on the next sync (which fires onMerged → reload).
@@ -323,106 +536,215 @@ export default function MainApp() {
     if (isNative) syncNow(); else reload();
   }, [reload]);
 
-  // Open straight into the app shell — never a full-screen loader. While the
-  // first read (or a sync pull) is in flight we show a small inline indicator.
   const busy = loading || syncState.syncing;
+  const syncLabel = syncState.syncing ? 'Syncing' : loading ? 'Loading' : 'Synced';
+  const counts = { docs: notes.length, plans: plans.length, clipboard: clips.length };
+  const canPrivacy = tab === 'docs' || tab === 'plans';
+  const showSort = tab === 'docs' || tab === 'plans';
+  const listCount = tab === 'docs' ? visibleNotes.length : tab === 'plans' ? visiblePlans.length : visibleClips.length;
 
   return (
-    <div className="app">
+    <div className={`app${hasDetail ? ' has-detail' : ''}`}
+      style={railW ? ({ '--rail-w': `${railW}px` } as any) : undefined}>
+      {/* Phone-only bar. The rail head covers this on a desktop. */}
       <header className="appbar">
         <div className="appbar-left">
-          <img className="appbar-logo" src={logoUrl} alt="Mah Notes" />
+          <img className="appbar-logo" src={logoUrl} alt="" />
           <span className="appbar-title">{TAB_TITLES[tab]}</span>
           {busy && (
-            <span className="appbar-busy" title={syncState.syncing ? 'Syncing…' : 'Loading…'}>
-              <i className="fas fa-circle-notch fa-spin" /> {syncState.syncing ? 'Syncing…' : 'Loading…'}
-            </span>
+            <span className="appbar-busy"><i className="fas fa-circle-notch fa-spin" /> {syncLabel}</span>
           )}
         </div>
         <div className="appbar-actions">
-          {tab !== 'settings' && tab !== 'view' && tab !== 'schedule' && tab !== 'clipboard' && (
-            <button className={`icon-btn${allHidden ? ' active' : ''}`} title={allHidden ? 'Show all content' : 'Hide all content'}
-              onClick={togglePrivacyAll}>
-              <i className={`fas ${allHidden ? 'fa-eye' : 'fa-eye-slash'}`} />
-            </button>
+          {isListTab && (
+            <>
+              <AiMenu tab={tab} counts={counts} onChanged={tab === 'clipboard' ? reloadClips : reload}
+                onStartSelect={startSelecting} />
+              {canPrivacy && (
+                <button className={`icon-btn${allHidden ? ' active' : ''}`}
+                  title={allHidden ? 'Show all in the list' : 'Hide all from the list'} onClick={togglePrivacyAll}>
+                  <i className={`fas ${allHidden ? 'fa-eye' : 'fa-eye-slash'}`} />
+                </button>
+              )}
+            </>
           )}
         </div>
       </header>
 
-      <main className="screens">
-        {loading ? (
-          <div className="screen-loading">
-            <i className="fas fa-circle-notch fa-spin" />
-            <span>{slowLoad ? 'Waking up the server — this can take a moment…' : 'Loading…'}</span>
+      <aside className="rail" ref={railRef}>
+        <button
+          className={`rail-resize${dragging ? ' dragging' : ''}`}
+          aria-label="Resize the list. Double-click to reset."
+          title="Drag to resize · double-click to reset"
+          onPointerDown={startResize}
+          onDoubleClick={resetRail}
+        />
+        <div className="rail-head">
+          <img className="rail-mark" src={logoUrl} alt="" />
+          <span className="rail-name">Mah Notes</span>
+          <span className="rail-sync">
+            <span className={`rail-sync-dot${busy ? ' busy' : ''}`} />{syncLabel}
+          </span>
+          <div className="rail-actions">
+            {isListTab && (
+              <AiMenu tab={tab} counts={counts} onChanged={tab === 'clipboard' ? reloadClips : reload}
+                onStartSelect={startSelecting} />
+            )}
+            {canPrivacy && (
+              <button className={`rail-btn${allHidden ? ' on' : ''}`}
+                title={allHidden ? 'Show all in the list' : 'Hide all from the list'}
+                aria-label="Hide all from the list" onClick={togglePrivacyAll}>
+                <i className={`fas ${allHidden ? 'fa-eye' : 'fa-eye-slash'}`} />
+              </button>
+            )}
+            {tab !== 'settings' && tab !== 'clipboard' && (
+              <button className="rail-btn solid" aria-label="New" title="New" onClick={onNew}>
+                <i className="fas fa-plus" />
+              </button>
+            )}
           </div>
-        ) : (
-        <>
+        </div>
+
+        <nav className="rail-tabs">
+          {TABS.map((t) => (
+            <button key={t.key} className={`rail-tab${tab === t.key ? ' active' : ''}`}
+              onClick={() => goTab(t.key)}>
+              <span className="nav-icon-wrap">
+                <i className={`fas ${t.icon}`} />
+                {t.key === 'settings' && (updateAvailable || needsPassword) && <span className="nav-dot" />}
+              </span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {isListTab && (
+          <div className="rail-search">
+            <div className="search-bar">
+              <i className="fas fa-search" />
+              <input type="text" placeholder={SEARCH_PLACEHOLDER[tab]} value={q}
+                onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <div className="rail-meta">
+              {showSort && (
+                <label className="sort-control" title="Sort">
+                  <i className="fas fa-arrow-down-wide-short" />
+                  <select aria-label="Sort list"
+                    value={tab === 'plans' ? sortPlans : sortDocs}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (tab === 'plans') { setSortPlans(v); saveSort('plans', v); }
+                      else { setSortDocs(v); saveSort('docs', v); }
+                    }}>
+                    {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                  </select>
+                </label>
+              )}
+              <span className="rail-count">{listCount} of {counts[tab]}</span>
+            </div>
+          </div>
+        )}
+
+        {selecting && (
+          <div className="select-bar">
+            <button className="select-all" onClick={toggleSelectAll}>
+              <span className={`row-check${allSelected ? ' on' : ''}`}><i className="fas fa-check" /></span>
+              {allSelected ? 'None' : 'All'}
+            </button>
+            <span className="select-count">{selected.size} selected</span>
+            <button className="select-del" onClick={deleteSelected} disabled={!selected.size || bulkBusy}>
+              <i className={`fas ${bulkBusy ? 'fa-circle-notch fa-spin' : 'fa-trash'}`} />
+              {bulkBusy ? 'Deleting' : 'Delete'}
+            </button>
+            <button className="select-cancel" onClick={stopSelecting}>Cancel</button>
+          </div>
+        )}
+
+        <div className="rail-list">
+          {loading ? (
+            <div className="screen-loading">
+              <i className="fas fa-circle-notch fa-spin" />
+              <span>{slowLoad ? 'Waking up the server — this can take a moment…' : 'Loading…'}</span>
+            </div>
+          ) : (
+            <>
+              {tab === 'docs' && (
+                <DocsTab notes={visibleNotes} selectedId={curDoc?.id} searching={!!query}
+                  onSelect={(n) => setSelDoc(n.id)} onNew={() => setDocEditor({})}
+                  selecting={selecting} selected={selected} onToggleSelect={toggleSelect} />
+              )}
+              {tab === 'plans' && (
+                <PlansTab plans={visiblePlans} selectedId={curPlan?.id} searching={!!query}
+                  onSelect={(p) => setSelPlan(p.id)}
+                  selecting={selecting} selected={selected} onToggleSelect={toggleSelect} />
+              )}
+              {tab === 'clipboard' && (
+                <ClipboardTab clips={visibleClips} selectedId={curClip?.id} searching={!!query}
+                  onSelect={(c) => setSelClip(c.id)}
+                  selecting={selecting} selected={selected} onToggleSelect={toggleSelect} />
+              )}
+            </>
+          )}
+        </div>
+      </aside>
+
+      <main className="pane">
         {tab === 'docs' && (
-          <DocsTab
-            notes={notes}
-            onOpen={(note) => setDocEditor({ note })}
-            onNew={() => setDocEditor({})}
-            onShare={(id) => setShare({ itemType: 'note', itemId: id })}
+          <DocPane note={curDoc} onBack={closeDetail}
+            onEdit={(note) => setDocEditor({ note })}
+            onTogglePin={togglePinned}
             onToggleHidden={(id, hidden) => toggleHidden('note', id, hidden)}
-            onTogglePin={(id, pinned) => togglePinned(id, pinned)}
-            onChanged={reload}
-          />
+            onShare={(id) => setShare({ itemType: 'note', itemId: id })}
+            onDelete={() => { closeDetail(); reload(); }} />
         )}
         {tab === 'plans' && (
-          <PlansTab
-            plans={plans}
+          <PlanPane plan={curPlan} onBack={closeDetail}
             onEdit={(plan) => setPlanEditor({ plan })}
-            onShare={(id) => setShare({ itemType: 'plan', itemId: id })}
             onToggleHidden={(id, hidden) => toggleHidden('plan', id, hidden)}
-            onChanged={reload}
-            setPlans={setPlans}
-          />
-        )}
-        {tab === 'view' && (
-          <ViewTab notes={notes} plans={plans} onOpen={openView} />
+            onShare={(id) => setShare({ itemType: 'plan', itemId: id })}
+            onToggleCheck={onTogglePlanCheck}
+            onDelete={() => { closeDetail(); reload(); }} />
         )}
         {tab === 'clipboard' && (
-          <ClipboardTab clips={clips} onChanged={reloadClips} />
+          <ClipPane clip={curClip} onBack={closeDetail}
+            onChanged={() => { closeDetail(); reloadClips(); }} />
         )}
         {tab === 'schedule' && (
-          <ScheduleTab schedules={schedules} onEdit={(block) => setScheduleEditor({ block })} onChanged={reload} />
+          <div className="pane-scroll full">
+            <div className="pane-head"><span className="pane-tag">Schedule</span></div>
+            <h1 className="pane-title">This week</h1>
+            <ScheduleTab schedules={schedules} onEdit={(block) => setScheduleEditor({ block })} onChanged={reload} />
+          </div>
         )}
         {tab === 'settings' && (
-          <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout} onReload={refreshAfterSave} reloadLists={reload} updateAvailable={updateAvailable} needsPassword={needsPassword} />
-        )}
-        </>
+          <div className="pane-scroll full">
+            <div className="pane-head"><span className="pane-tag">Settings</span></div>
+            <h1 className="pane-title">{user?.name || user?.username || 'Your account'}</h1>
+            <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout}
+              onReload={refreshAfterSave} reloadLists={reload}
+              updateAvailable={updateAvailable} needsPassword={needsPassword} />
+          </div>
         )}
       </main>
 
-      {tab !== 'settings' && tab !== 'view' && tab !== 'clipboard' && (
-        <button className="add-fab" aria-label="Create" onClick={onFab}>
+      {/* Phone-only: create button and the five-tab bar. */}
+      {(tab === 'docs' || tab === 'plans' || tab === 'schedule') && !openItem && (
+        <button className="add-fab" aria-label="Create" onClick={onNew}>
           <i className="fas fa-plus" />
         </button>
       )}
 
       <nav className="bottom-nav">
-        <button className={`nav-item${tab === 'docs' ? ' active' : ''}`} onClick={() => setTab('docs')}>
-          <i className="fas fa-book-open" /><span>Docs</span>
-        </button>
-        <button className={`nav-item${tab === 'plans' ? ' active' : ''}`} onClick={() => setTab('plans')}>
-          <i className="fas fa-calendar-week" /><span>Plans</span>
-        </button>
-        <button className={`nav-item${tab === 'view' ? ' active' : ''}`} onClick={() => setTab('view')}>
-          <i className="fas fa-eye" /><span>View</span>
-        </button>
-        <button className={`nav-item${tab === 'clipboard' ? ' active' : ''}`} onClick={() => setTab('clipboard')}>
-          <i className="fas fa-clipboard" /><span>Clipboard</span>
-        </button>
-        <button className={`nav-item${tab === 'schedule' ? ' active' : ''}`} onClick={() => setTab('schedule')}>
-          <i className="fas fa-clock" /><span>Schedule</span>
-        </button>
-        <button className={`nav-item${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>
-          <span className="nav-icon-wrap">
-            <i className="fas fa-gear" />
-            {(updateAvailable || needsPassword) && <span className="nav-dot" />}
-          </span>
-          <span>Settings</span>
-        </button>
+        {TABS.map((t) => (
+          <button key={t.key} className={`nav-item${tab === t.key ? ' active' : ''}`}
+            onClick={() => goTab(t.key)}>
+            <span className="nav-icon-wrap">
+              <i className={`fas ${t.icon}`} />
+              {t.key === 'settings' && (updateAvailable || needsPassword) && <span className="nav-dot" />}
+            </span>
+            <span>{t.label}</span>
+          </button>
+        ))}
       </nav>
 
       {docEditor && (

@@ -67,7 +67,7 @@ export default function InboxModal({ onClose, onSaved }) {
         </div>
 
         {shares === null ? (
-          <div className="friend-hint"><i className="fas fa-spinner fa-spin" /> Loading…</div>
+          <div className="friend-hint"><i className="fas fa-circle-notch fa-spin" /> Loading…</div>
         ) : shares.length === 0 ? (
           <div className="friend-hint">Nothing shared with you yet. When a friend shares a doc or plan, it lands here.</div>
         ) : shares.map((s) => (

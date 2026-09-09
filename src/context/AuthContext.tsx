@@ -8,6 +8,7 @@
 // ============================================================
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api, setToken, getToken } from '../lib/api';
+import { useTheme } from './ThemeContext';
 import { isNative } from '../lib/nativeAuth';
 import { consumeGoogleRedirect, pendingGoogleRedirect } from '../lib/googleRedirect';
 import { notify } from '../lib/notify';
@@ -31,6 +32,9 @@ const readCachedUser = () => { try { return JSON.parse(localStorage.getItem(USER
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  // ThemeProvider is the outer provider (see main.tsx), so the account's
+  // colour theme is handed down to it as soon as we know who is signed in.
+  const { adoptAccountTheme } = useTheme() || {};
   const [ready, setReady] = useState(false); // false until we've checked the stored token
   // 'login' | 'link' | null — set synchronously on the FIRST render when we've just
   // come back from Google, so the UI can show "signing you in" for the whole code
@@ -55,7 +59,7 @@ export function AuthProvider({ children }) {
       if (cached && !cancelled) { setUser(cached); setReady(true); }
       try {
         const { user } = await api.get('/api/auth/me');
-        if (!cancelled) { setUser(user); cacheUser(user); }
+        if (!cancelled) { setUser(user); cacheUser(user); adoptAccountTheme?.(user); }
       } catch (err) {
         // Only sign out on an explicit auth rejection; keep the session on
         // network failures (offline) so the device stays logged in.
@@ -71,8 +75,10 @@ export function AuthProvider({ children }) {
     setToken(data.token);
     cacheUser(data.user);
     setUser(data.user);
+    // Signing in pulls this account's colour theme down to the device.
+    adoptAccountTheme?.(data.user);
     return data.user;
-  }, []);
+  }, [adoptAccountTheme]);
 
   // `identifier` is an email OR a username — the server tries both.
   const login = useCallback(async (identifier, password) => {
@@ -153,6 +159,15 @@ export function AuthProvider({ children }) {
     return u;
   }, []);
 
+  // What this account shows in the byline on its public share links.
+  // Takes a partial patch, e.g. { shareAvatar: false }.
+  const setSharePrivacy = useCallback(async (patch) => {
+    const { user: u } = await api.patch('/api/auth/me', patch);
+    cacheUser(u);
+    setUser(u);
+    return u;
+  }, []);
+
   // Add a password to a Google-only account, or change an existing one
   // (currentPassword required only when one is already set — the server
   // enforces this). Keeps the session; only the user record changes.
@@ -204,7 +219,7 @@ export function AuthProvider({ children }) {
   }, [user?.id]);
 
   return (
-    <AuthContext.Provider value={{ user, ready, googlePending, login, register, loginWithGoogle, linkGoogle, forgotPassword, resetPassword, setPassword, setUsername, updateProfile, deleteAccount, logout }}>
+    <AuthContext.Provider value={{ user, ready, googlePending, login, register, loginWithGoogle, linkGoogle, forgotPassword, resetPassword, setPassword, setUsername, updateProfile, setSharePrivacy, deleteAccount, logout }}>
       {children}
     </AuthContext.Provider>
   );

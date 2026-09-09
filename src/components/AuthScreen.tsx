@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth';
 import WebGoogleButton from './WebGoogleButton';
@@ -13,7 +14,10 @@ const ERROR_MAP = {
 
 export default function AuthScreen() {
   const { login, register, loginWithGoogle, forgotPassword } = useAuth();
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [params] = useSearchParams();
+  // A shared link offers "Create an account" directly, which arrives as
+  // /?signup=1 — open on the sign-up form rather than making them switch.
+  const [isSignUp, setIsSignUp] = useState(() => params.get('signup') === '1');
   const [forgot, setForgot] = useState(false); // showing the "email me a link" form
   const [sent, setSent] = useState(false);     // reset link requested
   const [name, setName] = useState('');

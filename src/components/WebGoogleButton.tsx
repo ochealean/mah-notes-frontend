@@ -23,7 +23,7 @@ export default function WebGoogleButton({ intent = 'login', disabled = false, la
   return (
     <button type="button" className="btn btn-google btn-block" disabled={disabled || redirecting} onClick={onClick}>
       {redirecting ? (
-        <><i className="fas fa-spinner fa-spin" style={{ marginRight: 8 }} /> Redirecting to Google…</>
+        <><i className="fas fa-circle-notch fa-spin" style={{ marginRight: 8 }} /> Redirecting to Google…</>
       ) : (
         <><i className="fab fa-google" style={{ marginRight: 8 }} /> {label}</>
       )}

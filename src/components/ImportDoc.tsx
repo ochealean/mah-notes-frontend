@@ -5,14 +5,14 @@
 //  As-is works offline (text only); the AI tidy needs an account + internet
 //  and can read an attached photo (handwritten or printed).
 // ============================================================
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getToken } from '../lib/api';
 import { repo } from '../lib/repo';
 import { notify } from '../lib/notify';
 import { sanitizeHtml } from '../lib/richtext';
 import { tidyNoteText, plainTextToHtml, firstLineTitle } from '../lib/aiImport';
 
-export default function ImportDoc({ onImported }) {
+export default function ImportDoc({ onImported, openToken = 0, hideTrigger = false }) {
   const fileRef = useRef(null);
   const imgRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -20,6 +20,10 @@ export default function ImportDoc({ onImported }) {
   const [image, setImage] = useState<File | null>(null);
   const [imgUrl, setImgUrl] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // v2: the rail's overflow menu owns this entry point, so it opens the
+  // dialog by bumping a token rather than rendering its own button.
+  useEffect(() => { if (openToken) setOpen(true); }, [openToken]);
 
   function close() {
     setOpen(false); setText(''); clearImage();
@@ -80,10 +84,12 @@ export default function ImportDoc({ onImported }) {
 
   return (
     <>
-      <button className="scan-btn" onClick={() => setOpen(true)}>
-        <i className="fas fa-file-import" />
-        <span>Import a note from another app</span>
-      </button>
+      {!hideTrigger && (
+        <button className="scan-btn" onClick={() => setOpen(true)}>
+          <i className="fas fa-file-import" />
+          <span>Import a note from another app</span>
+        </button>
+      )}
       <input ref={fileRef} type="file" accept=".txt,.md,.markdown,text/plain,text/markdown"
         style={{ display: 'none' }} onChange={pickFile} />
       <input ref={imgRef} type="file" accept="image/*"

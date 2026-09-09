@@ -81,7 +81,7 @@ function FriendSend({ itemType, itemId }) {
     } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
   }
 
-  if (friends === null) return <div className="friend-hint"><i className="fas fa-spinner fa-spin" /> Loading friends…</div>;
+  if (friends === null) return <div className="friend-hint"><i className="fas fa-circle-notch fa-spin" /> Loading friends…</div>;
   if (friends.length === 0) {
     return <div className="friend-hint">Add friends in <b>Settings → Friends</b> to share directly with them.</div>;
   }
@@ -92,7 +92,7 @@ function FriendSend({ itemType, itemId }) {
           {friends.map((f) => <option key={f.user.id} value={f.user.id}>{f.user.displayName}</option>)}
         </select>
         <button className="btn btn-primary fs-send-btn" onClick={send} disabled={busy}>
-          {busy ? <i className="fas fa-spinner fa-spin" /> : <><i className="fas fa-paper-plane" /> Send</>}
+          {busy ? <i className="fas fa-circle-notch fa-spin" /> : <><i className="fas fa-paper-plane" /> Send</>}
         </button>
       </div>
       {sentTo.length > 0 && (
@@ -167,7 +167,7 @@ export default function ShareModal({ itemType, itemId, onClose }) {
             {error && <div className="share-revoked">{error}</div>}
             {!cards && !error && (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
-                <i className="fas fa-spinner fa-spin" /> Creating links…
+                <i className="fas fa-circle-notch fa-spin" /> Creating links…
               </div>
             )}
             {cards && cards.map((card) => (

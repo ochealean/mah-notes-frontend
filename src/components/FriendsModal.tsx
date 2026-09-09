@@ -130,7 +130,7 @@ export default function FriendsModal({ me, onClose }) {
         </div>
         {q.trim().length >= 2 && (
           <div className="friend-section">
-            {searching && <div className="friend-hint"><i className="fas fa-spinner fa-spin" /> Searching…</div>}
+            {searching && <div className="friend-hint"><i className="fas fa-circle-notch fa-spin" /> Searching…</div>}
             {!searching && results && results.length === 0 && <div className="friend-hint">No one matches “{q.trim()}”.</div>}
             {results && results.map((r) => <Person key={r.id} person={r}>{resultAction(r)}</Person>)}
           </div>

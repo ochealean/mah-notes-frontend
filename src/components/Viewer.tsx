@@ -14,6 +14,9 @@ import { localdb } from '../lib/localdb';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
 import { APP_DOWNLOAD_URL, fetchLatestRelease } from '../lib/updates';
 import { isInAppBrowser } from '../lib/inAppBrowser';
+import { previewTheme, restoreOwnTheme } from '../lib/palette';
+import { useTheme } from '../context/ThemeContext';
+import logoUrl from '../images/mn_logo.png';
 
 const KNOWN_TABS = ['docs', 'plans', 'view', 'schedule', 'settings'];
 
@@ -23,6 +26,11 @@ const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satu
 const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
 const today = () => JS_DAY[new Date().getDay()];
 
+// Live refresh cadence for a shared link. Deliberately well under the public
+// endpoint's IP rate limit, which the old 4s interval exceeded on its own.
+const POLL_MS = 15000;
+const POLL_MAX_MS = 60000;
+
 const refKey = (tok) => 'mahnotes_ref_' + tok;
 const refLoad = (tok) => { try { return JSON.parse(localStorage.getItem(refKey(tok)) || '{}'); } catch { return {}; } };
 const refSave = (tok, state) => { try { localStorage.setItem(refKey(tok), JSON.stringify(state)); } catch {} };
@@ -30,7 +38,44 @@ const refSave = (tok, state) => { try { localStorage.setItem(refKey(tok), JSON.s
 
 // Public acquisition CTA shown under a shared link on the web: get the app, and
 // sign in / sign up. Hidden inside the native app and for signed-in owners.
-function ViewerCta() {
+// "Shared by …" — a face and a name make a shared page read as something a
+// person sent you rather than a document dump. The author picks either, both
+// or neither in Settings → Privacy, so all four shapes have to render:
+// picture + name, initial + name, picture alone, or nothing at all.
+function AuthorBadge({ author }) {
+  const name = (author?.name || '').trim();
+  const avatar = author?.avatar || '';
+  const showAvatar = author?.showAvatar !== false;
+  const initial = name.charAt(0).toUpperCase();
+
+  // The disc appears only when a picture is allowed — one drawn while the
+  // author has the profile switched off is indistinguishable from the profile
+  // they just hid. With it allowed but no picture stored, an initial stands in
+  // when the name is public, and a neutral figure when it is not, so the
+  // switch always does something visible without leaking the hidden name.
+  let disc = null;
+  if (avatar) disc = <img className="view-author-avatar" src={avatar} alt="" />;
+  else if (showAvatar) {
+    disc = (
+      <span className="view-author-avatar">
+        {initial || <i className="fas fa-user" aria-hidden="true" />}
+      </span>
+    );
+  }
+  if (!name && !disc) return null;
+
+  return (
+    <div className="view-author">
+      {disc}
+      <span className="view-author-meta">
+        <span className="view-author-label">Shared by</span>
+        {name && <span className="view-author-name">{name}</span>}
+      </span>
+    </div>
+  );
+}
+
+function ViewerCta({ themed }) {
   const signedIn = !!getToken();
   // Shared links land here from Messenger/Instagram/etc. often enough that
   // this is the single most common place someone hits the broken-download
@@ -56,6 +101,12 @@ function ViewerCta() {
         <span className="logo">Mah Notes</span>
         <p>Your notes, plans &amp; checklists — everywhere.</p>
       </div>
+      {themed && (
+        <p className="view-themed">
+          <i className="fas fa-palette" /> You are reading this in the author&rsquo;s own colour
+          theme. Every Mah Notes account picks its own, and it travels with everything you share.
+        </p>
+      )}
       {inApp && (
         <p className="vcta-warn">
           <i className="fas fa-triangle-exclamation" /> Downloads can get stuck here — tap <b>⋮</b> / <b>···</b> and choose
@@ -74,22 +125,34 @@ function ViewerCta() {
         >
           <i className="fas fa-download" /> Download the app
         </a>
-        {!signedIn && (
+        {signedIn ? (
           <Link className="vcta-btn ghost" to="/">
-            <i className="fas fa-right-to-bracket" /> Sign in / Sign up
+            <i className="fas fa-arrow-right" /> Open Mah Notes
           </Link>
+        ) : (
+          <>
+            <Link className="vcta-btn ghost" to="/?signup=1">
+              <i className="fas fa-user-plus" /> Create an account
+            </Link>
+            <Link className="vcta-btn ghost" to="/">
+              <i className="fas fa-right-to-bracket" /> Sign in
+            </Link>
+          </>
         )}
       </div>
     </div>
   );
 }
 
-function Message({ icon, title, desc, extra }: any) {
+function Message({ icon, title, desc, extra, busy }: any) {
   return (
     <div className="view-page">
-      <div className="view-bar"><span className="logo">Mah Notes</span></div>
+      <div className="view-bar">
+        <img className="view-logo" src={logoUrl} alt="" />
+        <span className="logo">Mah Notes</span>
+      </div>
       <div className="v-card"><div className="empty-state">
-        <i className={`fas ${icon}`} />
+        {busy ? <span className="view-spinner" /> : <i className={`fas ${icon}`} />}
         <h2 style={{ marginBottom: 8, color: 'var(--dark)' }}>{title}</h2>
         <p>{desc}</p>
         {extra}
@@ -123,6 +186,7 @@ function WeekDetails({ days, markDone = true }) {
 export default function Viewer() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { effective } = useTheme() || {};
   const token = params.get('token');
   const ownerType = params.get('type');
   const ownerId = params.get('id');
@@ -133,12 +197,32 @@ export default function Viewer() {
 
   const [state, setState] = useState<any>({ status: 'loading' }); // loading | ok | message
   const [data, setData] = useState<any>(null); // { kind, mode, title, contentHtml?, days?, id }
+  // The author's colour theme, sent with a shared link so the page renders in
+  // THEIR colours rather than the reader's. Null for an owner view.
+  const [authorTheme, setAuthorTheme] = useState<any>(null);
+  // { name, avatar } when the author lets their identity show (Settings →
+  // Privacy). Null otherwise, and always null for an owner view.
+  const [author, setAuthor] = useState<any>(null);
   const docRef = useRef(null);
+
+  // Paint the page in the author's colours while it is open. Nothing is
+  // persisted, so the reader's own theme is untouched and comes straight back
+  // when they navigate away (or the fetch turns out to have no theme).
+  // Re-runs on a light/dark flip, otherwise ThemeContext would repaint the
+  // page in the READER's colours the moment they toggled the mode.
+  useEffect(() => {
+    if (!authorTheme) return undefined;
+    const mode = effective === 'dark' ? 'dark' : 'light';
+    previewTheme(authorTheme, mode);
+    return () => restoreOwnTheme(mode);
+  }, [authorTheme, effective]);
 
   // ── Load ──────────────────────────────────────────────
   const loadToken = useCallback(async () => {
     const res = await api.get(`/api/share/${token}`);
     const mode = res.viewMode === 'reference' ? 'reference' : 'live';
+    setAuthorTheme(res.theme || null);
+    setAuthor(res.author || null);
     if (res.itemType === 'plan') {
       setData({ kind: 'plan', mode, title: res.title, days: res.days || {} });
     } else {
@@ -199,10 +283,45 @@ export default function Viewer() {
   }, [token, ownerType, ownerId, loadToken, loadOwner]);
 
   // ── Live polling (read-only) ──────────────────────────
+  // The public share endpoint is IP-limited because it is the one route a
+  // stranger can hit, so polling has to stay under that ceiling. It also
+  // pauses on a hidden tab (a backgrounded browser was spending the whole
+  // budget on a page nobody was looking at) and backs off on a 429 rather
+  // than retrying straight into the wall.
   useEffect(() => {
-    if (!token || !data || data.mode !== 'live') return;
-    const id = setInterval(() => { loadToken().catch(() => {}); }, 4000);
-    return () => clearInterval(id);
+    if (!token || !data || data.mode !== 'live') return undefined;
+    let delay = POLL_MS;
+    let timer = null;
+    let stopped = false;
+
+    const schedule = () => { timer = setTimeout(tick, delay); };
+    async function tick() {
+      if (stopped) return;
+      if (document.visibilityState !== 'visible') { schedule(); return; }
+      try {
+        await loadToken();
+        delay = POLL_MS;                      // healthy again
+      } catch (err: any) {
+        if (err?.status === 429) delay = Math.min(delay * 2, POLL_MAX_MS);
+      }
+      schedule();
+    }
+
+    schedule();
+    // Coming back to the tab refreshes immediately rather than waiting out
+    // the rest of the interval.
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return;
+      clearTimeout(timer);
+      delay = POLL_MS;
+      tick();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [token, data, loadToken]);
 
   // ── Note checkbox wiring (owner saves; reference = localStorage) ──
@@ -238,7 +357,7 @@ export default function Viewer() {
   }, [data, token]);
 
   if (state.status === 'loading') {
-    return <Message icon="fa-spinner fa-spin" title="Loading…" desc="Fetching the shared item." />;
+    return <Message busy title="Loading…" desc="Fetching the shared item." />;
   }
   if (state.status === 'message') {
     return <Message icon={state.icon} title={state.title} desc={state.desc} extra={state.extra} />;
@@ -261,9 +380,11 @@ export default function Viewer() {
             <i className="fas fa-arrow-left" />
           </button>
         )}
+        <img className="view-logo" src={logoUrl} alt="" />
         <span className="logo">Mah Notes</span><span className="sub">{sub}</span>
       </div>
       <div className="v-card">
+        <AuthorBadge author={author} />
         {badge}
         <h1 className="v-title">{data.title || (data.kind === 'plan' ? 'Plan' : 'Untitled')}</h1>
 
@@ -279,7 +400,7 @@ export default function Viewer() {
       </div>
 
       {/* Public share on the web → offer the app + sign-in. */}
-      {!isNative && data.mode !== 'owner' && <ViewerCta />}
+      {!isNative && data.mode !== 'owner' && <ViewerCta themed={!!authorTheme} />}
     </div>
   );
 }

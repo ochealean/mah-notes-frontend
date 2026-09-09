@@ -6,11 +6,26 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '1.5.0';
+export const APP_VERSION = '2.0.0';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.0.0',
+    date: '2026-09-09',
+    title: 'Mah Notes 2.0 — a complete redesign',
+    changes: [
+      'A whole new look: paper, ink and one accent colour, with square edges and a single typeface. Nothing shouts for attention any more.',
+      'On a computer the app is now two panes — your list on the left, whatever you’re reading on the right — instead of a wall of cards.',
+      'The View tab is gone. Opening a document or plan already shows it in full, so there is nothing left to “view” separately. Links you have already shared still work exactly as before.',
+      'Every card’s row of buttons is gone. Edit, pin, hide, share and delete now appear once, next to the thing you are actually reading.',
+      'Import a note with AI and Build a weekly plan with AI moved into the ⋯ menu at the top, along with Delete all — so the list holds your notes and nothing else. Scanning a timetable stays on the Time tab.',
+      'Appearance is simpler: pick one accent colour (or any colour you like) instead of setting seven at once. The drifting background can be switched off.',
+      'On your phone, tapping a document opens it in place, and Back returns you to the list.',
+      'Dark mode has been rebuilt to match.',
+    ],
+  },
   {
     version: '1.5.0',
     date: '2026-08-30',

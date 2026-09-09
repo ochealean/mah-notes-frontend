@@ -67,7 +67,7 @@ export default function UpdateModal({ update, onClose }) {
 
         <button className="btn btn-primary btn-block" disabled={busy} onClick={inApp}>
           {busy
-            ? <><i className="fas fa-spinner fa-spin" /> Downloading…</>
+            ? <><i className="fas fa-circle-notch fa-spin" /> Downloading…</>
             : <><i className="fas fa-download" /> Update now</>}
         </button>
         <button className="btn btn-ghost btn-block" style={{ marginTop: 9 }} disabled={busy} onClick={browser}>

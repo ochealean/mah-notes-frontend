@@ -4,7 +4,7 @@
 //  backend (Gemini) returns a day-by-day list → review → create a Plan.
 //  Needs an account + internet.
 // ============================================================
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getToken } from '../lib/api';
 import { scanPlanInput } from '../lib/aiImport';
 import { repo } from '../lib/repo';
@@ -13,7 +13,7 @@ import { notify } from '../lib/notify';
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
 
-export default function ScanPlan({ onAdded }) {
+export default function ScanPlan({ onAdded, openToken = 0, hideTrigger = false }) {
   const fileRef = useRef(null);
   const fileObj = useRef(null);
   const [open, setOpen] = useState(false);     // input composer
@@ -23,6 +23,10 @@ export default function ScanPlan({ onAdded }) {
   const [rows, setRows] = useState(null);       // [{ day, text, include }] | null
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // v2: opened from the rail's overflow menu by bumping a token.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (openToken) start(); }, [openToken]);
 
   function start() {
     if (!getToken()) { notify('Sign in first (Settings → Account & Sync) — AI needs an account.', 'info'); return; }
@@ -69,10 +73,12 @@ export default function ScanPlan({ onAdded }) {
 
   return (
     <>
-      <button className="scan-btn" onClick={start} disabled={busy}>
-        <i className={`fas ${busy ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles'}`} />
-        <span>{busy ? 'Building your plan…' : <>Build a weekly plan <b>· AI</b></>}</span>
-      </button>
+      {!hideTrigger && (
+        <button className="scan-btn" onClick={start} disabled={busy}>
+          <i className={`fas ${busy ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles'}`} />
+          <span>{busy ? 'Building your plan…' : <>Build a weekly plan <b>· AI</b></>}</span>
+        </button>
+      )}
       <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickFile} />
 
       {open && (

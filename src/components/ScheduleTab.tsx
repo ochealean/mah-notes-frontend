@@ -120,7 +120,7 @@ export default function ScheduleTab({ schedules, onEdit, onChanged }) {
       )}
       <div className="list-bulk">
         <button className="bulk-delete-btn" onClick={deleteAll} disabled={bulkBusy}>
-          <i className={`fas ${bulkBusy ? 'fa-spinner fa-spin' : 'fa-trash'}`} /> {bulkBusy ? 'Deleting…' : `Delete all (${schedules.length})`}
+          <i className={`fas ${bulkBusy ? 'fa-circle-notch fa-spin' : 'fa-trash'}`} /> {bulkBusy ? 'Deleting…' : `Delete all (${schedules.length})`}
         </button>
       </div>
       {groups.length > 0 && (
@@ -133,7 +133,7 @@ export default function ScheduleTab({ schedules, onEdit, onChanged }) {
           </div>
           {activeGroup !== 'all' && (
             <button className="sched-group-delete" onClick={deleteActiveGroup} disabled={deletingGroup}>
-              <i className={`fas ${deletingGroup ? 'fa-spinner fa-spin' : 'fa-trash'}`} />
+              <i className={`fas ${deletingGroup ? 'fa-circle-notch fa-spin' : 'fa-trash'}`} />
               {deletingGroup ? ' Deleting…' : <> Delete “{activeGroup}” group</>}
             </button>
           )}

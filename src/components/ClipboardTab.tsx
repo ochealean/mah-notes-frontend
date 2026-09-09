@@ -1,10 +1,10 @@
 // ============================================================
-//  Clipboard tab: text captured from Android's selection toolbar.
-//  Highlight anything in any app, tap "Mah Notes" in the copy/paste bar,
-//  and it lands here — no app switching, no pasting.
+//  Clipboard, v2: text captured from Android's selection toolbar.
+//  Highlight anything in any app, tap "Mah Notes" in the copy/paste
+//  bar, and it lands here — no app switching, no pasting.
 //
-//  Each clip can be copied back to the system clipboard (which is also how it
-//  reaches Gboard's clipboard panel) or promoted into a real document.
+//  Rows in the rail, the full clip in the pane. Copy back to the
+//  system clipboard or promote a clip into a real document.
 //  Clips are device-local; they never sync.
 // ============================================================
 import { useState } from 'react';
@@ -13,20 +13,88 @@ import { notify } from '../lib/notify';
 import { isNative } from '../lib/nativeAuth';
 import { escapeHtml } from '../lib/richtext';
 import { timeAgo } from '../lib/timeAgo';
-import { copyClip, deleteClip, clearClips } from '../lib/clips';
+import { copyClip, deleteClip } from '../lib/clips';
 
-// First line of a clip, used as the card's title.
-function clipTitle(text) {
+// First line of a clip, used as its title.
+export function clipTitle(text) {
   const flat = String(text || '').replace(/\s+/g, ' ').trim();
   return flat.length > 80 ? `${flat.slice(0, 80)}…` : flat;
 }
 
-function ClipCard({ clip, onChanged }) {
+// ── The list (rail) ──────────────────────────────────────
+export default function ClipboardTab({ clips, selectedId, onSelect, searching, selecting, selected, onToggleSelect }) {
+  if (!clips.length) {
+    return searching ? (
+      <div className="empty-state">
+        <i className="fas fa-search" />
+        <p>No clips match your search.</p>
+      </div>
+    ) : (
+      <div className="empty-state">
+        <i className="fas fa-clipboard" />
+        {isNative ? (
+          <p>
+            Nothing clipped yet. Highlight text in <b>any</b> app, then tap <b>Mah Notes</b> in
+            the copy/paste bar (it may be under the <b>⋮</b> menu) and it lands here.
+          </p>
+        ) : (
+          <p>
+            Clips are captured on your phone: highlight text in any app and tap <b>Mah Notes</b> in
+            the copy/paste bar. They stay on that device, so they don&rsquo;t appear here on the web.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="rail-group kicker">Clipped</div>
+      {clips.map((clip) => {
+        const checked = !!selected?.has(clip.id);
+        return (
+        <button
+          key={clip.id}
+          className={`row${clip.id === selectedId && !selecting ? ' active' : ''}${checked ? ' checked' : ''}`}
+          onClick={() => (selecting ? onToggleSelect(clip.id) : onSelect(clip))}
+        >
+          <div className="row-head">
+            {selecting && (
+              <span className={`row-check${checked ? ' on' : ''}`}><i className="fas fa-check" /></span>
+            )}
+            <span className="row-title"
+              dangerouslySetInnerHTML={{ __html: escapeHtml(clipTitle(clip.text) || 'Empty clip') }} />
+          </div>
+          <div className="row-time">
+            {clip.source ? `From ${clip.source} · ` : ''}{timeAgo(clip.createdAt)}
+          </div>
+        </button>
+        );
+      })}
+    </>
+  );
+}
+
+// ── The pane ─────────────────────────────────────────────
+export function ClipPane({ clip, onChanged, onBack }) {
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  if (!clip) {
+    return (
+      <div className="pane-empty">
+        <div className="kicker accent">Clipped</div>
+        <h2>Nothing selected</h2>
+        <p>Pick a clip on the left to read it in full, copy it back, or turn it into a document.</p>
+      </div>
+    );
+  }
 
   async function copy() {
     try {
       await copyClip(clip.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
       notify('Copied to clipboard', 'success');
     } catch (err) { notify(err.message || 'Could not copy', 'error'); }
   }
@@ -51,81 +119,41 @@ function ClipCard({ clip, onChanged }) {
   }
 
   return (
-    <div className="note-card">
-      <div className="note-card-top">
-        <div className="note-card-title">
-          <span dangerouslySetInnerHTML={{ __html: escapeHtml(clipTitle(clip.text) || 'Empty clip') }} />
-        </div>
-      </div>
-      <div className="note-preview clip-text">{clip.text}</div>
-      <div className="card-updated">
-        <i className="fas fa-clipboard" /> {clip.source ? `From ${clip.source} · ` : ''}{timeAgo(clip.createdAt)}
-      </div>
-      <div className="card-actions">
-        <button className="act-btn open" onClick={copy}><i className="fas fa-copy" /> Copy</button>
-        <button className="act-btn view" onClick={makeNote} disabled={busy}>
-          <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-file-lines'}`} /> Make note
+    <>
+      <div className="detail-bar">
+        <button className="icon-btn" aria-label="Back to clips" onClick={onBack}>
+          <i className="fas fa-chevron-left" />
         </button>
-        <button className="act-btn danger del" onClick={remove}><i className="fas fa-trash" /> Delete</button>
+        <span className="detail-status"><span className="pane-dot" />{timeAgo(clip.createdAt)}</span>
       </div>
-    </div>
-  );
-}
 
-export default function ClipboardTab({ clips, onChanged }) {
-  const [q, setQ] = useState('');
-  const query = q.toLowerCase().trim();
-  const filtered = !query ? clips : clips.filter((c) => c.text.toLowerCase().includes(query));
+      <div className="pane-scroll">
+        <div className="pane-head">
+          <span className="pane-tag">Clipped</span>
+          <span className="pane-status">
+            <span className="pane-dot" />
+            {clip.source ? `From ${clip.source} · ` : ''}{timeAgo(clip.createdAt)} · stays on this device, never synced
+          </span>
+        </div>
 
-  async function clearAll() {
-    if (!clips.length) return;
-    if (!confirm(`Clear all ${clips.length} clip${clips.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
-    try { await clearClips(); notify('Clipboard cleared', 'success'); }
-    catch (err) { notify(err.message || 'Could not clear', 'error'); }
-    finally { onChanged(); }
-  }
+        <h1 className="pane-title" style={{ fontSize: 34, maxWidth: '26ch' }}>
+          {clipTitle(clip.text) || 'Empty clip'}
+        </h1>
 
-  return (
-    <section className="screen">
-      <div className="search-bar">
-        <i className="fas fa-search" />
-        <input type="text" placeholder="Search clips…" value={q} onChange={(e) => setQ(e.target.value)} />
-      </div>
-      {clips.length > 0 && (
-        <div className="list-toolbar">
-          <span className="clip-count">{clips.length} clip{clips.length > 1 ? 's' : ''}</span>
-          <button className="bulk-delete-btn" onClick={clearAll}>
-            <i className="fas fa-trash" /> Clear all
+        <div className="pane-clip">{clip.text}</div>
+
+        <div className="pane-buttons">
+          <button className="pane-btn solid" onClick={copy}>
+            <i className="fas fa-copy" /> {copied ? 'Copied' : 'Copy'}
+          </button>
+          <button className="pane-btn" onClick={makeNote} disabled={busy}>
+            <i className={`fas ${busy ? 'fa-circle-notch fa-spin' : 'fa-file-lines'}`} /> Make document
+          </button>
+          <button className="pane-btn icon-only" aria-label="Delete clip" onClick={remove}>
+            <i className="fas fa-trash" />
           </button>
         </div>
-      )}
-      <div className="list">
-        {clips.length === 0 ? (
-          <div className="empty-state">
-            <i className="fas fa-clipboard" />
-            {isNative ? (
-              <p>
-                Nothing clipped yet. Highlight text in <b>any</b> app, then tap
-                {' '}<b>Mah Notes</b> in the copy/paste bar (it may be under the <b>⋮</b> menu)
-                {' '}and it lands here.
-              </p>
-            ) : (
-              <p>
-                Clips are captured on your phone: highlight text in any app and tap
-                {' '}<b>Mah Notes</b> in the copy/paste bar. They stay on that device, so
-                {' '}they don’t appear here on the web.
-              </p>
-            )}
-          </div>
-        ) : (
-          <>
-            {filtered.map((c) => <ClipCard key={c.id} clip={c} onChanged={onChanged} />)}
-            {filtered.length === 0 && (
-              <div className="empty-state"><i className="fas fa-search" /><p>No matches for “{q}”.</p></div>
-            )}
-          </>
-        )}
       </div>
-    </section>
+    </>
   );
 }

@@ -27,6 +27,9 @@ const THEME_OPTIONS = [
   { value: 'dark', label: 'Dark', icon: 'fa-moon' },
   { value: 'system', label: 'System', icon: 'fa-laptop' },
 ];
+// Shown on the collapsed Appearance header so the current choice is readable
+// without opening the section.
+const THEME_LABEL = Object.fromEntries(THEME_OPTIONS.map((o) => [o.value, o.label]));
 
 // ── Native-only: connect an account and control sync ──
 function AccountSync({ reloadLists }) {
@@ -340,7 +343,102 @@ function AccountSync({ reloadLists }) {
   );
 }
 
-export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloadLists, updateAvailable }) {
+// What the collapsed Privacy header says about your shared links, so the
+// current answer is readable without opening the section.
+function shareSummary(user) {
+  if (!user) return '';
+  const name = user.shareIdentity !== false;
+  const pic = user.shareAvatar !== false;
+  if (name && pic) return 'Name and picture';
+  if (name) return 'Name only';
+  if (pic) return 'Picture only';
+  return 'Anonymous';
+}
+
+// One switch in the share-privacy pair. Optimistic, because a toggle that
+// waits on the network feels broken.
+function ShareToggle({ icon, label, field, value, hint, disabled = false }) {
+  const { setSharePrivacy } = useAuth();
+  const [on, setOn] = useState(value);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { setOn(value); }, [value]);
+
+  async function toggle() {
+    if (busy) return;
+    const next = !on;
+    setOn(next);
+    setBusy(true);
+    try { await setSharePrivacy({ [field]: next }); }
+    catch (err) { setOn(!next); notify(err.message || 'Could not save that', 'error'); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <>
+      <div className={`settings-row${disabled ? ' is-disabled' : ''}`} style={{ cursor: 'default' }}>
+        <span><i className={`fas ${icon}`} /> {label}</span>
+        <label className="switch" onClick={(e) => e.stopPropagation()}>
+          <input type="checkbox" checked={on && !disabled} onChange={toggle} disabled={busy || disabled} />
+          <span className="slider" />
+        </label>
+      </div>
+      <p className="settings-hint-text">{hint}</p>
+    </>
+  );
+}
+
+// The byline on pages you share publicly. Both on by default: a share link is
+// something you chose to publish, and a byline is what makes the page read as
+// a person's rather than an anonymous dump.
+//
+// The two are independent — name only, picture only, both or neither. With
+// both off there is no byline at all.
+function SharePrivacy({ user }) {
+  const nameOn = user.shareIdentity !== false;
+  const avatarOn = user.shareAvatar !== false;
+  const both = nameOn && avatarOn;
+  const hasPicture = !!user.avatar;
+
+  // Turning the picture on when none is stored does nothing visible, which
+  // reads as a broken switch unless we say why.
+  const avatarHint = !avatarOn
+    ? (nameOn ? 'Your name appears on its own, with no picture.' : 'Your picture is hidden on shared links.')
+    : hasPicture
+      ? (both ? 'Your picture appears next to your name.' : 'Your picture appears above the note, on its own.')
+      : (nameOn
+        ? 'You have no profile picture yet, so your initial is shown instead.'
+        : 'You have no profile picture yet, so a plain placeholder is shown. Connect Google or set one to use your own.');
+
+  return (
+    <>
+      <ShareToggle
+        icon="fa-id-badge"
+        label="Show my name on shared links"
+        field="shareIdentity"
+        value={nameOn}
+        hint={nameOn
+          ? 'Your name appears above the note on any link you share.'
+          : 'Your name is hidden on shared links.'}
+      />
+      <ShareToggle
+        icon="fa-circle-user"
+        label="Show my profile on shared links"
+        field="shareAvatar"
+        value={avatarOn}
+        hint={avatarHint}
+      />
+      {!nameOn && !avatarOn && (
+        <p className="settings-hint-text">
+          With both off, pages you share carry no byline. The note itself is still
+          readable by anyone holding the link.
+        </p>
+      )}
+    </>
+  );
+}
+
+export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloadLists, updateAvailable, needsPassword = false }) {
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
   const initial = (name[0] || 'U').toUpperCase();
   const { pref, setTheme } = useTheme();
@@ -363,6 +461,11 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
   // password, username, and Google linking are settled-once, rarely-revisited
   // controls that don't need to sit open on every visit to Settings.
   const [accountExpanded, setAccountExpanded] = useState(false);
+  // Appearance retracts like Account Info. It is the section most likely to
+  // grow (background, gradients, per-surface colours), so it stays closed by
+  // default rather than pushing everything else off the screen.
+  const [appearanceExpanded, setAppearanceExpanded] = useState(false);
+  const [privacyExpanded, setPrivacyExpanded] = useState(false);
 
   function toggleAuto(on) { setAutoUpd(on); setAutoUpdate(on); }
   async function checkUpdates() {
@@ -442,7 +545,7 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
                   }}
                 />
                 <button className="icon-btn" title="Save name" disabled={savingName} onClick={saveName}>
-                  <i className={`fas ${savingName ? 'fa-spinner fa-spin' : 'fa-check'}`} />
+                  <i className={`fas ${savingName ? 'fa-circle-notch fa-spin' : 'fa-check'}`} />
                 </button>
                 <button className="icon-btn" title="Cancel" disabled={savingName} onClick={() => setEditingName(false)}>
                   <i className="fas fa-times" />
@@ -468,7 +571,15 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
 
           {accountExpanded && (
             <>
-              {/* Set a password (Google-only accounts) or change the existing one. */}
+              {/* Set a password (Google-only accounts) or change the existing one.
+                  Without one, a broken Google sign-in locks the account out — so
+                  say so here rather than leaving it to be discovered. */}
+              {needsPassword && (
+                <p className="settings-hint-text">
+                  <i className="fas fa-triangle-exclamation" style={{ color: 'var(--accent-700)', marginRight: 8 }} />
+                  This account has no password yet. Set one so you can still sign in if Google sign-in ever fails.
+                </p>
+              )}
               <SetAccountPassword />
 
               {/* Add or change the login username. */}
@@ -503,18 +614,34 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
       )}
 
       <div className="settings-card">
-        <div className="settings-section-label">Appearance</div>
-        <div className="theme-seg">
-          {THEME_OPTIONS.map((opt) => (
-            <button key={opt.value} className={pref === opt.value ? 'active' : ''} onClick={() => setTheme(opt.value)}>
-              <i className={`fas ${opt.icon}`} />
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ padding: '4px 16px 16px' }}>
-          <ThemeCustomizer />
-        </div>
+        <button
+          className={`settings-collapse${appearanceExpanded ? ' open' : ''}`}
+          aria-expanded={appearanceExpanded}
+          onClick={() => setAppearanceExpanded((v) => !v)}
+        >
+          <span><i className="fas fa-palette" /> Appearance</span>
+          <span className="settings-collapse-right">
+            <span className="settings-collapse-hint">{THEME_LABEL[pref] || 'System'}</span>
+            <i className={`fas fa-chevron-${appearanceExpanded ? 'up' : 'down'}`} />
+          </span>
+        </button>
+
+        {appearanceExpanded && (
+          <div className="settings-collapse-body">
+            <div className="settings-sub-label">Theme</div>
+            <div className="theme-seg">
+              {THEME_OPTIONS.map((opt) => (
+                <button key={opt.value} className={pref === opt.value ? 'active' : ''} onClick={() => setTheme(opt.value)}>
+                  <i className={`fas ${opt.icon}`} />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="settings-sub-label">Colour theme</div>
+            <ThemeCustomizer />
+          </div>
+        )}
       </div>
 
       {isNative && (
@@ -558,18 +685,42 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
       )}
 
       <div className="settings-card">
-        <button className="settings-row" onClick={onPrivacy}>
-          <span><i className="fas fa-eye-slash" /> Hide all content (privacy)</span>
-          <i className="fas fa-chevron-right" />
+        <button
+          className={`settings-collapse${privacyExpanded ? ' open' : ''}`}
+          aria-expanded={privacyExpanded}
+          onClick={() => setPrivacyExpanded((v) => !v)}
+        >
+          <span><i className="fas fa-lock" /> Privacy</span>
+          <span className="settings-collapse-right">
+            <span className="settings-collapse-hint">{shareSummary(user)}</span>
+            <i className={`fas fa-chevron-${privacyExpanded ? 'up' : 'down'}`} />
+          </span>
         </button>
-        {/* Web logout lives here; native logout is in the Account & Sync card. */}
-        {!isNative && (
+
+        {privacyExpanded && (
+          <div className="settings-collapse-body">
+            <div className="settings-sub-label">In this app</div>
+            <button className="settings-row" onClick={onPrivacy}>
+              <span><i className="fas fa-eye-slash" /> Hide all content in the list</span>
+              <i className="fas fa-chevron-right" />
+            </button>
+
+            <div className="settings-sub-label">On shared links</div>
+            {user && <SharePrivacy user={user} />}
+          </div>
+        )}
+      </div>
+
+      {/* Log out sits in its own card: it is not a privacy setting, and it
+          must not disappear when the section above is collapsed. */}
+      {!isNative && (
+        <div className="settings-card">
           <button className="settings-row danger" onClick={() => { if (confirm('Log out of Mah Notes?')) onLogout(); }}>
             <span><i className="fas fa-sign-out-alt" /> Log out</span>
             <i className="fas fa-chevron-right" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="settings-card">
         <div className="settings-section-label">About &amp; updates</div>
@@ -596,7 +747,7 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
             </div>
             <button className="settings-row" disabled={checking} onClick={checkUpdates}>
               <span>
-                <i className={`fas ${checking ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-down'}`} /> {checking ? 'Checking…' : 'Check for updates'}
+                <i className={`fas ${checking ? 'fa-circle-notch fa-spin' : 'fa-cloud-arrow-down'}`} /> {checking ? 'Checking…' : 'Check for updates'}
                 {updateAvailable && <span className="update-dot" />}
               </span>
               {updateAvailable
