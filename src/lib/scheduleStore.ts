@@ -17,6 +17,7 @@ import { localdb } from './localdb';
 import { api } from './api';
 import { newUid } from './uid';
 import { isNative } from './nativeAuth';
+import { hasLocalStore } from './platform';
 import { requestSync, markDeleted, markLocalOrigin } from './sync';
 import { ensurePermission } from './notifications';
 import {
@@ -115,7 +116,10 @@ const web = {
   deleteSchedule: (id) => api.del(`/api/schedules/${id}`),
 };
 
-const store: any = isNative ? local : web;
+// Offline store on Android and desktop; REST on the web. Reminders and
+// alarms inside `local` are still gated on `isNative` (see applyTriggers) —
+// desktop keeps the timetable without the Android alarm machinery.
+const store: any = hasLocalStore ? local : web;
 
 export const listSchedules = (...a) => store.listSchedules(...a);
 export const listGroups = (...a) => store.listGroups(...a);

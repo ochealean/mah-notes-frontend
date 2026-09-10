@@ -10,9 +10,12 @@
 //  same value the backend checks (VITE_GOOGLE_CLIENT_ID) — so the
 //  returned idToken's audience matches.
 // ============================================================
-import { Capacitor } from '@capacitor/core';
-
-export const isNative = Capacitor.isNativePlatform();
+// `isNative` lives in platform.ts now (a Tauri desktop build is a third
+// platform, and Capacitor cannot see it). Re-exported here because most of
+// the app imports it from this module, and it still means the same thing:
+// "the Android app".
+export { isNative } from './platform';
+import { isNative } from './platform';
 
 const WEB_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 let initPromise = null;

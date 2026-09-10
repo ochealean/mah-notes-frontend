@@ -9,11 +9,13 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { api, getToken } from '../lib/api';
 import { isNative } from '../lib/nativeAuth';
+import { hasLocalStore } from '../lib/platform';
 import { repo } from '../lib/repo';
 import { localdb } from '../lib/localdb';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
 import { APP_DOWNLOAD_URL, fetchLatestRelease } from '../lib/updates';
 import { isInAppBrowser } from '../lib/inAppBrowser';
+import { isMobileBrowser, isWindowsBrowser } from '../lib/deviceKind';
 import { previewTheme, restoreOwnTheme } from '../lib/palette';
 import { useTheme } from '../context/ThemeContext';
 import logoUrl from '../images/mn_logo.png';
@@ -86,11 +88,20 @@ function ViewerCta({ themed }) {
   // of dropping the user on the GitHub releases page to hunt for the asset.
   // Falls back to that page until this resolves (or if it fails).
   const [apkUrl, setApkUrl] = useState(null);
+  const [installerUrl, setInstallerUrl] = useState(null);
+  // A phone gets the APK alone; it cannot run a Windows installer. A desktop
+  // gets both, since someone at a computer may be fetching the app for their
+  // phone, and Windows goes first when that is what they are running.
+  const onMobile = isMobileBrowser();
+  const onWindows = isWindowsBrowser();
+  const showWindows = !!installerUrl && !onMobile;
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const rel = await fetchLatestRelease();
-      if (!cancelled && rel?.apkUrl) setApkUrl(rel.apkUrl);
+      if (cancelled) return;
+      if (rel?.apkUrl) setApkUrl(rel.apkUrl);
+      if (rel?.installerUrl) setInstallerUrl(rel.installerUrl);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -114,17 +125,30 @@ function ViewerCta({ themed }) {
         </p>
       )}
       <div className="view-cta-btns">
-        {/* New tab → /download, which paints a real page before starting the
-            transfer. A new tab aimed straight at the .apk holds no document,
-            and Android leaves that download at 100% forever. */}
+        {/* Windows first for a Windows visitor. The installer is an ordinary
+            download, so a plain link is fine.
+
+            Android goes via /download, which paints a real page before starting
+            the transfer. A new tab aimed straight at the .apk holds no
+            document, and Android leaves that download at 100% forever. */}
+        {showWindows && onWindows && (
+          <a className="vcta-btn primary" href={installerUrl}>
+            <i className="fab fa-windows" /> Download for Windows
+          </a>
+        )}
         <a
-          className="vcta-btn primary"
+          className={`vcta-btn ${showWindows && onWindows ? 'ghost' : 'primary'}`}
           href={apkUrl ? '/download' : APP_DOWNLOAD_URL}
           target="_blank"
           rel="noopener noreferrer"
         >
-          <i className="fas fa-download" /> Download the app
+          <i className="fab fa-android" /> Download for Android
         </a>
+        {showWindows && !onWindows && (
+          <a className="vcta-btn ghost" href={installerUrl}>
+            <i className="fab fa-windows" /> Download for Windows
+          </a>
+        )}
         {signedIn ? (
           <Link className="vcta-btn ghost" to="/">
             <i className="fas fa-arrow-right" /> Open Mah Notes
@@ -233,7 +257,7 @@ export default function Viewer() {
 
   const loadOwner = useCallback(async () => {
     // Native reads its own offline copy (read-only); web fetches from the API.
-    if (isNative) {
+    if (hasLocalStore) {
       const item = await localdb.get(ownerType === 'plan' ? 'plans' : 'notes', ownerId);
       if (!item) { const e: any = new Error('Not found'); e.status = 404; throw e; }
       // Owner view on the device: text stays read-only, but checkbox taps are
@@ -263,7 +287,7 @@ export default function Viewer() {
         if (token) {
           await loadToken();
         } else if (ownerType && ownerId) {
-          if (!isNative && !getToken()) {
+          if (!hasLocalStore && !getToken()) {
             setState({ status: 'message', icon: 'fa-right-to-bracket', title: 'Sign in to view',
               desc: 'Open Mah Notes and sign in to see this item.',
               extra: <p style={{ marginTop: 14 }}><Link to="/" style={{ fontWeight: 700 }}>Go to Mah Notes →</Link></p> });

@@ -14,14 +14,14 @@
 //  Keyed by user id so one account never sees another's cached data, and it's
 //  cleared on sign-out (see AuthContext).
 // ============================================================
-import { isNative } from './nativeAuth';
+import { hasLocalStore } from './platform';
 
 const KEY = 'mahnotes_cache';
 
 // Read the cached snapshot for `uid`, or null if none / different account /
 // unavailable. Never used on native (which reads its own IndexedDB).
 export function readCache(uid) {
-  if (isNative || !uid) return null;
+  if (hasLocalStore || !uid) return null;
   try {
     const snap = JSON.parse(localStorage.getItem(KEY) || 'null');
     if (!snap || snap.uid !== uid) return null; // no cache, or a different account
@@ -36,7 +36,7 @@ export function readCache(uid) {
 // Mirror the current lists to localStorage. Best-effort: a quota error (large
 // notes) or disabled storage just means the next visit falls back to a fetch.
 export function writeCache(uid, data) {
-  if (isNative || !uid) return;
+  if (hasLocalStore || !uid) return;
   try {
     localStorage.setItem(KEY, JSON.stringify({
       uid,

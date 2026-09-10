@@ -16,7 +16,12 @@ function apiRoutes() {
 }
 
 // Vite dev server on :5173 (must match backend CLIENT_ORIGIN).
+// The desktop bundle is loaded from a custom protocol rather than a web root,
+// so its asset URLs must be relative. The web deploy keeps absolute paths.
+const isDesktop = process.env.VITE_APP_TARGET === 'desktop';
+
 export default defineConfig({
+  base: isDesktop ? './' : '/',
   plugins: [react(), apiRoutes()],
   server: { port: 5173 },
 });

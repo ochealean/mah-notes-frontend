@@ -1,8 +1,9 @@
 // ============================================================
 //  Realtime client (socket.io). A single shared connection that
 //  authenticates with the same JWT the REST API uses. Components
-//  subscribe to server events via onRealtime(); right now those are
-//  display-name updates (me:updated for self, friend:updated for friends).
+//  subscribe to server events via onRealtime(). Profile changes
+//  (me:updated, friend:updated) and data changes (data:changed) both
+//  arrive this way.
 //
 //  Transport: on the Android WebView we force the WebSocket transport so the
 //  handshake isn't routed through the CapacitorHttp plugin (which only patches
@@ -37,8 +38,12 @@ export function connectRealtime() {
     // Native: websocket only (WebView/CapacitorHttp). Web: default upgrade path.
     ...(isNative ? { transports: ['websocket'] } : {}),
   });
-  // Re-broadcast every known event to local subscribers.
-  ['me:updated', 'friend:updated'].forEach((ev) => socket.on(ev, (p) => fanOut(ev, p)));
+  // Re-broadcast EVERY server event to local subscribers. This used to be a
+  // hard-coded whitelist, which meant any new server event was received by the
+  // socket and then silently dropped — a bug that costs an hour every time and
+  // leaves no trace. onAny has no such failure mode; fanOut already no-ops when
+  // nothing is listening.
+  socket.onAny((ev, p) => fanOut(ev, p));
 }
 
 export function disconnectRealtime() {

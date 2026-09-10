@@ -1,0 +1,6 @@
+# Cargo's build output. Several gigabytes, rebuilt from source, and never
+# useful to anyone else — CI compiles its own from Cargo.lock.
+/target/
+
+# Tauri regenerates these from tauri.conf.json on every build.
+/gen/schemas/

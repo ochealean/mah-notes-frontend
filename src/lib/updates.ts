@@ -13,6 +13,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
 import { AppLauncher } from '@capacitor/app-launcher';
 import { isNative } from './nativeAuth';
+import { isDesktop } from './platform';
 import { APP_VERSION } from './appInfo';
 
 const APK_MIME = 'application/vnd.android.package-archive';
@@ -84,11 +85,21 @@ async function fetchRelease() {
     if (rel.draft || rel.prerelease) return null;
     const version = String(rel.tag_name || rel.name || '').replace(/^v/i, '');
     if (!version) return null;
-    const apk = (rel.assets || []).find((a) => /\.apk$/i.test(a.name || ''));
+    const assets = rel.assets || [];
+    const apk = assets.find((a) => /\.apk$/i.test(a.name || ''));
+    // One release carries every platform's build, so pick by extension.
+    // NSIS first: it installs per-user without a UAC prompt, which the MSI
+    // cannot do.
+    const installer = assets.find((a) => /-setup\.exe$/i.test(a.name || ''))
+      || assets.find((a) => /\.exe$/i.test(a.name || ''))
+      || assets.find((a) => /\.msi$/i.test(a.name || ''));
     return {
       version,
       notes: rel.body || '',
       apkUrl: apk?.browser_download_url || null,
+      installerUrl: installer?.browser_download_url || null,
+      // What THIS platform should download.
+      downloadUrl: (isDesktop ? installer?.browser_download_url : apk?.browser_download_url) || null,
       htmlUrl: rel.html_url || `https://github.com/${UPDATE_REPO}/releases/latest`,
     };
   } catch {
@@ -99,9 +110,12 @@ async function fetchRelease() {
 // Returns { version, notes, apkUrl, htmlUrl } when a newer release exists,
 // or null (already current / offline / not configured / web). Never throws.
 export async function checkForUpdate() {
-  if (!isNative) return null;
+  // Desktop checks too now; it just installs differently (see openInBrowser).
+  if (!isNative && !isDesktop) return null;
   const rel = await fetchRelease();
   if (!rel || cmp(rel.version, APP_VERSION) <= 0) return null;
+  // A release with nothing for this platform is not an update we can offer.
+  if (isDesktop && !rel.downloadUrl) return null;
   return rel;
 }
 
@@ -118,8 +132,21 @@ export async function fetchLatestRelease() {
 // hands off to the OS's default browser app (not the in-app WebView, which
 // can't complete an APK install). Falls back to window.open if needed.
 export async function openInBrowser(update) {
-  const url = update?.apkUrl || update?.htmlUrl;
+  const url = update?.downloadUrl || update?.apkUrl || update?.htmlUrl;
   if (!url) return;
+  if (isDesktop) {
+    // Hand the installer to the system browser. Tauri's own updater would
+    // mean signing keys and a signed latest.json; downloading the installer
+    // reuses the GitHub Releases mechanism that already works.
+    try {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(url);
+      return;
+    } catch {
+      try { window.open(url, '_blank'); } catch { /* nothing else to try */ }
+      return;
+    }
+  }
   try { await AppLauncher.openUrl({ url }); }
   catch {
     try { window.open(url, '_system'); } catch { window.open(url, '_blank'); }

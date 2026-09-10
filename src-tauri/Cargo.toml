@@ -1,0 +1,53 @@
+[package]
+name = "mah-notes"
+version = "2.1.0"
+description = "Mah Notes — notes, plans, schedule and clipboard"
+authors = ["ochealean"]
+edition = "2021"
+rust-version = "1.77.2"
+
+# The library is what Tauri's mobile targets would use; the binary is desktop.
+# Keeping both means adding a platform later doesn't restructure the crate.
+[lib]
+name = "mah_notes_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-clipboard-manager = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-opener = "2"
+
+# Desktop-only plugins. Global shortcuts and single-instance have no meaning on
+# a phone, and Tauri refuses to build them for mobile targets.
+[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
+
+# Alt+N needs Win32 directly: there is no API to read another app's
+# selection, so we synthesise a copy and put the clipboard back exactly as
+# we found it. windows-sys rather than windows because Tauri already pulls
+# it in, and its C-shaped API is stable across releases.
+[target.'cfg(target_os = "windows")'.dependencies.windows-sys]
+version = "0.60"
+features = [
+  "Win32_Foundation",
+  "Win32_System_DataExchange",
+  "Win32_System_Memory",
+  "Win32_System_Threading",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
+]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

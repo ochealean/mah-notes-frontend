@@ -29,7 +29,18 @@ async function request(method: string, path: string, body?: any) {
     });
   } catch (e: any) {
     if (e?.name === 'AbortError') throw new Error('The server took too long to respond. Please try again.');
-    throw e;
+    // A failed fetch surfaces as "Failed to fetch", which tells the user
+    // nothing and sends developers hunting in the wrong place. The usual
+    // cause is simply that nothing is listening — during development that
+    // means the backend is not running.
+    const err: any = new Error(
+      BASE.includes('localhost') || BASE.includes('127.0.0.1')
+        ? `Can't reach the server at ${BASE}. Is the backend running?`
+        : "Can't reach the server. Check your connection and try again."
+    );
+    err.status = 0;          // "no response", distinct from any HTTP status
+    err.cause = e;
+    throw err;
   } finally {
     clearTimeout(timer);
   }

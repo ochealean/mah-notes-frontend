@@ -6,16 +6,18 @@
 //  Rows in the rail, the full clip in the pane. Copy back to the
 //  system clipboard or promote a clip into a real document.
 //
-//  Clips are device-local: they never sync, and they only exist on the
-//  phone that captured them. The web build therefore does not offer this
-//  tab at all (see TABS in MainApp), so everything here is native-only.
+//  Clips are device-local until the user opts in to syncing them, and a
+//  pinned clip is exempt from the 30-day sweep. The web build does not
+//  offer this tab (see TABS in MainApp) because it has no way to capture.
 // ============================================================
 import { useState } from 'react';
 import { repo } from '../lib/repo';
 import { notify } from '../lib/notify';
 import { escapeHtml } from '../lib/richtext';
 import { timeAgo } from '../lib/timeAgo';
-import { copyClip, deleteClip } from '../lib/clips';
+import { copyClip, deleteClip, setClipPinned } from '../lib/clips';
+import { expiryLabel } from '../lib/clipRetention';
+import { useSync } from '../lib/sync';
 
 // First line of a clip, used as its title.
 export function clipTitle(text) {
@@ -57,6 +59,7 @@ export default function ClipboardTab({ clips, selectedId, onSelect, searching, s
             {selecting && (
               <span className={`row-check${checked ? ' on' : ''}`}><i className="fas fa-check" /></span>
             )}
+            {clip.pinned && <i className="fas fa-thumbtack row-pin" title="Pinned" />}
             <span className="row-title"
               dangerouslySetInnerHTML={{ __html: escapeHtml(clipTitle(clip.text) || 'Empty clip') }} />
           </div>
@@ -72,8 +75,10 @@ export default function ClipboardTab({ clips, selectedId, onSelect, searching, s
 
 // ── The pane ─────────────────────────────────────────────
 export function ClipPane({ clip, onChanged, onBack }) {
+  const sync = useSync();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [pinning, setPinning] = useState(false);
 
   if (!clip) {
     return (
@@ -113,6 +118,19 @@ export function ClipPane({ clip, onChanged, onBack }) {
     catch (err) { notify(err.message || 'Could not delete', 'error'); }
   }
 
+  // Pinning is the only thing that saves a clip from the 30-day sweep, so the
+  // toast says what actually changed rather than just "pinned".
+  async function togglePin() {
+    if (pinning) return;
+    setPinning(true);
+    try {
+      await setClipPinned(clip.id, !clip.pinned);
+      notify(clip.pinned ? 'Unpinned \u2014 will expire again' : 'Pinned \u2014 kept until you unpin it', 'info');
+      onChanged();
+    } catch (err) { notify(err.message || 'Could not pin that', 'error'); }
+    finally { setPinning(false); }
+  }
+
   return (
     <>
       <div className="detail-bar">
@@ -127,7 +145,9 @@ export function ClipPane({ clip, onChanged, onBack }) {
           <span className="pane-tag">Clipped</span>
           <span className="pane-status">
             <span className="pane-dot" />
-            {clip.source ? `From ${clip.source} · ` : ''}{timeAgo(clip.createdAt)} · stays on this device, never synced
+            {clip.source ? `From ${clip.source} · ` : ''}{timeAgo(clip.createdAt)}
+            {expiryLabel(clip) ? ` \u00b7 ${expiryLabel(clip)}` : ''}
+            {sync.clipSync ? ' \u00b7 synced to your account' : ' \u00b7 stays on this device'}
           </span>
         </div>
 
@@ -143,6 +163,15 @@ export function ClipPane({ clip, onChanged, onBack }) {
           </button>
           <button className="pane-btn" onClick={makeNote} disabled={busy}>
             <i className={`fas ${busy ? 'fa-circle-notch fa-spin' : 'fa-file-lines'}`} /> Make document
+          </button>
+          <button
+            className={`pane-btn icon-only${clip.pinned ? ' solid' : ''}`}
+            aria-label={clip.pinned ? 'Unpin clip' : 'Pin clip'}
+            title={clip.pinned ? 'Unpin \u2014 lets it expire again' : 'Pin \u2014 keeps it past 30 days'}
+            onClick={togglePin}
+            disabled={pinning}
+          >
+            <i className="fas fa-thumbtack" />
           </button>
           <button className="pane-btn icon-only" aria-label="Delete clip" onClick={remove}>
             <i className="fas fa-trash" />

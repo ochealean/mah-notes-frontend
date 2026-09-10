@@ -1,13 +1,18 @@
 // ============================================================
 //  Data repository — the one place that knows WHERE data lives.
 //
-//   • Web   → talks to the backend REST API (unchanged behaviour).
-//   • Native → reads/writes the local IndexedDB store and asks the sync
-//              engine to mirror changes when an account is connected.
+//   • Web     → talks to the backend REST API (unchanged behaviour).
+//   • Android
+//     + Desktop → read/write the local IndexedDB store and ask the sync
+//                 engine to mirror changes when an account is connected.
+//
+//  The split follows `hasLocalStore`, not the OS: what matters here is
+//  whether this build owns an offline copy, and both the APK and the
+//  Tauri desktop app do.
 //
 //  Components call repo.* and never branch on platform themselves.
 // ============================================================
-import { isNative } from './nativeAuth';
+import { hasLocalStore } from './platform';
 import { api } from './api';
 import { localdb } from './localdb';
 import { newUid } from './uid';
@@ -177,4 +182,4 @@ const web = {
   deletePlan: (id) => api.del(`/api/plans/${id}`),
 };
 
-export const repo = isNative ? local : web;
+export const repo = hasLocalStore ? local : web;

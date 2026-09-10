@@ -2,7 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth';
-import { useSync, setSyncEnabled, syncNow, setSyncAccount, getAccountOnlyItems, removeAccountData, resetSyncForLogout } from '../lib/sync';
+import { useSync, setSyncEnabled, setClipSyncEnabled, purgeAccountClips, syncNow, setSyncAccount, getAccountOnlyItems, removeAccountData, resetSyncForLogout } from '../lib/sync';
+import { hasClips, hasLocalStore, isDesktop } from '../lib/platform';
+import {
+  getHotkeyStatus, isAutostartOn, setAutostart,
+  isKeepRunningOn, setKeepRunning, desktopGoogleSignIn,
+  type HotkeyStatus,
+} from '../lib/desktopPrefs';
+import { listClips } from '../lib/clips';
 import { api, getToken } from '../lib/api';
 import { notify } from '../lib/notify';
 import { APP_VERSION } from '../lib/appInfo';
@@ -31,7 +38,10 @@ const THEME_OPTIONS = [
 // without opening the section.
 const THEME_LABEL = Object.fromEntries(THEME_OPTIONS.map((o) => [o.value, o.label]));
 
-// ── Native-only: connect an account and control sync ──
+// ── Offline-first builds: connect an account and control sync ──
+//  Android and desktop both open without a login gate, so signing in lives
+//  HERE rather than on a gate screen. That is also why it has to render on
+//  desktop: without it there is no way to sign in at all.
 function AccountSync({ reloadLists }) {
   const { user, login, register, loginWithGoogle, forgotPassword, logout } = useAuth();
   const sync = useSync();
@@ -141,8 +151,11 @@ function AccountSync({ reloadLists }) {
   async function google() {
     setBusy(true); setError('');
     try {
-      const idToken = await nativeGoogleSignIn();
-      const u = await loginWithGoogle(idToken);
+      // Android hands back an ID token from the native picker. Desktop opens
+      // the system browser and comes back with an auth code plus the loopback
+      // URI it was issued for; the backend already accepts both shapes.
+      const payload = isDesktop ? await desktopGoogleSignIn() : await nativeGoogleSignIn();
+      const u = await loginWithGoogle(payload);
       await afterAuth(u?.email);
     } catch (err) {
       const m = String(err?.message || '');
@@ -260,12 +273,25 @@ function AccountSync({ reloadLists }) {
           )}
           {error && <div className="auth-error">{error}</div>}
         </form>
-        <div className="auth-divider" style={{ margin: '0 16px' }}><span>or</span></div>
-        <div style={{ padding: '10px 16px 12px' }}>
-          <button type="button" className="btn btn-google btn-block" onClick={google} disabled={busy}>
-            Continue with Google
-          </button>
-        </div>
+        {/* Android uses the native account picker; desktop opens the system
+            browser and listens on a loopback port. The website has its own
+            redirect button and never reaches this card. */}
+        {(isNative || isDesktop) && (
+          <>
+            <div className="auth-divider" style={{ margin: '0 16px' }}><span>or</span></div>
+            <div style={{ padding: '10px 16px 12px' }}>
+              <button type="button" className="btn btn-google btn-block" onClick={google} disabled={busy}>
+                {busy && isDesktop ? 'Waiting for your browser…' : 'Continue with Google'}
+              </button>
+              {isDesktop && (
+                <p className="auth-hint">
+                  This opens your normal browser, where you are probably already
+                  signed in to Google.
+                </p>
+              )}
+            </div>
+          </>
+        )}
         <button className="settings-row" onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); setError(''); }}>
           <span><i className="fas fa-user-plus" /> {mode === 'signup' ? 'Have an account? Sign in' : 'New here? Create an account'}</span>
           <i className="fas fa-chevron-right" />
@@ -438,6 +464,232 @@ function SharePrivacy({ user }) {
   );
 }
 
+// ── Clipboard sync (opt-in) ───────────────────────────────
+//  Agreeing to sync your notes is NOT agreeing to upload everything you copy,
+//  so this is a second switch on top of the master one, and it starts off.
+//
+//  The notice is permanent and visible rather than a tooltip: clips are stored
+//  like notes, not end-to-end encrypted, and people paste passwords into
+//  clipboards without thinking about it.
+function ClipboardSync() {
+  const sync = useSync();
+  const [count, setCount] = useState(0);
+  const [confirm, setConfirm] = useState(null); // 'on' | 'off' | null
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { listClips().then((c) => setCount(c.length)).catch(() => {}); }, [sync.clipSync]);
+
+  const signedIn = !!getToken();
+  const ready = signedIn && sync.enabled;
+
+  async function turnOn(uploadExisting) {
+    setBusy(true);
+    try {
+      // "Start fresh" is one timestamp, not per-row bookkeeping: the push
+      // filter simply ignores anything created before this moment.
+      await setClipSyncEnabled(true, uploadExisting ? null : new Date().toISOString());
+      notify(uploadExisting ? 'Clipboard is syncing' : 'Syncing new clips from now on', 'success');
+    } catch (err) { notify(err.message || 'Could not turn that on', 'error'); }
+    finally { setBusy(false); setConfirm(null); }
+  }
+
+  async function turnOff(purge) {
+    setBusy(true);
+    try {
+      if (purge) await purgeAccountClips();
+      await setClipSyncEnabled(false);
+      notify(purge ? 'Stopped syncing and cleared your account' : 'Stopped syncing', 'info');
+    } catch (err) { notify(err.message || 'Could not turn that off', 'error'); }
+    finally { setBusy(false); setConfirm(null); }
+  }
+
+  return (
+    <div className="settings-card">
+      <div className="settings-section-label">Clipboard</div>
+
+      <div className="clip-sync-choice">
+        <button
+          className={`clip-sync-opt${!sync.clipSync ? ' active' : ''}`}
+          disabled={busy}
+          onClick={() => (sync.clipSync ? setConfirm('off') : null)}
+        >
+          <span className="clip-sync-dot" />
+          <span>
+            Keep clips on this device only
+            <small>Nothing is uploaded. This is the default.</small>
+          </span>
+        </button>
+        <button
+          className={`clip-sync-opt${sync.clipSync ? ' active' : ''}`}
+          disabled={busy || !ready}
+          onClick={() => (sync.clipSync ? null : setConfirm('on'))}
+        >
+          <span className="clip-sync-dot" />
+          <span>
+            Sync my clipboard to my account
+            <small>Clips follow you between your phone and your computer.</small>
+          </span>
+        </button>
+      </div>
+
+      <p className="clip-sync-warn">
+        <i className="fas fa-triangle-exclamation" />
+        <span>
+          Clips sync the same way your notes do. They are stored on our servers and are
+          <b> not</b> end-to-end encrypted. Never clip passwords, card numbers, one-time
+          codes, or anything you would not put in a note.
+        </span>
+      </p>
+
+      <p className="settings-hint-text">
+        {!signedIn
+          ? 'Sign in to use this.'
+          : !sync.enabled
+            ? 'Turn on Sync above first — clips follow the same account.'
+            : sync.clipSync
+              ? `On \u2014 ${count} clip${count === 1 ? '' : 's'} on this device, synced to your account.`
+              : `Off \u2014 ${count} clip${count === 1 ? '' : 's'}, on this device only.`}
+      </p>
+
+      {confirm === 'on' && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setConfirm(null); }}>
+          <div className="popup confirm-popup">
+            <div className="popup-head"><h3>Sync your clipboard?</h3></div>
+            <p className="confirm-text">
+              You have {count} clip{count === 1 ? '' : 's'} on this device. Uploading them puts
+              their full text in your account, where your other devices can read it.
+            </p>
+            <div className="confirm-actions">
+              <button className="btn btn-primary btn-block" disabled={busy} onClick={() => turnOn(true)}>
+                Upload my {count} existing clip{count === 1 ? '' : 's'}
+              </button>
+              <button className="btn btn-ghost btn-block" disabled={busy} onClick={() => turnOn(false)}>
+                Start fresh, sync only new clips
+              </button>
+              <button className="btn btn-ghost btn-block" disabled={busy} onClick={() => setConfirm(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirm === 'off' && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setConfirm(null); }}>
+          <div className="popup confirm-popup">
+            <div className="popup-head"><h3>Stop syncing your clipboard?</h3></div>
+            <p className="confirm-text">
+              Your {count} clip{count === 1 ? '' : 's'} stay on this device either way. The
+              question is only what happens to the copies in your account.
+            </p>
+            <div className="confirm-actions">
+              <button className="btn btn-primary btn-block" disabled={busy} onClick={() => turnOff(false)}>
+                Stop syncing, keep them in my account
+              </button>
+              <button className="btn btn-danger-ghost btn-block" disabled={busy} onClick={() => turnOff(true)}>
+                Stop syncing and delete them from my account
+              </button>
+              <button className="btn btn-ghost btn-block" disabled={busy} onClick={() => setConfirm(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Desktop: how the app runs, and its shortcuts ──────────
+//  Two settings that only make sense together, so they share a heading:
+//  whether Mah Notes starts with the computer, and whether it stays running
+//  once the window is closed. Both exist for the same reason — the global
+//  shortcuts only work while the app is actually running — so the group is
+//  named for that rather than for the switches.
+function DesktopCard() {
+  const [keys, setKeys] = useState<HotkeyStatus | null>(null);
+  const [autostart, setAuto] = useState(false);
+  const [keepRunning, setKeep] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getHotkeyStatus().then(setKeys).catch(() => {});
+    isAutostartOn().then(setAuto).catch(() => {});
+    isKeepRunningOn().then(setKeep).catch(() => {});
+  }, []);
+
+  // Optimistic on both: a switch that waits on the OS feels broken.
+  async function toggle(next, setLocal, current, apply) {
+    if (busy) return;
+    setLocal(next);
+    setBusy(true);
+    try { await apply(next); }
+    catch (err) {
+      setLocal(current);
+      notify(err.message || 'Could not change that', 'error');
+    } finally { setBusy(false); }
+  }
+
+  const taken = keys && (!keys.captureOk || !keys.panelOk);
+
+  return (
+    <div className="settings-card">
+      <div className="settings-section-label">Startup and background</div>
+
+      <div className="settings-row" style={{ cursor: 'default' }}>
+        <span><i className="fas fa-power-off" /> Start Mah Notes when I sign in to Windows</span>
+        <label className="switch" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={autostart}
+            disabled={busy}
+            onChange={() => toggle(!autostart, setAuto, autostart, setAutostart)}
+          />
+          <span className="slider" />
+        </label>
+      </div>
+
+      <div className="settings-row" style={{ cursor: 'default' }}>
+        <span><i className="fas fa-inbox" /> Keep running when I close the window</span>
+        <label className="switch" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={keepRunning}
+            disabled={busy}
+            onChange={() => toggle(!keepRunning, setKeep, keepRunning, setKeepRunning)}
+          />
+          <span className="slider" />
+        </label>
+      </div>
+
+      <p className="settings-hint-text">
+        {keepRunning
+          ? 'Closing the window tucks Mah Notes into the tray, next to the clock. It keeps answering the shortcuts below, and Quit in the tray menu stops it properly.'
+          : 'Closing the window quits Mah Notes completely. The shortcuts below will not work until you open it again.'}
+      </p>
+
+      <div className="settings-sub-label">Shortcuts</div>
+      <div className="settings-row" style={{ cursor: 'default' }}>
+        <span><i className="fas fa-scissors" /> Save the selected text</span>
+        <kbd className={`hotkey${keys && !keys.captureOk ? ' failed' : ''}`}>
+          {keys?.capture || 'Alt+N'}
+        </kbd>
+      </div>
+      <div className="settings-row" style={{ cursor: 'default' }}>
+        <span><i className="fas fa-clipboard-list" /> Open the paste panel</span>
+        <kbd className={`hotkey${keys && !keys.panelOk ? ' failed' : ''}`}>
+          {keys?.panel || 'Alt+M'}
+        </kbd>
+      </div>
+      <p className="settings-hint-text">
+        {taken
+          ? 'Another app already owns one of these, so it will not fire. Close that app, or change its shortcut, and restart Mah Notes.'
+          : 'Both shortcuts are registered and working.'}
+      </p>
+    </div>
+  );
+}
+
 export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloadLists, updateAvailable, needsPassword = false }) {
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
   const initial = (name[0] || 'U').toUpperCase();
@@ -596,7 +848,9 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
       )}
 
       {/* Native: account + sync controls. */}
-      {isNative && <AccountSync reloadLists={reloadLists} />}
+      {hasLocalStore && <AccountSync reloadLists={reloadLists} />}
+      {hasClips && <ClipboardSync />}
+      {isDesktop && <DesktopCard />}
 
       {/* Friends + sharing inbox — online features, need an account. */}
       {user && (
@@ -731,7 +985,7 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
         {/* Web only: you're already running the app if this is native. */}
         {!isNative && (
           <button className="settings-row" onClick={() => setShowDownload(true)}>
-            <span><i className="fas fa-mobile-screen-button" /> Get the Android app</span>
+            <span><i className="fas fa-download" /> Get the app for Windows or Android</span>
             <i className="fas fa-chevron-right" />
           </button>
         )}

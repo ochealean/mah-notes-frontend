@@ -6,11 +6,23 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.1.0';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.1.0',
+    date: '2026-09-10',
+    title: 'Pin clips, and sync them if you want to',
+    changes: [
+      'Pin a clip to keep it. Pinned clips stay until you unpin them.',
+      'Clips you don\u2019t pin now clear themselves after 30 days, so your clipboard doesn\u2019t fill up with things you copied once. Unpinning something old gives you another day to change your mind.',
+      'Your clipboard can now follow your account between devices \u2014 but only if you switch it on. It is off until you do, in Settings \u2192 Clipboard.',
+      'If you do switch it on, clips are stored the same way your notes are. They are not end-to-end encrypted, so don\u2019t clip passwords, card numbers or one-time codes.',
+      'Turning it off again lets you delete the copies from your account. Your clips stay on your phone either way.',
+    ],
+  },
   {
     version: '2.0.0',
     date: '2026-09-09',

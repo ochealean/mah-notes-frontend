@@ -1,0 +1,79 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mah Notes",
+  "version": "2.1.0",
+  "identifier": "com.mahnotes.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build:desktop",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Mah Notes",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 380,
+        "minHeight": 480,
+        "resizable": true,
+        "center": true,
+        "decorations": true
+      },
+      {
+        "label": "toast",
+        "url": "index.html#/toast",
+        "title": "Mah Notes",
+        "width": 260,
+        "height": 44,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "visible": false,
+        "shadow": false
+      },
+      {
+        "label": "panel",
+        "url": "index.html#/clip-panel",
+        "title": "Mah Notes clipboard",
+        "width": 420,
+        "height": 520,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "center": true,
+        "shadow": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis",
+      "msi"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

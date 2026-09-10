@@ -1,0 +1,97 @@
+# ============================================================
+#  Build the Windows desktop app and attach it to the SAME GitHub
+#  Release the APK goes to, so one tag ships every platform and the
+#  in-app updater finds the right asset by extension.
+#
+#  Runs beside release.yml on the same `v*` tag. Two workflows rather
+#  than one job matrix, because the Android build needs a JDK and a
+#  keystore while this one needs Rust and a Windows runner, and mixing
+#  them makes both slower and harder to read.
+#
+#  It can also be run by hand from the Actions tab. That build uploads
+#  the installer as a workflow artifact and creates no release, so the
+#  desktop app can be tested on a real machine before a version is cut.
+#  It is also the way to get an installer at all on a machine where
+#  Smart App Control blocks Cargo from running its own build scripts.
+# ============================================================
+name: Release desktop
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to attach to the release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Rust builds are slow from cold. Keyed on the lockfile so a dependency
+      # change invalidates it and nothing else does.
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install dependencies
+        run: npm ci
+
+      # .env is gitignored, so CI has none and the app would fall back to
+      # localhost. These are all PUBLIC values, already shipped in the web app.
+      # VITE_PUBLIC_WEB_BASE matters especially here: without it, share links
+      # created on desktop would point at http://tauri.localhost.
+      - name: Write .env
+        shell: bash
+        run: |
+          cat > .env <<EOF
+          VITE_API_BASE=https://mah-notes-backend.onrender.com
+          VITE_GOOGLE_CLIENT_ID=982037934424-cfvsb73fo771e6u4citndjke8mblrqp5.apps.googleusercontent.com
+          VITE_PUBLIC_WEB_BASE=https://mah-notes.vercel.app
+          EOF
+
+      - name: Build the desktop app
+        run: npm run desktop:build
+
+      # tauri build writes both an NSIS installer and an MSI.
+      #
+      # Every run keeps them as a downloadable artifact, tag or not. That is
+      # what makes a manual run useful: an installer to try, with no release
+      # created and nothing published.
+      - name: Keep the installers as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mah-notes-windows
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/msi/*.msi
+
+      # Only a tag publishes. Both files are attached; the website offers the
+      # NSIS one because it installs per-user without a UAC prompt.
+      - name: Attach the installers to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          fail_on_unmatched_files: true

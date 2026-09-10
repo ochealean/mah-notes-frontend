@@ -19,6 +19,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { repo } from '../lib/repo';
 import { isNative } from '../lib/nativeAuth';
+import { hasClips, hasLocalStore, isWeb } from '../lib/platform';
 import { initSync, setOnMerged, useSync, applyReconcile, dismissReconcile, syncNow } from '../lib/sync';
 import { listSchedules } from '../lib/scheduleStore';
 import { rearmAlarms, rearmReminders, ensureKeepAlive, pruneOrphanAlarms } from '../lib/alarm';
@@ -42,6 +43,7 @@ import UpdateModal from './UpdateModal';
 import AiMenu from './AiMenu';
 import { pushWidgetData, consumeWidgetOpen, consumeWidgetToggles } from '../lib/widget';
 import { listClips, drainPendingClips, pushClipSnapshot, deleteClip } from '../lib/clips';
+import { onDesktopCapture } from '../lib/clipsDesktop';
 import { readCache, writeCache } from '../lib/webCache';
 import { useSlowHint } from '../lib/useSlowHint';
 import logoUrl from '../images/mn_logo.png';
@@ -55,15 +57,20 @@ const ALL_TABS = [
   { key: 'schedule', label: 'Time', icon: 'fa-clock' },
   { key: 'settings', label: 'Settings', icon: 'fa-gear' },
 ];
-// Clips are captured by the Android selection toolbar and never leave the
-// device, so on the web the tab could only ever show an empty state explaining
-// why it is empty. It isn't offered there at all. `isNative` is settled once at
-// module load (Capacitor.isNativePlatform()), so this list never changes after.
-const TABS = ALL_TABS.filter((t) => t.key !== 'clipboard' || isNative);
-const isTab = (t) => TABS.some((x) => x.key === t);
+// Android and desktop can capture clips, so they always offer the tab. The web
+// can't capture anything, so it used to hide the tab entirely — it could only
+// ever have shown an empty state explaining why it was empty. Now that clips
+// sync, the website DOES have something to show, but only once the user has
+// opted in and captured something somewhere. So on the web the tab appears when
+// there are clips and disappears when there are none, rather than sitting there
+// permanently empty.
+function tabsFor(webClipCount) {
+  const showClips = hasClips || webClipCount > 0;
+  return ALL_TABS.filter((t) => t.key !== 'clipboard' || showClips);
+}
 
 // Tabs that own a list in the rail. Schedule and Settings fill the pane instead.
-const LIST_TABS = TABS.filter((t) => ['docs', 'plans', 'clipboard'].includes(t.key)).map((t) => t.key);
+const RAIL_TABS = ['docs', 'plans', 'clipboard'];
 const SEARCH_PLACEHOLDER = { docs: 'Search documents', plans: 'Search plans', clipboard: 'Search clips' };
 
 const RAIL_KEY = 'mahnotes_rail_w';
@@ -134,7 +141,9 @@ export default function MainApp() {
   // ?tab=view from a v1 link falls back to Docs — that tab no longer exists.
   const [tab, setTab] = useState(() => {
     const t = searchParams.get('tab');
-    return isTab(t) ? t : 'docs';
+    // Validated against the tabs that always exist; the web clips tab may not
+    // be known yet on first render, and falling back to Docs is harmless.
+    return ALL_TABS.some((x) => x.key === t) && (t !== 'clipboard' || hasClips) ? t : 'docs';
   });
 
   // Web: seed from the localStorage cache so a revisit paints instantly, then
@@ -205,15 +214,25 @@ export default function MainApp() {
   useEffect(() => { reload(); }, [reload]);
 
   // Pull in anything the Android selection toolbar captured while we were closed
-  // or backgrounded, then re-read the store. Safe on web: the drain no-ops and
-  // listClips() just returns an empty list.
+  // or backgrounded, then re-read the store. `drainPendingClips` is itself
+  // Android-only inside, so desktop just reads the store.
   const reloadClips = useCallback(async () => {
-    if (!isNative) return;
-    await drainPendingClips();
+    // Web has no queue to drain, but it does have clips to fetch once the
+    // user has turned syncing on.
+    if (!hasClips && !isWeb) return;
+    if (hasClips) await drainPendingClips();
     setClips(await listClips());
   }, []);
 
   useEffect(() => { reloadClips(); }, [reloadClips]);
+
+  // Desktop: Alt+N can fire while the window is open, and the queue on disk
+  // would otherwise not be read until the next launch.
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    onDesktopCapture(() => { reloadClips(); }).then((fn) => { stop = fn; });
+    return () => { if (stop) stop(); };
+  }, [reloadClips]);
 
   // Native: mirror the list back down so the "Mah Notes Clipboard" entry in the
   // selection toolbar can offer these clips from its own (WebView-less) process.
@@ -232,9 +251,10 @@ export default function MainApp() {
 
   // Web: keep the instant-load cache in step with the lists (including optimistic
   // edits like pin/hide), so the next visit renders the latest without waiting on
-  // the network. Skipped while the first load is still in flight.
+  // the network. Skipped while the first load is still in flight, and skipped
+  // entirely where an IndexedDB copy already exists (Android, desktop).
   useEffect(() => {
-    if (isNative || loading) return;
+    if (hasLocalStore || loading) return;
     writeCache(user?.id, { notes, plans, schedules });
   }, [notes, plans, schedules, loading, user?.id]);
 
@@ -313,13 +333,17 @@ export default function MainApp() {
     })();
   }, []);
 
-  // Native: start the sync engine and refresh the lists whenever a sync
-  // pull merges in new data from the account. Schedules pulled from another
-  // device need their reminders/alarms armed on THIS device too.
+  // Offline builds (Android, desktop): start the sync engine and refresh the
+  // lists whenever a pull merges in new data from the account. Schedules pulled
+  // from another device need their reminders/alarms armed on THIS device too —
+  // those helpers no-op off Android.
   useEffect(() => {
-    if (!isNative) return;
+    if (!hasLocalStore) return;
     setOnMerged(async () => {
       await reload();
+      // A pull can now bring CLIPS down too, and reload() only covers the
+      // synced lists — clips live in their own state and their own store.
+      await reloadClips();
       try {
         const blocks = await listSchedules();
         await rearmReminders(blocks);
@@ -330,25 +354,25 @@ export default function MainApp() {
       } catch { /* best-effort */ }
     });
     initSync();
-  }, [reload]);
+  }, [reload, reloadClips]);
 
-  // Native: surface items the WEB side deleted so the user can keep/delete them.
+  // Offline builds: surface items the WEB side deleted so the user can keep them.
   useEffect(() => {
-    if (!isNative) return;
+    if (!hasLocalStore) return;
     const pr = syncState.pendingReconcile;
     if (pr && (pr.notes.length || pr.plans.length)) setReconcile(pr);
   }, [syncState.pendingReconcile]);
 
   // Web: ask the server whether the app deleted anything we still show.
   const checkWebReconcile = useCallback(async () => {
-    if (isNative || !getToken()) return;
+    if (hasLocalStore || !getToken()) return;
     try {
       const pr = await api.get('/api/reconcile');
       if (pr && (pr.notes?.length || pr.plans?.length)) setReconcile(pr);
     } catch { /* non-critical */ }
   }, []);
   useEffect(() => {
-    if (isNative) return undefined;
+    if (hasLocalStore) return undefined;
     checkWebReconcile();
     const onFocus = () => checkWebReconcile();
     window.addEventListener('focus', onFocus);
@@ -357,7 +381,7 @@ export default function MainApp() {
 
   async function onReconcileApply(sel) {
     try {
-      if (isNative) {
+      if (hasLocalStore) {
         await applyReconcile(sel); // posts + restores kept items locally + reloads
       } else {
         await api.post('/api/reconcile', {
@@ -376,7 +400,7 @@ export default function MainApp() {
   }
 
   function onReconcileClose() {
-    if (isNative) dismissReconcile();
+    if (hasLocalStore) dismissReconcile();
     setReconcile(null);
   }
 
@@ -410,6 +434,9 @@ export default function MainApp() {
 
   // On a phone the pane replaces the rail. Schedule and Settings have no list,
   // so they always fill the pane.
+  // On the web this list changes as clips arrive or are cleared.
+  const TABS = tabsFor(isWeb ? clips.length : 0);
+  const LIST_TABS = TABS.filter((t) => RAIL_TABS.includes(t.key)).map((t) => t.key);
   const isListTab = LIST_TABS.includes(tab);
   const openItem = tab === 'docs' ? selDoc && curDoc : tab === 'plans' ? selPlan && curPlan : tab === 'clipboard' ? selClip && curClip : null;
   const hasDetail = !isListTab || (!isDesktop && !!openItem);
@@ -542,7 +569,7 @@ export default function MainApp() {
   // After saving a friend-shared item into my account: web refetches; the app
   // pulls it down on the next sync (which fires onMerged → reload).
   const refreshAfterSave = useCallback(() => {
-    if (isNative) syncNow(); else reload();
+    if (hasLocalStore) syncNow(); else reload();
   }, [reload]);
 
   const busy = loading || syncState.syncing;

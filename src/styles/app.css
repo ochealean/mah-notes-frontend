@@ -242,6 +242,12 @@ body::after {
     position: absolute; right: 0; background: none; border: none; color: var(--ink-64);
     width: 44px; height: 44px; cursor: pointer;
 }
+/* Edge and the WebView2 the desktop app runs on inject their OWN password
+   reveal button, which sits right next to ours and looks like a bug. Ours
+   stays, because it is the one that matches the rest of the interface and
+   works identically on every platform. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear { display: none; width: 0; height: 0; }
 .auth-error { color: var(--danger); font-size: 12.5px; min-height: 18px; margin-top: 8px; font-weight: 600; }
 .auth-divider {
     text-align: center; color: var(--ink-64); font-size: 10px; margin: 22px 0;
@@ -969,6 +975,121 @@ body.rail-resizing * { pointer-events: none; }
 .signout-actions { display: flex; flex-direction: column; gap: 2px; }
 .signout-remove { background: rgba(174, 24, 0, .08); border-color: rgba(174, 24, 0, .3); color: var(--danger); }
 
+/* ── Clipboard sync opt-in (Settings) ─────────────────
+   A named pair rather than a bare toggle: "off" and "on" both need to say
+   what they actually mean before someone uploads their clipboard. */
+.clip-sync-choice { display: flex; flex-direction: column; gap: 2px; padding: 0 24px 14px; }
+.clip-sync-opt {
+    display: flex; align-items: flex-start; gap: 12px; text-align: left; cursor: pointer;
+    border: 1px solid var(--ink-16); background: var(--veil-2); color: var(--ink);
+    padding: 14px 16px; font-family: var(--font-body); font-size: 13.5px;
+    transition: border-color .14s ease, background .14s ease;
+}
+.clip-sync-opt:hover:not(:disabled) { border-color: var(--ink-40); }
+.clip-sync-opt:disabled { opacity: .45; cursor: not-allowed; }
+.clip-sync-opt.active { border-color: var(--accent); background: var(--tint); }
+.clip-sync-opt small { display: block; font-size: 11.5px; color: var(--ink-64); margin-top: 3px; }
+.clip-sync-dot {
+    width: 15px; height: 15px; flex: none; margin-top: 3px; box-sizing: border-box;
+    border: 2px solid var(--ink-40); border-radius: 50%;
+}
+.clip-sync-opt.active .clip-sync-dot {
+    border-color: var(--accent); background: var(--accent);
+    box-shadow: inset 0 0 0 3px var(--paper);
+}
+.clip-sync-warn {
+    display: flex; gap: 10px; align-items: flex-start; margin: 0 24px 14px;
+    padding: 12px 14px; background: var(--tint); box-shadow: inset 0 0 0 1px var(--accent-300);
+    color: var(--ink-80); font-size: 11.5px; line-height: 1.65;
+}
+.clip-sync-warn i { margin-top: 2px; flex: none; color: var(--accent-700); }
+.clip-sync-warn b { color: var(--accent-700); }
+
+/* ── Floating desktop windows ─────────────────────────
+   The toast and the paste panel are transparent Tauri windows, so the page
+   behind them has to be transparent too — otherwise the rounded corners sit
+   on an opaque square. Set while those routes are mounted. */
+[data-chrome="floating"], [data-chrome="floating"] body {
+    background: transparent !important;
+}
+[data-chrome="floating"] body::before,
+[data-chrome="floating"] body::after { display: none; }
+
+/* ── Alt+N toast (desktop) ────────────────────────────
+   Its own borderless, never-focused window. Slim, rounded, and gone in
+   under two seconds. Deliberately the one place the square-cornered house
+   style is broken: a floating pill over someone else's app should not look
+   like part of it. */
+.toast-window {
+    display: flex; align-items: center; gap: 10px;
+    height: 100%; padding: 0 15px; box-sizing: border-box;
+    background: var(--sheet); border-radius: 999px;
+    backdrop-filter: blur(20px) saturate(1.1); -webkit-backdrop-filter: blur(20px) saturate(1.1);
+    border: 1px solid var(--ink-16); box-shadow: var(--shadow-lg);
+    animation: fadeUp .14s ease;
+    overflow: hidden;
+}
+.toast-mark {
+    width: 7px; height: 7px; flex: none; border-radius: 50%;
+    background: var(--accent); display: block;
+}
+.toast-text {
+    font-family: var(--font-heading); font-weight: 800; font-size: 10px;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── Alt+M paste panel (desktop) ──────────────────────
+   Its own always-on-top window. Reuses the rail's row styling so the
+   panel and the Clips tab cannot drift apart visually. */
+.clip-panel {
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    border-radius: 14px;
+    background: var(--sheet);
+    backdrop-filter: blur(24px) saturate(1.1); -webkit-backdrop-filter: blur(24px) saturate(1.1);
+    border: 1px solid var(--ink-24); box-shadow: var(--shadow-lg);
+}
+.clip-panel-search {
+    display: flex; align-items: center; gap: 10px; flex: none;
+    padding: 14px 16px; border-bottom: 2px solid var(--ink-24); color: var(--ink-64);
+}
+.clip-panel-search input {
+    flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+    font-family: var(--font-body); font-size: 14px; color: var(--ink);
+}
+.clip-panel-search input::placeholder { color: var(--ink-40); }
+.clip-panel-hint {
+    flex: none; padding: 3px 7px; box-shadow: inset 0 0 0 1px var(--ink-16);
+    font-family: var(--font-heading); font-weight: 800; font-size: 9px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--ink-64);
+}
+
+.clip-panel-list { flex: 1; min-height: 0; overflow-y: auto; }
+/* Hover is the same as keyboard focus here: both set `active`, so there is
+   one highlighted row and Enter always acts on it. */
+.clip-panel-list .row { border-left: 2px solid transparent; }
+.clip-panel-list .row.active { border-left-color: var(--accent); background: var(--veil-2); }
+
+.clip-panel-actions {
+    margin-left: auto; display: flex; gap: 2px; flex: none;
+    opacity: 0; transition: opacity .12s ease;
+}
+.row.active .clip-panel-actions { opacity: 1; }
+.clip-panel-actions i {
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--ink-64); cursor: pointer;
+}
+.clip-panel-actions i:hover { color: var(--accent); background: var(--ink-08); }
+
+.clip-panel-foot {
+    flex: none; display: flex; gap: 16px; padding: 9px 16px;
+    border-top: 1px solid var(--ink-14); color: var(--ink-64); font-size: 10.5px;
+}
+.clip-panel-foot b {
+    font-family: var(--font-heading); font-weight: 800; font-size: 9px;
+    letter-spacing: .08em; color: var(--ink); margin-right: 4px;
+}
+
 /* ═══════════ SCHEDULE ═══════════ */
 .sched-day { margin-bottom: 2px; }
 .sched-block {
@@ -1507,4 +1628,17 @@ body.rail-resizing * { pointer-events: none; }
 
     .screens { padding: 40px 68px 60px; }
     .settings-card { max-width: 460px; }
+}
+
+/* ── Desktop hotkey chips (Settings) ──────────────────
+   A shortcut another app already owns simply never fires, which reads as a
+   bug. The failed state says so at a glance. */
+.hotkey {
+    font-family: var(--font-heading); font-weight: 800; font-size: 10px;
+    letter-spacing: .08em; padding: 5px 9px; color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink-24); background: var(--veil-2);
+}
+.hotkey.failed {
+    color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger);
+    text-decoration: line-through;
 }
