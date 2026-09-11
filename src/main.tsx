@@ -5,6 +5,17 @@ import { isDesktop } from './lib/platform';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import App from './App';
+// Icons and the typeface, bundled rather than fetched from a CDN.
+//
+// They used to come from jsDelivr and Google Fonts with no integrity check, and
+// they shipped that way inside the APK and the desktop binary too — so both
+// packaged apps phoned out to a third party on every launch and rendered
+// whatever came back. Self-hosting removes that trust, lets the Content
+// Security Policy stay tight, and means the desktop app is genuinely offline.
+import '@fortawesome/fontawesome-free/css/all.min.css';
+import '@fontsource/archivo/400.css';
+import '@fontsource/archivo/600.css';
+import '@fontsource/archivo/800.css';
 import './styles/app.css';
 import './styles/viewer.css';
 import './styles/themes.css';

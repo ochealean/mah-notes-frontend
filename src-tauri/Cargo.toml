@@ -49,5 +49,9 @@ features = [
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
+# Deliberately NOT "abort". The hotkeys do their work on spawned threads, and
+# unwinding keeps a panic there contained to that one failed capture. Aborting
+# turns any such bug into the whole app vanishing mid-keystroke, with no
+# message and nothing in the log to explain it.
+panic = "unwind"
 strip = true

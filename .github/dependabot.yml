@@ -1,0 +1,32 @@
+# Dependabot keeps an eye on the dependency tree so a published advisory reaches
+# us as a pull request rather than being discovered later.
+#
+# Three ecosystems: npm for the web/Android/desktop front end, cargo for the
+# Tauri shell, and github-actions because a compromised action runs in the same
+# job that decodes the Android signing keystore.
+#
+# Dependabot understands SHA-pinned actions and updates the pin along with the
+# version comment, so pinning does not mean going stale.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for routine bumps keeps the noise down. Security fixes are raised
+      # separately by Dependabot regardless of this grouping.
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -29,21 +29,21 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
       # Rust builds are slow from cold. Keyed on the lockfile so a dependency
       # change invalidates it and nothing else does.
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/registry
@@ -54,6 +54,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Refuse to cut a release on a tree with a known high-severity
+      # advisory. --omit=dev because build tooling does not ship to users;
+      # Dependabot raises those separately.
+      - name: Check dependencies for known vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
 
       # .env is gitignored, so CI has none and the app would fall back to
       # localhost. These are all PUBLIC values, already shipped in the web app.
@@ -77,7 +83,7 @@ jobs:
       # what makes a manual run useful: an installer to try, with no release
       # created and nothing published.
       - name: Keep the installers as an artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mah-notes-windows
           if-no-files-found: error
@@ -89,7 +95,7 @@ jobs:
       # NSIS one because it installs per-user without a UAC prompt.
       - name: Attach the installers to the release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
             src-tauri/target/release/bundle/nsis/*-setup.exe

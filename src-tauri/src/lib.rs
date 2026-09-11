@@ -330,6 +330,17 @@ pub fn run() {
                 }
             }
 
+            // Open filling the screen.
+            //
+            // `maximized` in tauri.conf.json only covers a first run: the
+            // window-state plugin restores whatever size the window had when it
+            // was last closed, and that restore happens as the window is
+            // created. Doing it here runs afterwards, so it wins. Un-maximising
+            // still gives back the remembered size.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.maximize();
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {

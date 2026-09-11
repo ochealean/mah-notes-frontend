@@ -6,36 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Mah Notes</title>
     <meta name="theme-color" content="#ec3013">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
-    <!-- v2.0 "Modernist": Archivo is the single typeface (400 body, 600 titles, 800 display). -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap">
-    <script>
-        // Apply the saved theme + accent before first paint (no flash).
-        (function () {
-            var dark = false;
-            try {
-                var p = localStorage.getItem('mahnotes_theme') || 'system';
-                dark = p === 'dark' || (p === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-                document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-            } catch (e) {}
-            try {
-                // The theme is three colours, but the app derives ~30 variables from
-                // them (src/lib/palette.ts). Rather than duplicate that maths here,
-                // the app caches the computed map and this just replays it, so the
-                // custom colours are on screen before React boots.
-                var cached = JSON.parse(localStorage.getItem('mahnotes_theme_vars') || 'null');
-                var vars = cached && (dark ? cached.dark : cached.light);
-                if (vars) {
-                    var el = document.documentElement;
-                    for (var k in vars) el.style.setProperty(k, vars[k]);
-                }
-                var t = JSON.parse(localStorage.getItem('mahnotes_theme_v2') || 'null');
-                if (t && t.ambient === false) document.documentElement.dataset.motion = 'off';
-            } catch (e) {}
-        })();
-    </script>
+    <!--CSP-->
+    <!-- Icons (Font Awesome) and the typeface (Archivo, 400 body / 600 titles /
+         800 display) are imported in src/main.tsx so they are bundled. They used
+         to load from jsDelivr and Google Fonts, which meant the APK and the
+         desktop app fetched executable CSS from a third party on every launch. -->
+    <!-- Runs before first paint. A file, not an inline script, so the Content
+         Security Policy above can forbid inline script outright. No defer/async:
+         it must finish before anything renders or the theme flashes. -->
+    <script src="./theme-boot.js"></script>
 </head>
 <body>
     <div id="root"></div>

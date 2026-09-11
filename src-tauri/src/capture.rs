@@ -49,6 +49,44 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindow
 
 const CF_UNICODETEXT: u32 = 13;
 
+/// Formats whose clipboard handle is NOT global memory.
+///
+/// `GetClipboardData` returns a GDI object for these — an HBITMAP, an
+/// HPALETTE, an enhanced metafile — and `GlobalSize`/`GlobalLock` on one is
+/// meaningless. Worse is putting them back: `SetClipboardData` under a GDI
+/// format tells Windows to free that block with `DeleteObject` later, which
+/// corrupts the heap and takes the process down with exception 0xC0000374,
+/// long after the code that caused it has returned.
+///
+/// Private (0x0200-0x02FF) and GDI-object (0x0300-0x03FF) formats are
+/// application-defined handles with the same problem, so they go too.
+///
+/// Skipping them costs only the ability to restore an image someone had
+/// copied, and the alternative is a crash.
+fn is_global_memory_format(format: u32) -> bool {
+    const CF_BITMAP: u32 = 2;
+    const CF_METAFILEPICT: u32 = 3;
+    const CF_PALETTE: u32 = 9;
+    const CF_ENHMETAFILE: u32 = 14;
+    const CF_OWNERDISPLAY: u32 = 0x0080;
+    const CF_DSPBITMAP: u32 = 0x0082;
+    const CF_DSPMETAFILEPICT: u32 = 0x0083;
+    const CF_DSPENHMETAFILE: u32 = 0x008E;
+
+    !matches!(
+        format,
+        CF_BITMAP
+            | CF_METAFILEPICT
+            | CF_PALETTE
+            | CF_ENHMETAFILE
+            | CF_OWNERDISPLAY
+            | CF_DSPBITMAP
+            | CF_DSPMETAFILEPICT
+            | CF_DSPENHMETAFILE
+    ) && !(0x0200..=0x02FF).contains(&format)
+        && !(0x0300..=0x03FF).contains(&format)
+}
+
 /// How long to wait for the target app to answer Ctrl+C. Electron apps,
 /// Office and remote sessions are routinely slower than the 300ms that feels
 /// natural, and giving up early reports "nothing selected" for a selection
@@ -98,6 +136,10 @@ pub(crate) fn snapshot() -> Vec<Blob> {
     unsafe {
         let mut format = EnumClipboardFormats(0);
         while format != 0 {
+            if !is_global_memory_format(format) {
+                format = EnumClipboardFormats(format);
+                continue;
+            }
             let handle = GetClipboardData(format);
             if !handle.is_null() {
                 let size = GlobalSize(handle as *mut c_void);
@@ -162,8 +204,12 @@ fn read_text() -> Option<String> {
         if !handle.is_null() {
             let ptr = GlobalLock(handle as *mut c_void) as *const u16;
             if !ptr.is_null() {
+                // Bounded by the block's real size. Scanning for the
+                // terminator alone trusts another process to have written one,
+                // and reads past the end of the allocation when it did not.
+                let max = GlobalSize(handle as *mut c_void) / 2;
                 let mut len = 0usize;
-                while *ptr.add(len) != 0 {
+                while len < max && *ptr.add(len) != 0 {
                     len += 1;
                 }
                 text = String::from_utf16(std::slice::from_raw_parts(ptr, len)).ok();

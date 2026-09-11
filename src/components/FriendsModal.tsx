@@ -1,16 +1,27 @@
 // ============================================================
 //  Friends sheet (online-only).
 //
-//  Find people by email or user ID, send a request, and accept the
-//  ones others send you. Friendships are consent-based — both sides
-//  agree. Built to power friend-sharing (Phase 3) later.
+//  Find people by their username, their full email, or a user ID, send a
+//  request, and accept the ones others send you. Friendships are
+//  consent-based — both sides agree.
+//
+//  Email matches in full only. A partial match used to return strangers'
+//  addresses, which made this a way to harvest them.
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { onRealtime } from '../lib/realtime';
 import { notify } from '../lib/notify';
 
-const initialOf = (p) => ((p?.displayName || p?.email || 'U')[0] || 'U').toUpperCase();
+const initialOf = (p) => ((p?.displayName || p?.username || p?.email || 'U')[0] || 'U').toUpperCase();
+
+// The line under someone's name.
+//
+// Search results are strangers, so the server no longer sends their email — you
+// have to already know it to find them. People you have a relationship with
+// still carry one. Falls back to the @username, and to nothing at all rather
+// than an empty grey line.
+const subtitleOf = (p) => p?.email || (p?.username ? `@${p.username}` : '');
 
 function Avatar({ person }) {
   return person?.avatar
@@ -24,7 +35,7 @@ function Person({ person, children }) {
       <Avatar person={person} />
       <div className="friend-meta">
         <div className="friend-name">{person.displayName}</div>
-        <div className="friend-email">{person.email}</div>
+        {subtitleOf(person) && <div className="friend-email">{subtitleOf(person)}</div>}
       </div>
       <div className="friend-actions">{children}</div>
     </div>
@@ -126,7 +137,7 @@ export default function FriendsModal({ me, onClose }) {
         {/* Search */}
         <div className="search-bar friend-search">
           <i className="fas fa-search" />
-          <input type="text" placeholder="Find by email or user ID…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="text" placeholder="Find by username or full email…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         {q.trim().length >= 2 && (
           <div className="friend-section">
