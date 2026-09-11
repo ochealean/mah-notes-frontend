@@ -1,10 +1,14 @@
 // ============================================================
 //  Update-available prompt. The user always chooses.
-//   • "Update now" tries the seamless in-app install (download +
+//   • ANDROID — "Update now" tries the seamless in-app install (download +
 //     Android installer). If that fails it shows the real error and
 //     points the user at the reliable browser path.
 //   • "Download in browser" always works: opens the APK in the real
 //     external browser (Chrome), which downloads + installs it.
+//   • WINDOWS — there is no in-app path. Tauri's own updater would need a
+//     signing key and a signed manifest we don't have, so the one button
+//     hands the installer to the system browser. Offering "Update now"
+//     there only ever produced "In-app install is Android-only."
 //   • "Don't remind me again" stops the prompt from auto-opening — a
 //     red dot in Settings → Check for updates is the only signal then.
 //  Closing the prompt records this version so it won't nag again.
@@ -13,6 +17,7 @@ import { useState } from 'react';
 import {
   installInApp, openInBrowser, markUpdateDismissed, setUpdateMuted, isUpdateMuted,
 } from '../lib/updates';
+import { isNative } from '../lib/platform';
 
 export default function UpdateModal({ update, onClose }) {
   const [busy, setBusy] = useState(false);
@@ -65,13 +70,24 @@ export default function UpdateModal({ update, onClose }) {
           </div>
         )}
 
-        <button className="btn btn-primary btn-block" disabled={busy} onClick={inApp}>
-          {busy
-            ? <><i className="fas fa-circle-notch fa-spin" /> Downloading…</>
-            : <><i className="fas fa-download" /> Update now</>}
-        </button>
-        <button className="btn btn-ghost btn-block" style={{ marginTop: 9 }} disabled={busy} onClick={browser}>
-          <i className="fas fa-up-right-from-square" /> Download in browser
+{/* Android gets the seamless path first. Everywhere else the browser
+            download IS the path, so it becomes the primary button rather than
+            a fallback sitting under one that cannot work. */}
+        {isNative && (
+          <button className="btn btn-primary btn-block" disabled={busy} onClick={inApp}>
+            {busy
+              ? <><i className="fas fa-circle-notch fa-spin" /> Downloading…</>
+              : <><i className="fas fa-download" /> Update now</>}
+          </button>
+        )}
+        <button
+          className={`btn btn-block ${isNative ? 'btn-ghost' : 'btn-primary'}`}
+          style={isNative ? { marginTop: 9 } : undefined}
+          disabled={busy}
+          onClick={browser}
+        >
+          <i className="fas fa-up-right-from-square" />
+          {isNative ? ' Download in browser' : ' Download the installer'}
         </button>
 
         {!busy && (

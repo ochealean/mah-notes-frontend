@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth';
 import { useSync, setSyncEnabled, setClipSyncEnabled, purgeAccountClips, syncNow, setSyncAccount, getAccountOnlyItems, removeAccountData, resetSyncForLogout } from '../lib/sync';
-import { hasClips, hasLocalStore, isDesktop } from '../lib/platform';
+import { hasClips, hasLocalStore, isDesktop, isWeb } from '../lib/platform';
+import { uploadAvatar, pictureProblem } from '../lib/avatarUpload';
+import AvatarCropModal from './AvatarCropModal';
 import {
   getHotkeyStatus, isAutostartOn, setAutostart,
   isKeepRunningOn, setKeepRunning, desktopGoogleSignIn,
@@ -694,7 +696,7 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
   const initial = (name[0] || 'U').toUpperCase();
   const { pref, setTheme } = useTheme();
-  const { updateProfile } = useAuth();
+  const { updateProfile, setAvatar } = useAuth();
   const [showFriends, setShowFriends] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [inboxCount, setInboxCount] = useState(0);
@@ -718,6 +720,53 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
   // default rather than pushing everything else off the screen.
   const [appearanceExpanded, setAppearanceExpanded] = useState(false);
   const [privacyExpanded, setPrivacyExpanded] = useState(false);
+
+  // ── Profile picture ───────────────────────────────────
+  // The avatar itself is the button: clicking it opens the file picker. A
+  // separate "change picture" row would be one more thing in a screen that is
+  // already long, and tapping your own face is what people try first.
+  const pictureInput = useRef(null);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+  // The file waiting to be cropped. The upload only starts once the user has
+  // decided which square of it is actually them.
+  const [pendingPicture, setPendingPicture] = useState(null);
+
+  function onPicturePicked(e) {
+    const file = e.target.files && e.target.files[0];
+    // Clear it either way, so picking the SAME file again still fires onChange.
+    e.target.value = '';
+    if (!file) return;
+    const problem = pictureProblem(file);
+    if (problem) { notify(problem, 'error'); return; }
+    setPendingPicture(file);
+  }
+
+  // Called by the crop dialog with the square it produced.
+  async function onCropped(blob) {
+    setUploadingPicture(true);
+    try {
+      const url = await uploadAvatar(blob);
+      await setAvatar(url);
+      setPendingPicture(null);
+      notify('Picture updated', 'success');
+    } catch (err) {
+      notify(err?.message || 'Could not update your picture', 'error');
+    } finally {
+      setUploadingPicture(false);
+    }
+  }
+
+  async function removePicture() {
+    setUploadingPicture(true);
+    try {
+      await setAvatar('');
+      notify('Picture removed', 'success');
+    } catch (err) {
+      notify(err?.message || 'Could not remove your picture', 'error');
+    } finally {
+      setUploadingPicture(false);
+    }
+  }
 
   function toggleAuto(on) { setAutoUpd(on); setAutoUpdate(on); }
   async function checkUpdates() {
@@ -777,9 +826,34 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
               if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAccountExpanded((v) => !v); }
             }}
           >
-            {user.avatar
-              ? <img className="settings-avatar" src={user.avatar} alt="" />
-              : <div className="settings-avatar">{initial}</div>}
+            <span
+              className="settings-avatar-pick"
+              role="button"
+              tabIndex={0}
+              title="Change your picture"
+              aria-label="Change your picture"
+              onClick={(e) => { e.stopPropagation(); if (!uploadingPicture) pictureInput.current?.click(); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault(); e.stopPropagation();
+                  if (!uploadingPicture) pictureInput.current?.click();
+                }
+              }}
+            >
+              {user.avatar
+                ? <img className="settings-avatar" src={user.avatar} alt="" />
+                : <div className="settings-avatar">{initial}</div>}
+              <span className="settings-avatar-badge">
+                <i className={`fas ${uploadingPicture ? 'fa-circle-notch fa-spin' : 'fa-camera'}`} />
+              </span>
+            </span>
+            <input
+              ref={pictureInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              hidden
+              onChange={onPicturePicked}
+            />
             {editingName ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
                 <input
@@ -823,6 +897,15 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
 
           {accountExpanded && (
             <>
+              {/* Only worth offering when there is something to remove. Clearing
+                  it falls back to the initial, which is also what a Google
+                  account gets if it never had a photo. */}
+              {!!user.avatar && (
+                <button className="settings-row" disabled={uploadingPicture} onClick={removePicture}>
+                  <span><i className="fas fa-user-slash" /> Remove profile picture</span>
+                  <i className="fas fa-chevron-right" />
+                </button>
+              )}
               {/* Set a password (Google-only accounts) or change the existing one.
                   Without one, a broken Google sign-in locks the account out — so
                   say so here rather than leaving it to be discovered. */}
@@ -982,15 +1065,18 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
           <span><i className="fas fa-gift" /> What’s new</span>
           <span className="settings-sub">v{APP_VERSION}</span>
         </button>
-        {/* Web only: you're already running the app if this is native. */}
-        {!isNative && (
+        {/* Web only. On a phone or the desktop app you are ALREADY running the
+            thing this would offer to download — it used to show there because
+            the check was "not Android", which the desktop build also satisfies. */}
+        {isWeb && (
           <button className="settings-row" onClick={() => setShowDownload(true)}>
             <span><i className="fas fa-download" /> Get the app for Windows or Android</span>
             <i className="fas fa-chevron-right" />
           </button>
         )}
-        {/* Native only: the APK self-updates from GitHub Releases (the web auto-updates on deploy). */}
-        {isNative && (
+        {/* The installed apps check GitHub Releases for themselves; the website
+            updates whenever you deploy it, so it has nothing to offer here. */}
+        {!isWeb && (
           <>
             <div className="settings-row" style={{ cursor: 'default' }}>
               <span><i className="fas fa-rotate" /> Check for updates automatically</span>
@@ -1014,6 +1100,13 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
 
       <p className="settings-about">Mah Notes · MERN edition</p>
 
+      {pendingPicture && (
+        <AvatarCropModal
+          file={pendingPicture}
+          onCancel={() => setPendingPicture(null)}
+          onDone={onCropped}
+        />
+      )}
       {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
       {showDownload && <DownloadAppModal onClose={() => setShowDownload(false)} />}
       {update && <UpdateModal update={update} onClose={() => setUpdate(null)} />}

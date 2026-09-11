@@ -159,6 +159,17 @@ export function AuthProvider({ children }) {
     return u;
   }, []);
 
+  // Set or clear the profile picture. The URL comes from lib/avatarUpload,
+  // which uploads to Cloudinary first; the server only accepts a URL it signed
+  // for this account, so this cannot point the avatar at an arbitrary address.
+  // Pass '' to go back to the initial.
+  const setAvatar = useCallback(async (avatar) => {
+    const { user: u } = await api.patch('/api/auth/me', { avatar: avatar || '' });
+    cacheUser(u);
+    setUser(u);
+    return u;
+  }, []);
+
   // What this account shows in the byline on its public share links.
   // Takes a partial patch, e.g. { shareAvatar: false }.
   const setSharePrivacy = useCallback(async (patch) => {
@@ -219,7 +230,7 @@ export function AuthProvider({ children }) {
   }, [user?.id]);
 
   return (
-    <AuthContext.Provider value={{ user, ready, googlePending, login, register, loginWithGoogle, linkGoogle, forgotPassword, resetPassword, setPassword, setUsername, updateProfile, setSharePrivacy, deleteAccount, logout }}>
+    <AuthContext.Provider value={{ user, ready, googlePending, login, register, loginWithGoogle, linkGoogle, forgotPassword, resetPassword, setPassword, setUsername, updateProfile, setAvatar, setSharePrivacy, deleteAccount, logout }}>
       {children}
     </AuthContext.Provider>
   );

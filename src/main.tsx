@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, HashRouter } from 'react-router-dom';
 import { isDesktop } from './lib/platform';
+import { installExternalLinkHandler } from './lib/externalLinks';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import App from './App';
@@ -29,6 +30,11 @@ import './styles/themes.css';
 // no such dependency. The web keeps BrowserRouter because /view share links
 // are real URLs people paste around.
 const Router = isDesktop ? HashRouter : BrowserRouter;
+
+// Links inside notes carry target="_blank", which the packaged apps have no
+// way to honour on their own — the click lands on nothing. Installed once,
+// before render, so a link works on the very first painted note.
+installExternalLinkHandler();
 
 const tree = (
   <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

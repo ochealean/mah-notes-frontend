@@ -55,7 +55,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https: asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost https://mah-notes-backend.onrender.com wss://mah-notes-backend.onrender.com https://api.github.com https://accounts.google.com https://www.googleapis.com; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https: asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost https://mah-notes-backend.onrender.com wss://mah-notes-backend.onrender.com https://api.github.com https://accounts.google.com https://www.googleapis.com https://api.cloudinary.com; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
     }
   },
   "bundle": {

@@ -32,7 +32,7 @@ function cspFor(apiBase: string) {
     // Avatars come from Google and from wherever a user's profile picture is
     // hosted, and notes can embed images. data: and blob: cover pasted images.
     "img-src 'self' data: blob: https:",
-    `connect-src 'self' ${api} ${ws} https://api.github.com https://accounts.google.com https://www.googleapis.com`,
+    `connect-src 'self' ${api} ${ws} https://api.github.com https://accounts.google.com https://www.googleapis.com https://api.cloudinary.com`,
     // Google's sign-in flow is a full-page redirect, not a frame, so nothing
     // needs framing and nothing may frame us.
     "frame-src 'none'",
