@@ -86,13 +86,26 @@ async function fetchRelease() {
     const version = String(rel.tag_name || rel.name || '').replace(/^v/i, '');
     if (!version) return null;
     const assets = rel.assets || [];
-    const apk = assets.find((a) => /\.apk$/i.test(a.name || ''));
-    // One release carries every platform's build, so pick by extension.
+
+    // Pick by extension, but ALWAYS prefer a file whose name carries this
+    // release's version.
+    //
+    // A release can end up holding assets from an earlier version — a failed
+    // build that was retried, or files uploaded by hand. Taking the first match
+    // then handed everyone the OLD installer: v2.1.2 still carried a
+    // 2.1.0-setup.exe, it sorted first, and the website offered 2.1.0 while
+    // claiming to be current. The in-app updater had it worse, offering an
+    // "update" to the version already installed.
+    const pick = (re: RegExp) => {
+      const matching = assets.filter((a) => re.test(a.name || ''));
+      if (!matching.length) return undefined;
+      return matching.find((a) => (a.name || '').includes(version)) || matching[0];
+    };
+
+    const apk = pick(/\.apk$/i);
     // NSIS first: it installs per-user without a UAC prompt, which the MSI
     // cannot do.
-    const installer = assets.find((a) => /-setup\.exe$/i.test(a.name || ''))
-      || assets.find((a) => /\.exe$/i.test(a.name || ''))
-      || assets.find((a) => /\.msi$/i.test(a.name || ''));
+    const installer = pick(/-setup\.exe$/i) || pick(/\.exe$/i) || pick(/\.msi$/i);
     return {
       version,
       notes: rel.body || '',
