@@ -6,11 +6,23 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.1.1';
+export const APP_VERSION = '2.1.2';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.1.2',
+    date: '2026-09-12',
+    title: 'Android is back, and a few desktop fixes',
+    changes: [
+      'The Android app is available again. The previous release failed to build, so 2.1.1 shipped for Windows only.',
+      'On Windows, Mah Notes now really does open filling the screen. It was being resized back immediately after opening.',
+      'Links inside your notes are clickable again in the Windows app. They open in your normal browser.',
+      'Windows Settings now offers Check for updates, in place of the download link that only made sense on the website.',
+      'You can set a profile picture, and choose which part of the photo to use.',
+    ],
+  },
   {
     version: '2.1.1',
     date: '2026-09-12',

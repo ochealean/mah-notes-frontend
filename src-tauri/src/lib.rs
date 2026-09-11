@@ -217,15 +217,24 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main(app);
         }));
-        // Remember where the user put the window and how big they made it.
-        // ONLY the main window's geometry is remembered. Left to itself the
-        // plugin also restores the toast and panel — including whether they
-        // were VISIBLE — so a toast that happened to be on screen at shutdown
-        // came back empty on next launch and never left, because nothing had
-        // sent it a message to time out.
+        // Every window is denied, which is the same as not restoring geometry
+        // at all — and that is deliberate.
+        //
+        // `main` is denied because the app is meant to open filling the screen.
+        // This plugin restores the last saved size AFTER setup runs, so it
+        // silently undid the maximize and the window came back at whatever size
+        // it happened to be closed at.
+        //
+        // `toast` and `panel` are denied because the plugin also restores
+        // whether a window was VISIBLE: a toast that happened to be on screen
+        // at shutdown came back empty on the next launch and never left,
+        // because nothing had sent it a message to time out.
+        //
+        // The plugin stays registered so a future window can opt in by being
+        // left off this list.
         builder = builder.plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_denylist(&["toast", "panel"])
+                .with_denylist(&["main", "toast", "panel"])
                 .build(),
         );
         // Run at login. Registered, but NOT enabled here — Settings owns that
