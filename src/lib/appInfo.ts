@@ -6,11 +6,26 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '2.1.1';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.1.1',
+    date: '2026-09-12',
+    title: 'A crash fix, and a safer account',
+    changes: [
+      'Fixed a crash on Windows: pressing Alt+N could close Mah Notes instantly, with no message. It depended on what was already on your clipboard, so it looked random. It is fixed.',
+      'On Windows, Mah Notes now opens filling the screen.',
+      'Changing or resetting your password now signs you out everywhere else. If someone else had got into your account, changing your password now actually removes them.',
+      'Passwords now need to be at least 10 characters. A few ordinary words you will remember beats a short jumble. Your existing password still works.',
+      'Repeated wrong password attempts now pause sign-in on that account for a short while, so nobody can sit there guessing.',
+      'Finding friends by email now needs the full address. Before, a partial one could turn up strangers’ email addresses.',
+      'Icons and the typeface now ship inside the app instead of being fetched from other companies’ servers each time it opens. It starts faster and works properly offline.',
+      'On a phone, the download page now offers the Android app only — the Windows installer is no use there.',
+    ],
+  },
   {
     version: '2.1.0',
     date: '2026-09-10',
