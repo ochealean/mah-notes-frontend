@@ -6,11 +6,20 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.1.4';
+export const APP_VERSION = '2.1.5';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.1.5',
+    date: '2026-09-13',
+    title: 'Links open again on Windows',
+    changes: [
+      'Links in your notes now open in your normal browser on Windows. They looked clickable but nothing happened — the app was allowed to open links, but had not been told which addresses were acceptable, so every one was turned down without a word.',
+      'Inside a note you are editing, hold Ctrl and click to open a link. A plain click still places your cursor, so you can fix the words.',
+    ],
+  },
   {
     version: '2.1.4',
     date: '2026-09-12',

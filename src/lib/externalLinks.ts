@@ -9,6 +9,10 @@
 //  One document-level listener rather than a prop on every renderer, because
 //  note bodies are injected as HTML in seven different components and a link
 //  can appear in any of them.
+//
+//  NOTE: the desktop side also needs `opener:allow-default-urls` in the Tauri
+//  capability. `opener:allow-open-url` alone enables the command with NO scope,
+//  so every URL is refused and the click appears to do nothing at all.
 // ============================================================
 import { isDesktop, isNative, isWeb } from './platform';
 
@@ -38,22 +42,28 @@ export function installExternalLinkHandler(): () => void {
   if (isWeb) return () => {};
 
   const onClick = (e: MouseEvent) => {
-    // Let a modified click behave normally, and ignore anything but the
-    // primary button.
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (e.defaultPrevented || e.button !== 0) return;
 
     const target = e.target as Element | null;
     const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null;
     if (!anchor) return;
 
-    // While editing, a click on a link belongs to the editor — it shows its own
-    // link controls. Opening a browser mid-sentence would be hostile.
-    if (anchor.closest('[contenteditable="true"]')) return;
-
     const href = anchor.getAttribute('href') || '';
     // Only genuinely external schemes. Router links are relative and must keep
     // being handled by the router, not thrown at the operating system.
     if (!/^(https?:|mailto:)/i.test(href)) return;
+
+    // An open document is an EDITABLE surface, so a plain click there has to go
+    // on meaning "put the caret here" — otherwise a link's text could never be
+    // corrected. Ctrl+click opens it instead, which is what Word and most
+    // editors do. Everywhere else a plain click opens, as people expect.
+    const editing = !!anchor.closest('[contenteditable="true"]');
+    if (editing) {
+      if (!e.ctrlKey && !e.metaKey) return;
+    } else if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+      // Outside the editor, leave modified clicks to the platform.
+      return;
+    }
 
     e.preventDefault();
     openExternal(href);
