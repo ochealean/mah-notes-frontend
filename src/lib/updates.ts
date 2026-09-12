@@ -148,9 +148,9 @@ export async function openInBrowser(update) {
   const url = update?.downloadUrl || update?.apkUrl || update?.htmlUrl;
   if (!url) return;
   if (isDesktop) {
-    // Hand the installer to the system browser. Tauri's own updater would
-    // mean signing keys and a signed latest.json; downloading the installer
-    // reuses the GitHub Releases mechanism that already works.
+    // The FALLBACK, now that installDesktopUpdate exists: hand the installer
+    // to the system browser. Still needed for a build that predates the
+    // updater, and for the case where the signed manifest cannot be fetched.
     try {
       const { openUrl } = await import('@tauri-apps/plugin-opener');
       await openUrl(url);
@@ -164,6 +164,34 @@ export async function openInBrowser(update) {
   catch {
     try { window.open(url, '_system'); } catch { window.open(url, '_blank'); }
   }
+}
+
+// DESKTOP seamless path: Tauri fetches the signed manifest, downloads the new
+// build, swaps the app and restarts it. No file for the user to find.
+//
+// The signature is verified against the public key baked into tauri.conf.json,
+// so a tampered or unsigned build is refused rather than installed — that check
+// is the entire reason this needs a signing key at all.
+//
+// THROWS on failure so the caller can fall back to the browser download, which
+// still works and needs no key.
+export async function installDesktopUpdate(onProgress) {
+  if (!isDesktop) throw new Error('In-app update is desktop-only.');
+  const { check } = await import('@tauri-apps/plugin-updater');
+  const update = await check();
+  if (!update) throw new Error('No update available.');
+
+  let downloaded = 0;
+  let total = 0;
+  await update.downloadAndInstall((event) => {
+    if (event.event === 'Started') total = event.data.contentLength || 0;
+    else if (event.event === 'Progress') downloaded += event.data.chunkLength || 0;
+    if (onProgress) onProgress(total ? Math.min(1, downloaded / total) : 0);
+  });
+
+  // The installer has run; restarting is what actually swaps the running app.
+  const { relaunch } = await import('@tauri-apps/plugin-process');
+  await relaunch();
 }
 
 // Seamless path: download the APK inside the app, then launch Android's

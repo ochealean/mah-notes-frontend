@@ -5,22 +5,25 @@
 //     points the user at the reliable browser path.
 //   • "Download in browser" always works: opens the APK in the real
 //     external browser (Chrome), which downloads + installs it.
-//   • WINDOWS — there is no in-app path. Tauri's own updater would need a
-//     signing key and a signed manifest we don't have, so the one button
-//     hands the installer to the system browser. Offering "Update now"
-//     there only ever produced "In-app install is Android-only."
+//   • WINDOWS — "Update now" downloads the signed build, swaps the app and
+//     restarts it. Nothing to find, no file to open. If that fails for any
+//     reason the browser download is still there underneath.
 //   • "Don't remind me again" stops the prompt from auto-opening — a
 //     red dot in Settings → Check for updates is the only signal then.
 //  Closing the prompt records this version so it won't nag again.
 // ============================================================
 import { useState } from 'react';
 import {
-  installInApp, openInBrowser, markUpdateDismissed, setUpdateMuted, isUpdateMuted,
+  installInApp, installDesktopUpdate, openInBrowser,
+  markUpdateDismissed, setUpdateMuted, isUpdateMuted,
 } from '../lib/updates';
-import { isNative } from '../lib/platform';
+import { isDesktop, isNative } from '../lib/platform';
 
 export default function UpdateModal({ update, onClose }) {
   const [busy, setBusy] = useState(false);
+  // 0..1 while a desktop update downloads. Android reports nothing granular,
+  // so it stays at 0 there and the button just spins.
+  const [progress, setProgress] = useState(0);
   const [err, setErr] = useState('');
   const [dontRemind, setDontRemind] = useState(isUpdateMuted());
 
@@ -36,10 +39,15 @@ export default function UpdateModal({ update, onClose }) {
     if (busy) return;
     setBusy(true); setErr('');
     try {
-      await installInApp(update); // resolves once the installer is launched
+      if (isDesktop) {
+        // Does not return: the app restarts into the new version.
+        await installDesktopUpdate(setProgress);
+      } else {
+        await installInApp(update); // resolves once the installer is launched
+      }
       close();
     } catch (e) {
-      setErr((e && e.message) || 'In-app install failed.');
+      setErr((e && e.message) || 'The update could not be installed.');
     } finally {
       setBusy(false);
     }
@@ -73,21 +81,19 @@ export default function UpdateModal({ update, onClose }) {
 {/* Android gets the seamless path first. Everywhere else the browser
             download IS the path, so it becomes the primary button rather than
             a fallback sitting under one that cannot work. */}
-        {isNative && (
-          <button className="btn btn-primary btn-block" disabled={busy} onClick={inApp}>
-            {busy
-              ? <><i className="fas fa-circle-notch fa-spin" /> Downloading…</>
-              : <><i className="fas fa-download" /> Update now</>}
-          </button>
-        )}
-        <button
-          className={`btn btn-block ${isNative ? 'btn-ghost' : 'btn-primary'}`}
-          style={isNative ? { marginTop: 9 } : undefined}
-          disabled={busy}
-          onClick={browser}
-        >
+{/* Both platforms can now install without leaving the app. The browser
+            download stays as a fallback for when that fails. */}
+        <button className="btn btn-primary btn-block" disabled={busy} onClick={inApp}>
+          {busy
+            ? <>
+                <i className="fas fa-circle-notch fa-spin" />
+                {progress > 0 ? ` Downloading… ${Math.round(progress * 100)}%` : ' Downloading…'}
+              </>
+            : <><i className="fas fa-download" /> Update now</>}
+        </button>
+        <button className="btn btn-ghost btn-block" style={{ marginTop: 9 }} disabled={busy} onClick={browser}>
           <i className="fas fa-up-right-from-square" />
-          {isNative ? ' Download in browser' : ' Download the installer'}
+          {isNative ? ' Download in browser' : ' Download the installer instead'}
         </button>
 
         {!busy && (

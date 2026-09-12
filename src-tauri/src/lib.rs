@@ -217,6 +217,13 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main(app);
         }));
+        // In-app updates: the app fetches a signed manifest, downloads the new
+        // build and swaps itself, instead of sending the user to a browser to
+        // find an installer. The signature is checked against the public key in
+        // tauri.conf.json, so an unsigned or tampered build is refused.
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+        builder = builder.plugin(tauri_plugin_process::init());
+
         // Every window is denied, which is the same as not restoring geometry
         // at all — and that is deliberate.
         //

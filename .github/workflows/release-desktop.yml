@@ -74,8 +74,44 @@ jobs:
           VITE_PUBLIC_WEB_BASE=https://mah-notes.vercel.app
           EOF
 
+      # The signing key is what lets an installed app trust an update. Tauri
+      # verifies every downloaded build against the PUBLIC key in
+      # tauri.conf.json, so without these the build produces no signature and
+      # no existing install would accept it.
       - name: Build the desktop app
         run: npm run desktop:build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      # The manifest the installed app polls. It has to name the exact download
+      # and carry the signature Tauri produced beside the bundle.
+      #
+      # The endpoint in tauri.conf.json points at releases/latest/download, so
+      # this file is looked up on whichever release is newest — no republishing
+      # an endpoint per version.
+      - name: Build the update manifest
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          BUNDLE=src-tauri/target/release/bundle/nsis
+          ZIP=$(ls "$BUNDLE"/*-setup.nsis.zip)
+          SIG=$(cat "$ZIP.sig")
+          cat > latest.json <<EOF
+          {
+            "version": "$VERSION",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "$SIG",
+                "url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/$(basename "$ZIP")"
+              }
+            }
+          }
+          EOF
+          echo "manifest for $VERSION:"; cat latest.json
 
       # tauri build writes both an NSIS installer and an MSI.
       #
@@ -100,4 +136,7 @@ jobs:
           files: |
             src-tauri/target/release/bundle/nsis/*-setup.exe
             src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*-setup.nsis.zip
+            src-tauri/target/release/bundle/nsis/*-setup.nsis.zip.sig
+            latest.json
           fail_on_unmatched_files: true

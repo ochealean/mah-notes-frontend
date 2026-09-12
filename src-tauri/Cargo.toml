@@ -1,6 +1,6 @@
 [package]
 name = "mah-notes"
-version = "2.1.3"
+version = "2.1.4"
 description = "Mah Notes — notes, plans, schedule and clipboard"
 authors = ["ochealean"]
 edition = "2021"
@@ -29,6 +29,13 @@ tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-window-state = "2"
+# In-app updates. Refuses anything not signed by the key in tauri.conf.json,
+# which is what stops someone who can tamper with a download from pushing code
+# onto a user's machine.
+tauri-plugin-updater = "2"
+# Restarting is what actually swaps the running app once the update has
+# been written; without it the new version only appears at the next launch.
+tauri-plugin-process = "2"
 
 # Alt+N needs Win32 directly: there is no API to read another app's
 # selection, so we synthesise a copy and put the clipboard back exactly as

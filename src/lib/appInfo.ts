@@ -6,11 +6,21 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.1.3';
+export const APP_VERSION = '2.1.4';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.1.4',
+    date: '2026-09-12',
+    title: 'The Windows app updates itself',
+    changes: [
+      'Mah Notes on Windows now installs its own updates. Press Update now and it downloads the new version, swaps itself and reopens — no installer to find, no file to open.',
+      'Every update is signed, and the app refuses one that is not. That is what stops anyone who could tamper with a download from putting their own code on your computer.',
+      'Downloading the installer by hand still works, and is offered if the automatic update cannot run.',
+    ],
+  },
   {
     version: '2.1.3',
     date: '2026-09-12',
