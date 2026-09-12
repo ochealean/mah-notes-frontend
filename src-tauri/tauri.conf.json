@@ -83,7 +83,7 @@
       "endpoints": [
         "https://github.com/ochealean/mah-notes-frontend/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNFN0QxNTZFQTg1OEFENzYKUldSMnJWaW9iaFY5UHFBNGNCUFJQRHRReWdTdklpRisrUXFwZ2F6VWRWMTlpZGl4YzJiMnVOVjIK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFDQzk2OTA4MEZGQzUzOEYKUldTUFUvd1BDR25KSEJYdTc1b2dYWldJNUUrQ3h5SmxtSDdZSmxTa2Q5SnF2NnlDQzFuVnlUVU0K",
       "windows": {
         "installMode": "passive"
       }
