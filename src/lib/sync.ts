@@ -42,6 +42,9 @@ const CLIPSYNC_FROM_KEY = 'clipSyncFrom';
 const DEVICE_KEY = 'deviceId';
 // One-shot guard for the clips origin backfill. See initSync.
 const ORIGIN_CLIPS_KEY = 'originClipsMigrated';
+// One-shot: rewind the clip cursor once, so a device re-pulls the clips the
+// old delta filter skipped. See the block in initSync for why.
+const CLIP_CURSOR_RESET_KEY = 'clipCursorResetV2';
 
 // Every collection the engine knows about. Derived from rather than repeated,
 // because the four maps below used to spell these out separately and adding a
@@ -211,6 +214,22 @@ export async function initSync() {
       await localdb.metaSet(ORIGIN_KEY, o);
     }
     await localdb.metaSet(ORIGIN_CLIPS_KEY, true);
+  }
+
+  // THIRD one-time migration: rewind the clip cursor.
+  //
+  // The server used to select the clip delta by `updatedAt`, which holds the
+  // moment a clip was CAPTURED, not when it reached the server. A phone
+  // captures at 10:00 but only uploads when the app is next opened, so a
+  // desktop whose cursor had already passed 10:00 asked for "anything after
+  // 10:30" and was never told about it. Clips went one way only.
+  //
+  // The server now stamps its own `syncedAt` and filters on that, but this
+  // device's cursor has already moved past the clips it missed. Clearing it
+  // once makes the next sync ask for everything, which brings them back.
+  if ((await localdb.metaGet(CLIP_CURSOR_RESET_KEY)) !== true) {
+    await localdb.metaSet(CLIPSYNC_KEY, null);
+    await localdb.metaSet(CLIP_CURSOR_RESET_KEY, true);
   }
 
   set({ initialized: true, enabled, clipSync, lastSync });

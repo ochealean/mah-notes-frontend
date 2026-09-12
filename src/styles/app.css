@@ -885,10 +885,22 @@ body.rail-resizing * { pointer-events: none; }
     font-family: var(--font-body);
 }
 .share-copy-btn {
-    background: var(--accent); color: var(--on-accent); border: none; border-radius: 0; padding: 0 16px; cursor: pointer;
+    /* inline-flex with its own minimum height, because this button is used
+       BOTH with a text label and with nothing but an icon. Relying on the
+       label for height made the icon-only version (the Friends ID row) render
+       as a short stub next to a full-height field. */
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    flex: 0 0 auto; min-height: 38px; min-width: 44px;
+    background: var(--accent); color: var(--on-accent); border: none; border-radius: 0;
+    padding: 0 16px; cursor: pointer;
     font-family: var(--font-heading); font-weight: 800; font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+    transition: background .14s ease;
 }
+.share-copy-btn i { font-size: 12px; }
 .share-copy-btn:hover { background: var(--accent-600); }
+.share-copy-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; }
+/* Match the field beside it exactly, whatever that field's height works out to. */
+.friend-myid-row .share-copy-btn { align-self: stretch; }
 .share-actions { display: flex; gap: 2px; margin-top: 2px; }
 .share-mini {
     flex: 1; border: 1px solid var(--ink-16); background: var(--veil-2); border-radius: 0;
@@ -1127,6 +1139,21 @@ body.rail-resizing * { pointer-events: none; }
     flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer;
 }
 
+/* ── Settings groups as dialogs ───────────────────────
+   Appearance, Privacy and Troubleshooting open here instead of expanding in
+   the list. The body scrolls on its own so a long group never pushes the
+   close button off a phone screen. */
+.settings-group-popup { width: min(520px, 94vw); }
+.settings-group-body {
+    max-height: min(64vh, 560px);
+    overflow-y: auto;
+    /* Cancels the popup's own padding so full-width rows still reach the
+       edges, then puts it back as breathing room at the bottom. */
+    margin: 0 -18px;
+    padding: 2px 18px 4px;
+}
+.settings-group-body .settings-sub-label:first-child { margin-top: 2px; }
+
 /* ═══════════ SCHEDULE ═══════════ */
 .sched-day { margin-bottom: 2px; }
 .sched-block {
@@ -1335,11 +1362,12 @@ body.rail-resizing * { pointer-events: none; }
     margin-bottom: 8px; color: var(--ink-64);
     font-family: var(--font-heading); font-weight: 800; font-size: 9px; letter-spacing: .16em; text-transform: uppercase;
 }
-.friend-myid-row { display: flex; gap: 2px; align-items: center; }
+.friend-myid-row { display: flex; gap: 2px; align-items: stretch; }
 .friend-myid-value {
     flex: 1; min-width: 0; font-size: 12px; color: var(--ink-80); background: var(--veil-3);
     box-shadow: inset 0 0 0 1px var(--ink-16); border: none; border-radius: 0; padding: 10px 12px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: flex; align-items: center;
 }
 .friend-search { margin-bottom: 8px; }
 .friend-section { margin-top: 16px; }
@@ -1555,15 +1583,24 @@ body.rail-resizing * { pointer-events: none; }
 .notification.info { background: var(--ink); }
 
 /* Toggle switch */
-.switch { position: relative; display: inline-block; width: 52px; height: 28px; flex: 0 0 auto; }
+/* Slimmer and fully rounded. The v2 design is square everywhere else, but a
+   switch is the one control people recognise by its shape — a square one reads
+   as a checkbox and invites a click on the wrong half. */
+.switch { position: relative; display: inline-block; width: 42px; height: 22px; flex: 0 0 auto; }
 .switch input { opacity: 0; width: 0; height: 0; }
-.switch .slider { position: absolute; inset: 0; cursor: pointer; border-radius: 0; background: var(--ink-24); transition: background .16s ease; }
+.switch .slider {
+    position: absolute; inset: 0; cursor: pointer; border-radius: 999px;
+    background: var(--ink-24); transition: background .16s ease;
+}
 .switch .slider::before {
-    content: ''; position: absolute; height: 22px; width: 22px; left: 3px; top: 3px;
-    background: var(--paper-2); border-radius: 0; transition: transform .16s ease;
+    content: ''; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px;
+    background: var(--paper-2); border-radius: 50%;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 22%);
+    transition: transform .16s ease;
 }
 .switch input:checked + .slider { background: var(--accent); }
-.switch input:checked + .slider::before { transform: translateX(24px); }
+.switch input:checked + .slider::before { transform: translateX(20px); }
+.switch input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ═══════════ ANIMATIONS ═══════════ */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

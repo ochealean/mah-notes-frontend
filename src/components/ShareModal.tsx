@@ -7,6 +7,7 @@
 // ============================================================
 import { useEffect, useState } from 'react';
 import { api, getToken } from '../lib/api';
+import { copyText } from '../lib/copyText';
 import { notify } from '../lib/notify';
 
 // Share links must point at the public website, not the in-app origin.
@@ -37,7 +38,7 @@ function ShareCard({ card, onRevoke, onRegen }) {
       <div className="share-copy-row">
         <input type="text" className="share-link-input" value={shareUrl(card.token)} readOnly />
         <button className="share-copy-btn" onClick={async () => {
-          try { await navigator.clipboard.writeText(shareUrl(card.token)); } catch {}
+          await copyText(shareUrl(card.token));
           setCopied(true); setTimeout(() => setCopied(false), 1600);
         }}><i className={`fas ${copied ? 'fa-check' : 'fa-copy'}`} /></button>
       </div>

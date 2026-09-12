@@ -82,8 +82,23 @@ export default function AuthScreen() {
     }
   }
 
+  // Mirrors USERNAME_RE on the server. Checked here too so the message appears
+  // as the user types rather than after a failed request.
+  function usernameProblem(value) {
+    const v = String(value || '').trim().toLowerCase();
+    if (!v) return 'Please choose a username — it is how friends find you.';
+    if (!/^[a-z0-9_.]{3,20}$/.test(v)) {
+      return 'Username must be 3–20 characters: letters, numbers, "_" or "." only.';
+    }
+    return '';
+  }
+
   async function doAuth() {
     setError('');
+    if (isSignUp) {
+      const problem = usernameProblem(username);
+      if (problem) { setError(problem); return; }
+    }
     setBusy(true);
     try {
       if (isSignUp) await register(email.trim(), password, name.trim(), username.trim());
@@ -169,8 +184,8 @@ export default function AuthScreen() {
           {isSignUp && (
             <div className="field">
               <i className="fas fa-at field-icon" />
-              <input type="text" className="field-input" placeholder="Username (optional)" autoComplete="username"
-                value={username} onChange={(e) => setUsername(e.target.value)} maxLength={20} />
+              <input type="text" className="field-input" placeholder="Username" autoComplete="username"
+                value={username} onChange={(e) => setUsername(e.target.value)} maxLength={20} required />
             </div>
           )}
           <div className="field">

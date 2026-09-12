@@ -31,14 +31,8 @@ import ThemeCustomizer from './ThemeCustomizer';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
 
-const THEME_OPTIONS = [
-  { value: 'light', label: 'Light', icon: 'fa-sun' },
-  { value: 'dark', label: 'Dark', icon: 'fa-moon' },
-  { value: 'system', label: 'System', icon: 'fa-laptop' },
-];
 // Shown on the collapsed Appearance header so the current choice is readable
 // without opening the section.
-const THEME_LABEL = Object.fromEntries(THEME_OPTIONS.map((o) => [o.value, o.label]));
 
 // ── Offline-first builds: connect an account and control sync ──
 //  Android and desktop both open without a login gate, so signing in lives
@@ -692,10 +686,38 @@ function DesktopCard() {
   );
 }
 
+// ── A settings group, as a dialog ─────────────────────
+//
+// These used to expand in place. With several open at once the screen turned
+// into a long scroll where the thing you had just changed was somewhere off
+// the top, and on a phone the list under an open section was unreachable
+// without closing it again. A dialog gives each group the whole screen and
+// leaves the list itself short enough to scan.
+function SettingsGroupModal({ title, icon, onClose, children }) {
+  // Escape closes, matching every other dialog in the app.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="popup settings-group-popup">
+        <div className="popup-head">
+          <h3><i className={`fas ${icon}`} /> {title}</h3>
+          <button className="icon-btn" aria-label="Close" onClick={onClose}><i className="fas fa-times" /></button>
+        </div>
+        <div className="settings-group-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloadLists, updateAvailable, needsPassword = false }) {
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
   const initial = (name[0] || 'U').toUpperCase();
-  const { pref, setTheme } = useTheme();
+  const { effective } = useTheme();
   const { updateProfile, setAvatar } = useAuth();
   const [showFriends, setShowFriends] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
@@ -710,7 +732,9 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
   const [autoUpd, setAutoUpd] = useState(autoUpdateEnabled());
   // Recovery actions, collapsed by default: they only matter when something has
   // already gone wrong, so they shouldn't take up room in everyday settings.
-  const [showMaintenance, setShowMaintenance] = useState(false);
+  // Which settings group is open as a dialog, or null. One value rather than
+  // a boolean each, so opening one closes the last.
+  const [openGroup, setOpenGroup] = useState(null);
   // Account Info starts collapsed to just the identity row (avatar/name/email) —
   // password, username, and Google linking are settled-once, rarely-revisited
   // controls that don't need to sit open on every visit to Settings.
@@ -718,8 +742,6 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
   // Appearance retracts like Account Info. It is the section most likely to
   // grow (background, gradients, per-surface colours), so it stays closed by
   // default rather than pushing everything else off the screen.
-  const [appearanceExpanded, setAppearanceExpanded] = useState(false);
-  const [privacyExpanded, setPrivacyExpanded] = useState(false);
 
   // ── Profile picture ───────────────────────────────────
   // The avatar itself is the button: clicking it opens the file picker. A
@@ -951,101 +973,32 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
       )}
 
       <div className="settings-card">
-        <button
-          className={`settings-collapse${appearanceExpanded ? ' open' : ''}`}
-          aria-expanded={appearanceExpanded}
-          onClick={() => setAppearanceExpanded((v) => !v)}
-        >
+        <button className="settings-row" onClick={() => setOpenGroup('appearance')}>
           <span><i className="fas fa-palette" /> Appearance</span>
           <span className="settings-collapse-right">
-            <span className="settings-collapse-hint">{THEME_LABEL[pref] || 'System'}</span>
-            <i className={`fas fa-chevron-${appearanceExpanded ? 'up' : 'down'}`} />
+            <span className="settings-collapse-hint">{effective === 'dark' ? 'Dark' : 'Light'}</span>
+            <i className="fas fa-chevron-right" />
           </span>
         </button>
-
-        {appearanceExpanded && (
-          <div className="settings-collapse-body">
-            <div className="settings-sub-label">Theme</div>
-            <div className="theme-seg">
-              {THEME_OPTIONS.map((opt) => (
-                <button key={opt.value} className={pref === opt.value ? 'active' : ''} onClick={() => setTheme(opt.value)}>
-                  <i className={`fas ${opt.icon}`} />
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="settings-sub-label">Colour theme</div>
-            <ThemeCustomizer />
-          </div>
-        )}
       </div>
 
       {isNative && (
         <div className="settings-card">
-          <button className="settings-row" onClick={() => setShowMaintenance((v) => !v)}>
+          <button className="settings-row" onClick={() => setOpenGroup('troubleshooting')}>
             <span><i className="fas fa-screwdriver-wrench" /> Troubleshooting</span>
-            <i className={`fas fa-chevron-${showMaintenance ? 'up' : 'down'}`} />
+            <i className="fas fa-chevron-right" />
           </button>
-          {showMaintenance && (
-            <>
-              <p className="settings-hint-text">
-                Only needed if something looks wrong — the app keeps both of these in
-                step on its own.
-              </p>
-              <button className="settings-row" onClick={async () => {
-                const c = await pushWidgetData();
-                notify(`Widget updated — ${c.notes} notes, ${c.plans} plans, ${c.schedule} schedule items`, 'success');
-              }}>
-                <span><i className="fas fa-table-cells-large" /> Refresh widget data</span>
-                <i className="fas fa-rotate-right" />
-              </button>
-              <button className="settings-row" onClick={async () => {
-                try {
-                  const blocks = await listSchedules();
-                  const removed = await clearStrayAlarms(blocks);
-                  notify(
-                    removed ? `Cleared ${removed} stray alarm${removed === 1 ? '' : 's'}`
-                      : 'No stray alarms found',
-                    'success',
-                  );
-                } catch (err) {
-                  notify(err.message, 'error');
-                }
-              }}>
-                <span><i className="fas fa-bell-slash" /> Clear stray alarms</span>
-                <i className="fas fa-broom" />
-              </button>
-            </>
-          )}
         </div>
       )}
 
       <div className="settings-card">
-        <button
-          className={`settings-collapse${privacyExpanded ? ' open' : ''}`}
-          aria-expanded={privacyExpanded}
-          onClick={() => setPrivacyExpanded((v) => !v)}
-        >
+        <button className="settings-row" onClick={() => setOpenGroup('privacy')}>
           <span><i className="fas fa-lock" /> Privacy</span>
           <span className="settings-collapse-right">
             <span className="settings-collapse-hint">{shareSummary(user)}</span>
-            <i className={`fas fa-chevron-${privacyExpanded ? 'up' : 'down'}`} />
+            <i className="fas fa-chevron-right" />
           </span>
         </button>
-
-        {privacyExpanded && (
-          <div className="settings-collapse-body">
-            <div className="settings-sub-label">In this app</div>
-            <button className="settings-row" onClick={onPrivacy}>
-              <span><i className="fas fa-eye-slash" /> Hide all content in the list</span>
-              <i className="fas fa-chevron-right" />
-            </button>
-
-            <div className="settings-sub-label">On shared links</div>
-            {user && <SharePrivacy user={user} />}
-          </div>
-        )}
       </div>
 
       {/* Log out sits in its own card: it is not a privacy setting, and it
@@ -1106,6 +1059,59 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
           onCancel={() => setPendingPicture(null)}
           onDone={onCropped}
         />
+      )}
+      {openGroup === 'appearance' && (
+        <SettingsGroupModal title="Appearance" icon="fa-palette" onClose={() => setOpenGroup(null)}>
+          {/* The light/dark/system buttons used to sit here. They are gone: the
+              colours below decide it. A light paper is a light theme, a dark
+              one (Midnight, or your own) is a dark theme. */}
+          <ThemeCustomizer />
+        </SettingsGroupModal>
+      )}
+
+      {openGroup === 'privacy' && (
+        <SettingsGroupModal title="Privacy" icon="fa-lock" onClose={() => setOpenGroup(null)}>
+          <div className="settings-sub-label">In this app</div>
+          <button className="settings-row" onClick={() => { setOpenGroup(null); onPrivacy(); }}>
+            <span><i className="fas fa-eye-slash" /> Hide all content in the list</span>
+            <i className="fas fa-chevron-right" />
+          </button>
+
+          <div className="settings-sub-label">On shared links</div>
+          {user && <SharePrivacy user={user} />}
+        </SettingsGroupModal>
+      )}
+
+      {openGroup === 'troubleshooting' && (
+        <SettingsGroupModal title="Troubleshooting" icon="fa-screwdriver-wrench" onClose={() => setOpenGroup(null)}>
+          <p className="settings-hint-text">
+            Only needed if something looks wrong — the app keeps both of these in
+            step on its own.
+          </p>
+          <button className="settings-row" onClick={async () => {
+            const c = await pushWidgetData();
+            notify(`Widget updated — ${c.notes} notes, ${c.plans} plans, ${c.schedule} schedule items`, 'success');
+          }}>
+            <span><i className="fas fa-table-cells-large" /> Refresh widget data</span>
+            <i className="fas fa-rotate-right" />
+          </button>
+          <button className="settings-row" onClick={async () => {
+            try {
+              const blocks = await listSchedules();
+              const removed = await clearStrayAlarms(blocks);
+              notify(
+                removed ? `Cleared ${removed} stray alarm${removed === 1 ? '' : 's'}`
+                  : 'No stray alarms found',
+                'success',
+              );
+            } catch (err) {
+              notify(err.message, 'error');
+            }
+          }}>
+            <span><i className="fas fa-bell-slash" /> Clear stray alarms</span>
+            <i className="fas fa-broom" />
+          </button>
+        </SettingsGroupModal>
       )}
       {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
       {showDownload && <DownloadAppModal onClose={() => setShowDownload(false)} />}

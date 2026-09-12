@@ -6,11 +6,27 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.1.2';
+export const APP_VERSION = '2.1.3';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.1.3',
+    date: '2026-09-12',
+    title: 'Clips that actually arrive, and a tidier Settings',
+    changes: [
+      'Clips now reach every device. Anything clipped on your phone while the app was closed could be missed by your computer entirely — it arrived carrying the time it was captured rather than the time it was sent, so a device that had already synced past that moment never heard about it.',
+      'Text you resize in a note stays resized. Saving used to quietly put it back to its original size.',
+      'Settings sections open as their own window now, instead of unfolding down the page.',
+      'A username is required when you create an account. It is how friends find you, and it means nobody has to share an email address to be added.',
+      'Friends no longer show each other’s email addresses — just the name and @username.',
+      'Light, dark and system are gone. Your colour theme decides it: a light paper is a light theme, a dark one is a dark theme. Pick Midnight in Appearance for dark.',
+      'You can set a profile picture and choose which part of the photo to use.',
+      'Fixed the copy button in Friends, which did nothing in the phone and desktop apps.',
+      'Switches are slimmer and rounder.',
+    ],
+  },
   {
     version: '2.1.2',
     date: '2026-09-12',

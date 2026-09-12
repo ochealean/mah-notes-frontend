@@ -1,9 +1,16 @@
 // ============================================================
-//  Theme: light / dark / system + a customizable colour theme.
-//  Reflects the *effective* light/dark theme onto <html data-theme>
-//  and applies any custom theme as inline CSS variables. Inline
-//  scripts in index.html apply both before first paint (no flash);
-//  this keeps them in sync afterwards.
+//  Theme: one customizable colour theme, and nothing else.
+//
+//  There is no light/dark/system switch any more. The colours ARE the
+//  choice: pick a light paper and you have a light theme, pick a dark one
+//  (the Midnight preset, or your own) and you have a dark theme. A separate
+//  mode switch on top of that only created a second, conflicting answer —
+//  a light theme had to be INVERTED to satisfy "dark mode", which is not
+//  what someone who picked those colours asked for.
+//
+//  `data-theme` still gets set, because the stylesheet and the native
+//  controls need to know which ground they are on. It is now derived from
+//  the paper colour rather than chosen separately.
 //
 //  The colour theme also lives on the ACCOUNT, for two reasons: it
 //  follows the user between devices, and whoever opens one of their
@@ -12,20 +19,20 @@
 //  theme down here via adoptAccountTheme rather than the reverse.
 // ============================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { loadPalette, savePalette, applyPalette } from '../lib/palette';
+import { loadPalette, savePalette, applyPalette, isDarkColor, DEFAULT_THEME } from '../lib/palette';
 import { api, getToken } from '../lib/api';
 
 const ThemeContext = createContext(null);
 export const useTheme = () => useContext(ThemeContext);
 
-const KEY = 'mahnotes_theme';
-const media = window.matchMedia('(prefers-color-scheme: dark)');
-
-const resolve = (pref) => (pref === 'system' ? (media.matches ? 'dark' : 'light') : pref);
 const apply = (effective) => { document.documentElement.dataset.theme = effective; };
 
+// Which ground are we on? Derived from the paper colour, falling back to the
+// default theme when the user has never picked one.
+const groundOf = (palette) =>
+  (isDarkColor(palette?.paper || DEFAULT_THEME.paper) ? 'dark' : 'light');
+
 export function ThemeProvider({ children }) {
-  const [pref, setPref] = useState(() => localStorage.getItem(KEY) || 'system');
   const [palette, setPaletteState] = useState(() => loadPalette());
   const pushTimer = useRef(null);
   const adoptedFor = useRef(null);
@@ -42,26 +49,21 @@ export function ThemeProvider({ children }) {
   }, []);
   useEffect(() => () => clearTimeout(pushTimer.current), []);
 
-  useEffect(() => {
-    apply(resolve(pref));
-    localStorage.setItem(KEY, pref);
-    if (pref !== 'system') return;
-    const onChange = () => apply(resolve('system'));
-    media.addEventListener('change', onChange);
-    return () => media.removeEventListener('change', onChange);
-  }, [pref]);
-
-  // Persist + apply the custom theme whenever it changes. The effective
-  // light/dark mode is passed in because a light theme is inverted for dark
-  // mode (see computeVars) rather than being ignored by it.
-  const effective = resolve(pref);
+  // Persist + apply the custom theme whenever it changes.
+  //
+  // The mode handed to applyPalette is derived from this very palette, so
+  // computeVars never swaps ink and paper: the colours are used exactly as the
+  // user built them.
+  const effective = groundOf(palette);
   const setPalette = useCallback((next, { push = true } = {}) => {
     const value = next && Object.keys(next).length ? next : null;
     setPaletteState(value);
     savePalette(value);
-    applyPalette(value, resolve(pref));
+    const ground = groundOf(value);
+    apply(ground);
+    applyPalette(value, ground);
     if (push) pushToAccount(value);
-  }, [pref, pushToAccount]);
+  }, [pushToAccount]);
 
   const resetPalette = useCallback(() => setPalette(null), [setPalette]);
 
@@ -87,14 +89,13 @@ export function ThemeProvider({ children }) {
     if (local && (local.ink || local.paper || local.accent)) pushToAccount(local);
   }, [setPalette, pushToAccount]);
 
-  // Apply on mount (covers an old cached shell whose pre-paint script didn't
-  // run) and again whenever light/dark flips, so a custom theme follows the
-  // mode instead of overriding it.
-  useEffect(() => { applyPalette(palette, effective); }, [palette, effective]);
+  // Apply on mount, which covers an old cached shell whose pre-paint script
+  // did not run.
+  useEffect(() => { apply(effective); applyPalette(palette, effective); }, [palette, effective]);
 
   return (
     <ThemeContext.Provider value={{
-      pref, setTheme: setPref, effective,
+      effective,
       palette, setPalette, resetPalette, adoptAccountTheme,
     }}>
       {children}

@@ -7,8 +7,26 @@
 (function () {
     var dark = false;
     try {
-        var p = localStorage.getItem('mahnotes_theme') || 'system';
-        dark = p === 'dark' || (p === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        // There is no light/dark/system preference any more — the colour theme
+        // decides. A dark PAPER colour means a dark ground. This mirrors
+        // isDarkColor() in src/lib/palette.ts; keep the two in step.
+        var t = JSON.parse(localStorage.getItem('mahnotes_theme_v2') || 'null');
+        var paper = (t && t.paper) || '#f3f2f2';
+        var m = /^#?([0-9a-f]{6})$/i.exec(String(paper).trim());
+        if (m) {
+            var n = parseInt(m[1], 16);
+            // Relative luminance, byte-for-byte the same maths as luminance()
+            // and isDarkColor() in palette.ts. An approximation here would
+            // disagree on mid-tones and show the wrong ground for one frame.
+            var ch = function (v) {
+                var x = v / 255;
+                return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+            };
+            var lum = 0.2126 * ch((n >> 16) & 255)
+                    + 0.7152 * ch((n >> 8) & 255)
+                    + 0.0722 * ch(n & 255);
+            dark = lum < 0.4;
+        }
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     } catch (e) {}
     try {
