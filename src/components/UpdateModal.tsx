@@ -47,7 +47,11 @@ export default function UpdateModal({ update, onClose }) {
       }
       close();
     } catch (e) {
-      setErr((e && e.message) || 'The update could not be installed.');
+      // Tauri rejects an invoke with a plain STRING, not an Error, so reading
+      // `.message` produced undefined and the fallback text swallowed the only
+      // clue there was. Take whichever form it arrives in.
+      const reason = typeof e === 'string' ? e : (e?.message || (e ? String(e) : ''));
+      setErr(reason ? `The update could not be installed. ${reason}` : 'The update could not be installed.');
     } finally {
       setBusy(false);
     }
@@ -107,7 +111,13 @@ export default function UpdateModal({ update, onClose }) {
         )}
 
         <p className="changelog-foot">
-          {busy ? 'Android will ask you to install when the download finishes.' : 'Seamless install can need “Install unknown apps” permission; the browser path always works.'}
+          {isNative
+            ? (busy
+              ? 'Android will ask you to install when the download finishes.'
+              : 'Seamless install can need “Install unknown apps” permission; the browser path always works.')
+            : (busy
+              ? 'Mah Notes will close and reopen once the update is in place.'
+              : 'The update installs itself and reopens the app. If that fails, the installer download always works.')}
         </p>
       </div>
     </div>

@@ -178,8 +178,16 @@ export async function openInBrowser(update) {
 export async function installDesktopUpdate(onProgress) {
   if (!isDesktop) throw new Error('In-app update is desktop-only.');
   const { check } = await import('@tauri-apps/plugin-updater');
-  const update = await check();
-  if (!update) throw new Error('No update available.');
+  let update;
+  try {
+    update = await check();
+  } catch (e) {
+    // Most often the manifest could not be fetched or its signature did not
+    // match the key this build trusts. Either way, say which step failed.
+    const why = typeof e === 'string' ? e : (e?.message || String(e));
+    throw new Error(`Could not check for the update: ${why}`);
+  }
+  if (!update) throw new Error('The update service reported nothing newer than this build.');
 
   let downloaded = 0;
   let total = 0;
