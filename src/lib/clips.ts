@@ -25,6 +25,7 @@ import { takePendingDesktopClips, desktopCopy } from './clipsDesktop';
 import { localdb } from './localdb';
 import { newUid } from './uid';
 import { requestSync, markDeleted, markLocalOrigin } from './sync';
+import { publishClipsChanged } from './clipsBus';
 import Clips from './clipsPlugin';
 import {
   computeExpiresAt, isExpired, CLIP_MAX, CLIP_MAX_TEXT,
@@ -149,7 +150,8 @@ export async function addClip(text: string, source = ''): Promise<Clip | null> {
   await localdb.put(STORE, clip);
   // Device-created, so a later "sign out and clear this device" keeps it.
   await markLocalOrigin('clips', uid);
-  requestSync();
+  requestSync('capture');
+  publishClipsChanged();
   return clip;
 }
 
@@ -160,7 +162,8 @@ export async function deleteClip(id: string) {
   // Queue the deletion so it reaches the account too. Harmless when clip sync
   // is off: syncNow() never puts these on the wire in that case.
   if (cur?.uid || cur?.id) await markDeleted('clips', cur.uid || cur.id);
-  requestSync();
+  requestSync('capture');
+  publishClipsChanged();
 }
 
 export async function clearClips() {
@@ -181,7 +184,8 @@ export async function setClipPinned(id: string, pinned: boolean): Promise<Clip |
     updatedAt: now(),
   });
   await localdb.put(STORE, next);
-  requestSync();
+  requestSync('capture');
+  publishClipsChanged();
   return next;
 }
 
@@ -214,7 +218,8 @@ export async function drainPendingClips(): Promise<number> {
   // Captures are device-created too, and they bypass addClip, so they are
   // marked here instead.
   for (const c of fresh) await markLocalOrigin('clips', c.uid); // eslint-disable-line no-await-in-loop
-  requestSync();
+  requestSync('capture');
+  publishClipsChanged();
   return fresh.length;
 }
 

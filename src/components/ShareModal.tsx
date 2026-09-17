@@ -9,15 +9,28 @@ import { useEffect, useState } from 'react';
 import { api, getToken } from '../lib/api';
 import { copyText } from '../lib/copyText';
 import { notify } from '../lib/notify';
+import { useAuth } from '../context/AuthContext';
+import { bundleLinkParams } from '../lib/bundles';
 
 // Share links must point at the public website, not the in-app origin.
 // Inside the APK window.location.origin is "https://localhost", so links
 // built from it are useless to recipients. Use the configured public web
 // base when set (required for native); fall back to the current origin on web.
 const WEB_BASE = (import.meta.env.VITE_PUBLIC_WEB_BASE || window.location.origin).replace(/\/$/, '');
-const shareUrl = (token) => `${WEB_BASE}/view?token=${token}`;
 
-function ShareCard({ card, onRevoke, onRegen }) {
+// The recipient has to render the SENDER's bundle, and the public share
+// endpoint knows nothing about bundles — user.theme on the server is a closed
+// {ink, paper, accent, ambient} sub-schema and this is a frontend-only change.
+// So the link carries it: `b` is the bundle id, `h` the sender's handle for the
+// card's @name line.
+//
+// `h` is attached only when share-identity is ON. That switch already decides
+// whether this account's name appears on a shared page at all (Settings →
+// Privacy); a link built while it is off must not smuggle the handle out in a
+// query string instead. bundleLinkParams enforces that, not this caller.
+const shareUrl = (token, extra = '') => `${WEB_BASE}/view?token=${token}${extra}`;
+
+function ShareCard({ card, onRevoke, onRegen, linkExtra }) {
   const [copied, setCopied] = useState(false);
   if (card.revoked) {
     return <div className="share-card"><div className="share-revoked"><i className="fas fa-ban" /> Link revoked</div></div>;
@@ -36,9 +49,9 @@ function ShareCard({ card, onRevoke, onRegen }) {
           : "Anyone with this link sees this in real-time. Your edits and ticks appear on their screen (they can’t edit). No account needed."}
       </div>
       <div className="share-copy-row">
-        <input type="text" className="share-link-input" value={shareUrl(card.token)} readOnly />
+        <input type="text" className="share-link-input" value={shareUrl(card.token, linkExtra)} readOnly />
         <button className="share-copy-btn" onClick={async () => {
-          await copyText(shareUrl(card.token));
+          await copyText(shareUrl(card.token, linkExtra));
           setCopied(true); setTimeout(() => setCopied(false), 1600);
         }}><i className={`fas ${copied ? 'fa-check' : 'fa-copy'}`} /></button>
       </div>
@@ -109,6 +122,11 @@ export default function ShareModal({ itemType, itemId, onClose }) {
   const [cards, setCards] = useState(null); // [{viewMode, token, revoked}]
   const [error, setError] = useState('');
   const signedIn = !!getToken();
+  const { user } = useAuth() || {};
+  const linkExtra = bundleLinkParams({
+    username: user?.username,
+    shareIdentity: user?.shareIdentity,
+  });
 
   useEffect(() => {
     if (!signedIn) return undefined;
@@ -172,7 +190,8 @@ export default function ShareModal({ itemType, itemId, onClose }) {
               </div>
             )}
             {cards && cards.map((card) => (
-              <ShareCard key={card.viewMode} card={card} onRevoke={onRevoke} onRegen={onRegen} />
+              <ShareCard key={card.viewMode} card={card} onRevoke={onRevoke} onRegen={onRegen}
+                linkExtra={linkExtra} />
             ))}
           </>
         )}

@@ -11,6 +11,8 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listClips, setClipPinned, deleteClip, type Clip } from '../lib/clips';
+import { onClipsChanged } from '../lib/clipsBus';
+import { onDesktopCapture } from '../lib/clipsDesktop';
 import { clipTitle } from './ClipboardTab';
 import { timeAgo } from '../lib/timeAgo';
 import { escapeHtml } from '../lib/richtext';
@@ -54,6 +56,32 @@ export default function ClipPanel() {
       alive = false;
       delete document.documentElement.dataset.chrome;
       if (unlisten) unlisten();
+    };
+  }, [refresh]);
+
+  // Stay live while the panel is OPEN.
+  //
+  // It used to re-read only when it was shown, so a clip captured with Alt+N
+  // — or pulled from the phone by the main window — while the panel was
+  // already on screen simply was not in the list. Two sources, because this
+  // window has no sync engine of its own:
+  //   · clip:captured — Rust fires it the moment Alt+N grabs something
+  //   · the clips bus — the main window announces a merge that moved clips,
+  //     and this window re-reads the IndexedDB they share
+  //
+  // The highlight is left alone: a list that reorders under the arrow keys
+  // while someone is picking is worse than one that is a second stale.
+  useEffect(() => {
+    const offBus = onClipsChanged(() => { refresh(); });
+    let offCapture: (() => void) | null = null;
+    let alive = true;
+    onDesktopCapture(() => refresh()).then((fn) => {
+      if (alive) offCapture = fn; else fn();
+    });
+    return () => {
+      alive = false;
+      offBus();
+      if (offCapture) offCapture();
     };
   }, [refresh]);
 

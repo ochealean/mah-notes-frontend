@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth';
@@ -30,6 +31,10 @@ import DownloadAppModal from './DownloadAppModal';
 import ThemeCustomizer from './ThemeCustomizer';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
+import BundleAvatar from './BundleAvatar';
+import BundleBackground from './BundleBackground';
+import BundleCollection from './BundleCollection';
+import { equippedId, equippedIntensity, getBundle, subscribeBundle } from '../lib/bundles';
 
 // Shown on the collapsed Appearance header so the current choice is readable
 // without opening the section.
@@ -721,6 +726,15 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
   const { updateProfile, setAvatar } = useAuth();
   const [showFriends, setShowFriends] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
+  // The equipped bundle, re-read whenever it changes so the identity row's
+  // decoration and the row's summary update the instant it is equipped —
+  // trying bundles on is the enjoyable part, and a reload would ruin it.
+  const [bundleId, setBundleId] = useState(() => equippedId());
+  const [bundleIntensity, setBundleIntensity] = useState(() => equippedIntensity());
+  useEffect(() => subscribeBundle(() => {
+    setBundleId(equippedId());
+    setBundleIntensity(equippedIntensity());
+  }), []);
   const [inboxCount, setInboxCount] = useState(0);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -822,6 +836,21 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
     }
   }
 
+  // A share card's "Add friend" action lands here as /?tab=settings&friend=…
+  // (see the v-card in Viewer). Open the sheet with the handle already
+  // searched, then strip the param so a refresh does not reopen it.
+  const [params, setParams] = useSearchParams();
+  const friendParam = params.get('friend') || '';
+  const [friendQuery, setFriendQuery] = useState('');
+  useEffect(() => {
+    if (!friendParam) return;
+    setFriendQuery(friendParam);
+    setShowFriends(true);
+    const next = new URLSearchParams(params);
+    next.delete('friend');
+    setParams(next, { replace: true });
+  }, [friendParam]);
+
   // How many items friends have shared with me (badge).
   const refreshInbox = useCallback(async () => {
     if (!user || !getToken()) { setInboxCount(0); return; }
@@ -835,7 +864,11 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
       {/* Account Info — identity is always visible; password, username, and
           Google linking retract behind it (web always; native when signed in). */}
       {user && (
-        <div className="settings-card">
+        <div className="settings-card bnb-host" data-bundle={bundleId} data-intensity={bundleIntensity}>
+          {/* The one place in the app that gets an ambient background, and
+              even here at the calmer daily intensity. Never behind the
+              editor, the note list or the capture panel. */}
+          <BundleBackground bundleId={bundleId} intensity={bundleIntensity} />
           <div className="settings-section-label">Account Info</div>
           <div
             className="settings-user settings-user-toggle"
@@ -862,9 +895,13 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
                 }
               }}
             >
-              {user.avatar
-                ? <img className="settings-avatar" src={user.avatar} alt="" />
-                : <div className="settings-avatar">{initial}</div>}
+              {/* The decoration is pointer-events: none, so it cannot
+                  swallow the click that opens the file picker underneath. */}
+              <BundleAvatar size={46} bundleId={bundleId}>
+                {user.avatar
+                  ? <img className="settings-avatar" src={user.avatar} alt="" />
+                  : <div className="settings-avatar">{initial}</div>}
+              </BundleAvatar>
               <span className="settings-avatar-badge">
                 <i className={`fas ${uploadingPicture ? 'fa-circle-notch fa-spin' : 'fa-camera'}`} />
               </span>
@@ -907,6 +944,12 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
                       they'd actually type to sign in, and it doesn't reveal the
                       backing Gmail/email address at a glance. */}
                   <div className="settings-email">{user?.username ? `@${user.username}` : (user?.email || '')}</div>
+                  {bundleId !== 'nocturne' && (
+                    <div className="settings-bundle-line">
+                      <span className="vc-bundle-dot" />
+                      {getBundle(bundleId).name}
+                    </div>
+                  )}
                 </div>
                 <button className="icon-btn" title="Edit name" style={{ marginLeft: 'auto' }}
                   onClick={(e) => { e.stopPropagation(); startEditName(); }}>
@@ -971,6 +1014,20 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
           </button>
         </div>
       )}
+
+      {/* Bundles get a row of their own rather than a section inside
+          Appearance. Appearance is the three-colour theme editor — the
+          chrome. This is the cosmetics catalogue, and it is the one screen
+          in the app meant to be browsed for pleasure rather than used. */}
+      <div className="settings-card">
+        <button className="settings-row" onClick={() => setOpenGroup('bundles')}>
+          <span><i className="fas fa-meteor" /> Bundles</span>
+          <span className="settings-collapse-right">
+            <span className="settings-collapse-hint">{getBundle(bundleId).name}</span>
+            <i className="fas fa-chevron-right" />
+          </span>
+        </button>
+      </div>
 
       <div className="settings-card">
         <button className="settings-row" onClick={() => setOpenGroup('appearance')}>
@@ -1069,6 +1126,12 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
         </SettingsGroupModal>
       )}
 
+      {openGroup === 'bundles' && (
+        <SettingsGroupModal title="Bundles" icon="fa-meteor" onClose={() => setOpenGroup(null)}>
+          <BundleCollection user={user} />
+        </SettingsGroupModal>
+      )}
+
       {openGroup === 'privacy' && (
         <SettingsGroupModal title="Privacy" icon="fa-lock" onClose={() => setOpenGroup(null)}>
           <div className="settings-sub-label">In this app</div>
@@ -1116,7 +1179,13 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
       {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
       {showDownload && <DownloadAppModal onClose={() => setShowDownload(false)} />}
       {update && <UpdateModal update={update} onClose={() => setUpdate(null)} />}
-      {showFriends && <FriendsModal me={user} onClose={() => setShowFriends(false)} />}
+      {showFriends && (
+        <FriendsModal
+          me={user}
+          initialQuery={friendQuery}
+          onClose={() => { setShowFriends(false); setFriendQuery(''); }}
+        />
+      )}
       {showInbox && (
         <InboxModal
           onClose={() => { setShowInbox(false); refreshInbox(); }}

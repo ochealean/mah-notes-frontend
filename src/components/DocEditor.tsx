@@ -10,6 +10,8 @@ import { rateGate } from '../lib/rateLimit';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
 import { saveDraft, loadDraft, clearDraft } from '../lib/drafts';
 import UnsavedChangesModal from './UnsavedChangesModal';
+import { attachCometCaret } from '../lib/cometCaret';
+import { equippedId } from '../lib/bundles';
 
 export default function DocEditor({ initial, onClose, onSaved }) {
   const editorRef = useRef(null);
@@ -100,6 +102,25 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, schedule, draftTick, dirty]);
+
+  // ── Comet caret ───────────────────────────────────────
+  // The bundle's typing animation: a wake behind the cursor, arriving
+  // characters lit and cooling to ink, deleted ones dissolving into dust.
+  //
+  // It draws in a fixed overlay parented to <body> and never mutates this
+  // element — which is load-bearing, because save() writes
+  // sanitizeHtml(editorRef.current.innerHTML) and any wrapper span the
+  // effect added would be saved into the note and synced everywhere.
+  //
+  // The editor gets the bundle's TOKENS (data-bundle on the sheet below)
+  // and nothing else: no background layer, no ambient motion. Feedback on
+  // the character you just typed is about what you are doing; motion
+  // beside a paragraph you are reading is not.
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return undefined;
+    return attachCometCaret(el);
+  }, []);
 
   // ── DOM helpers (operate on the editor element) ──
   const makeCheckItem = (innerHtml?: string) => {
@@ -373,7 +394,7 @@ export default function DocEditor({ initial, onClose, onSaved }) {
 
   return (
     <>
-    <div className="sheet">
+    <div className="sheet" data-bundle={equippedId()}>
       <div className="sheet-bar">
         <button className="icon-btn" aria-label="Close" onClick={requestClose}><i className="fas fa-arrow-left" /></button>
         <input type="text" className="sheet-title-input" placeholder="Untitled document"

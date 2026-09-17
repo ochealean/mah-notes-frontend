@@ -1,0 +1,1545 @@
+/* ============================================================
+   Cosmetic bundles — Galaxy.
+
+   Every rule here is scoped under [data-bundle="…"] on a SURFACE, never
+   on <html>. That is what lets a shared page render the sender's bundle
+   while the reader's own app chrome stays exactly as they built it, and
+   it is why the app's ink/paper/accent tokens still own every surface
+   and all text colour. A bundle is an accent layer, not a theme.
+
+   Motion budget: transform and opacity only. Nothing here animates a
+   property that triggers layout, and the one blurred layer (the nebula)
+   is small-and-scaled rather than large-and-blurred.
+
+   The single motion switch is --bundle-motion-scale. Every duration is
+   calc(var(--bundle-motion-scale) * Ns), so a scale of 0 resolves every
+   duration to 0s — the animation stops applying and the element renders
+   its BASE styles. Those base styles are therefore authored as the
+   poster frame, deliberately composed, for reduced motion and for the
+   "off" intensity. A bundle that is only good in motion is not finished.
+   ============================================================ */
+
+/* ═══════════ 1 · TOKEN CONTRACT ═══════════
+   Bundles set variables. Components read variables. No bundle names a
+   component and no component names a bundle. */
+
+[data-bundle] {
+    --bundle-motion-scale: 1;
+    --bundle-accent: var(--accent);
+    --bundle-accent-soft: var(--accent-600);
+    --bundle-glow: transparent;
+    --bundle-spark: var(--accent);
+    --bundle-ember: var(--accent);
+    --bundle-core: var(--paper-2);
+    --bundle-void: var(--paper);
+    --bundle-dust: var(--ink-24);
+    --bundle-surface-tint: transparent;
+    --bundle-ring-width: 0px;
+}
+
+/* Nocturne: the app undecorated. Its tokens point at the theme's own
+   accent, so equipping it is genuinely "off" rather than a second look
+   to keep alive. Unknown ids land here too (see getBundle). */
+[data-bundle="nocturne"] {
+    --bundle-ring-width: 0px;
+}
+
+/* Galaxy's own palette, written for a DARK ground: light dust, a hot
+   white-blue core, a cyan secondary, an amber sun. */
+[data-bundle="galaxy"] {
+    --bundle-accent: #7b5cff;
+    --bundle-accent-soft: #b9a6ff;
+    --bundle-glow: rgba(123, 92, 255, .42);
+    --bundle-spark: #46d8ff;
+    --bundle-ember: #ffb347;
+    --bundle-core: #eaf2ff;
+    --bundle-void: #0b0a16;
+    --bundle-dust: rgba(207, 228, 255, .55);
+    --bundle-surface-tint: rgba(123, 92, 255, .07);
+    --bundle-ring-width: 2px;
+}
+
+/* On a LIGHT ground the same palette disappears — near-white dust on
+   near-white paper is not a subtle decoration, it is an absent one.
+   Rather than lighten the ground to suit the bundle (a bundle must never
+   take over a surface the theme owns), Galaxy inverts its own light
+   sources: the galaxy drawn in INK instead of lit against the dark.
+   That is also the more Mah Notes answer of the two — this app's world is
+   paper and ink before it is anything else.
+
+   [data-theme] is stamped on <html> by the app from the paper colour, so
+   a custom theme built light gets this automatically. */
+:root[data-theme="light"] [data-bundle="galaxy"] {
+    --bundle-accent: #5b3fd9;
+    --bundle-accent-soft: #7b5cff;
+    --bundle-glow: rgba(91, 63, 217, .28);
+    --bundle-spark: #0f83a8;
+    --bundle-ember: #c2761a;
+    --bundle-core: #2e2470;
+    --bundle-dust: rgba(46, 36, 112, .38);
+    --bundle-surface-tint: rgba(91, 63, 217, .06);
+}
+
+/* The intro is its own dark field whatever the app's theme is, so it keeps
+   the lit palette. Without this it would inherit the ink one above and
+   draw a dark galaxy on a dark sky. */
+.intro[data-bundle="galaxy"],
+:root[data-theme="light"] .intro[data-bundle="galaxy"] {
+    --bundle-accent: #7b5cff;
+    --bundle-accent-soft: #b9a6ff;
+    --bundle-glow: rgba(123, 92, 255, .42);
+    --bundle-spark: #46d8ff;
+    --bundle-ember: #ffb347;
+    --bundle-core: #eaf2ff;
+    --bundle-dust: rgba(207, 228, 255, .55);
+}
+
+/* Reduced motion is a first-class state, not a disable switch. What
+   remains is each bundle's poster frame, and it has to be the composition
+   that was designed — a bundle whose reduced-motion state is an empty
+   circle has failed the people who need reduced motion most.
+
+   Two declarations, because app.css already carries a blanket
+   `* { animation-duration: .01ms !important }` in its own reduced-motion
+   block. That override wins over any calc() here, and .01ms does not mean
+   "do not animate": it means "finish instantly", landing every layer on
+   its END keyframe. For the nebula that is a drifted, scaled-up state
+   rather than the still we composed.
+
+   So: the scale still zeroes every amplitude INSIDE the keyframes, and
+   `animation: none` (matching !important, which is the only thing that
+   beats a blanket !important) stops the continuous layers at their base
+   styles — which are authored as the poster frame. */
+@media (prefers-reduced-motion: reduce) {
+    [data-bundle] { --bundle-motion-scale: 0; }
+
+    .bd-ring, .bd-orbit, .bd-system, .bd-sys-orbit,
+    .bd-aurora, .bd-arc, .bd-corona, .bd-twinkle,
+    .bnb-field, .bnb-stars, .bnb-comet {
+        animation: none !important;
+    }
+    /* The twinkles' and the corona's base styles are their DIMMEST
+       keyframe, which would leave the still looking under-lit. Hold both
+       near full instead - the poster frame has to be the composition that
+       was designed, not the moment the animation happens to start at. */
+    .bd-twinkle { opacity: .9; }
+    .bd-corona { opacity: .85; }
+
+    /* The intro keeps its entrance and its exit, slowed and simplified —
+       the same reason: someone who asked for less motion should get a
+       calmer front door, not a single frame of dark and then nothing. */
+    .intro {
+        animation: introOut 420ms ease 900ms forwards !important;
+    }
+    .intro-ring, .intro-dust, .intro-orbit,
+    .intro-mark, .intro-word, .intro-sub, .intro-skip {
+        animation: fadeIn 320ms ease both !important;
+    }
+}
+
+/* The in-app control. The system preference is a starting default, not
+   the whole answer — people set it once and forget. */
+[data-bundle][data-intensity="off"] { --bundle-motion-scale: 0; }
+
+/* Motion stops when unwatched. A notes app sits open behind other windows
+   all day; animating there is pure waste and warms the device. Installed by
+   installBundleMotion() in lib/bundles.ts.
+
+   Named layers, NOT a blanket `[data-bundle] *`.
+   The blanket version paused ENTRANCE animations as well as idle loops,
+   and those entrances are what make their elements visible — they start at
+   opacity 0. A share link opened in a background tab (a middle-click, or
+   anything that opens behind) is hidden at load, so the pause class is on
+   before the card's entrance has run, and it froze at the first keyframe:
+   a reader switching to that tab found an empty card.
+
+   Pausing is for things that loop forever. A 520ms entrance should simply
+   be allowed to finish. */
+.motion-paused .bd-ring,
+.motion-paused .bd-orbit,
+.motion-paused .bd-system,
+.motion-paused .bd-sys-orbit,
+.motion-paused .bd-aurora,
+.motion-paused .bd-arc,
+.motion-paused .bd-corona,
+.motion-paused .bd-twinkle,
+.motion-paused .bnb-field,
+.motion-paused .bnb-stars,
+.motion-paused .bnb-comet,
+.motion-paused .intro-dust,
+.motion-paused .intro-orbit {
+    animation-play-state: paused !important;
+}
+
+/* ═══════════ 2 · AVATAR DECORATION ═══════════
+   Geometry that keeps a decoration out of the layout's way and off the
+   person's face.
+
+   .bav is sized by the avatar it wraps — no width of its own — so it can
+   never disagree with the component's sizing. The canvas comes from
+   percentage insets on .bd, which resolve against that:
+
+     .bd          inset -12.5%  → 1.25× the avatar, the standard canvas
+     .bd-rim      inset  9%     → ~1.14×, hugging the edge
+     .bd-ring     inset  0      → the dust band at the canvas edge
+     .bd-system   inset -12%    → ~1.55×, the only layer allowed outside
+                                  the canvas, and only at the full tier
+                                  where the surface is built for it
+
+   The face: the rim's inner edge is already outside the avatar, so the
+   centre 70% is clear at every size. Nothing expands on hover, so a
+   decoration never shifts its neighbours. */
+
+.bav {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+}
+
+/* A stacking context of its own - this is load-bearing, not tidiness.
+   The layers inside carry z-index 1..7, and .bd used to be a positioned
+   element with `z-index: auto`, which creates NO context: those indices
+   escaped and competed with .bd's own siblings. The visible result was the
+   camera badge on the settings avatar painting UNDERNEATH the decoration,
+   because an orbiting body at z-index 7 outranks a badge at auto.
+   Isolating them keeps the stack a private matter of the decoration, so the
+   camera, presence and sync indicators - which are functional, and always
+   win - sit above it as ordinary later siblings. */
+.bd {
+    position: absolute;
+    inset: -12.5%;
+    pointer-events: none;
+    border-radius: 50%;
+    z-index: 0;
+    isolation: isolate;
+}
+
+/* Every tier gets the rim. At 24px it is the WHOLE decoration: detail
+   down there is invisible and costs exactly the same to compute. */
+/* The glow scales with the avatar. A flat 10px halo is atmosphere at
+   112px and a purple smudge at 24px, where the halo was wider than the
+   face it was meant to frame. */
+.bd-rim {
+    position: absolute;
+    inset: 9%;
+    border-radius: 50%;
+    box-shadow:
+        inset 0 0 0 var(--bundle-ring-width) var(--bundle-accent),
+        0 0 calc(var(--avatar-size, 48px) * .16) var(--bundle-glow);
+}
+
+/* The rim is a hairline on a chip and a real stroke on a hero. */
+.bav[data-tier="ring"] { --bundle-ring-width: 1.5px; }
+.bav[data-tier="full"] { --bundle-ring-width: 2.5px; }
+
+/* -- The corona --
+   The outermost thing, and the reason the decoration reads as a body with
+   an atmosphere rather than a circle with a stroke. It breathes on a 7s
+   cycle: slow enough to be atmosphere, far under the three-per-second
+   luminance floor, and confined to a small area. */
+.bd-corona {
+    position: absolute;
+    inset: 6%;
+    border-radius: 50%;
+    box-shadow:
+        0 0 calc(var(--avatar-size, 48px) * .30) calc(var(--avatar-size, 48px) * .05) var(--bundle-glow),
+        inset 0 0 calc(var(--avatar-size, 48px) * .10) var(--bundle-glow);
+    animation: bdBreathe calc(var(--bundle-motion-scale) * 7s) ease-in-out infinite alternate;
+    will-change: transform, opacity;
+}
+
+@keyframes bdBreathe {
+    from { opacity: .55; transform: scale(1); }
+    to   { opacity: 1;   transform: scale(1.05); }
+}
+
+/* -- The aurora --
+   A band of actual COLOUR turning behind the rim: accent into cyan, a gap,
+   then ember into violet. A flat single-colour stroke was the whole reason
+   the decoration read as plain - one hue, one weight, no depth. This is
+   what makes the edge look like it is made of light. */
+.bd-aurora {
+    position: absolute;
+    inset: -2%;
+    border-radius: 50%;
+    opacity: .85;
+    filter: blur(1.5px);
+    background: conic-gradient(from 0deg,
+        transparent 0deg,
+        var(--bundle-accent) 38deg,
+        var(--bundle-spark) 104deg,
+        transparent 156deg,
+        var(--bundle-ember) 212deg,
+        var(--bundle-accent-soft) 268deg,
+        transparent 322deg,
+        transparent 360deg);
+    -webkit-mask: radial-gradient(circle, transparent 0 71%, #000 78% 91%, transparent 98%);
+    mask: radial-gradient(circle, transparent 0 71%, #000 78% 91%, transparent 98%);
+    animation: bdRing calc(var(--bundle-motion-scale) * 30s) linear infinite;
+    will-change: transform;
+}
+
+/* -- The accretion arc --
+   One bright, short sweep running the rim much faster than everything
+   else. It is the element that makes the whole thing feel alive rather
+   than merely rotating: the eye catches it, then finds the slower
+   structure underneath. */
+.bd-arc {
+    position: absolute;
+    inset: 5%;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg,
+        var(--bundle-core) 0deg, var(--bundle-spark) 14deg, transparent 38deg);
+    -webkit-mask: radial-gradient(circle, transparent 0 83%, #000 88% 97%, transparent 100%);
+    mask: radial-gradient(circle, transparent 0 83%, #000 88% 97%, transparent 100%);
+    animation: bdRing calc(var(--bundle-motion-scale) * 9s) linear infinite;
+    will-change: transform;
+}
+
+/* -- Twinkles --
+   Two layers rather than a handful of elements: each is one box painting
+   three tiny radial-gradient dots out in the ring band, and the two run on
+   different periods so the field never blinks in unison. Six stars for the
+   cost of two elements and no extra nodes per star. */
+.bd-twinkle {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    animation: bdTwinkle calc(var(--bundle-motion-scale) * var(--bt-dur, 5.5s)) ease-in-out infinite alternate;
+}
+
+.bd-twinkle.a {
+    background-image:
+        radial-gradient(circle at 80% 21%, var(--bundle-core) 0 1.4px, transparent 2px),
+        radial-gradient(circle at 17% 71%, var(--bundle-spark) 0 1.1px, transparent 1.7px),
+        radial-gradient(circle at 63% 93%, var(--bundle-core) 0 1px, transparent 1.6px);
+}
+
+.bd-twinkle.b {
+    --bt-dur: 8.5s;
+    background-image:
+        radial-gradient(circle at 24% 17%, var(--bundle-accent-soft) 0 1.2px, transparent 1.8px),
+        radial-gradient(circle at 93% 58%, var(--bundle-core) 0 1.5px, transparent 2.1px),
+        radial-gradient(circle at 46% 4%, var(--bundle-spark) 0 1px, transparent 1.5px);
+}
+
+@keyframes bdTwinkle {
+    from { opacity: .25; }
+    to   { opacity: 1; }
+}
+
+/* ── The dust ring ──
+   Irregular conic stops rather than an even dash pattern: evenly spaced
+   ticks read as a loading spinner, uneven ones read as debris. Masked to
+   an annulus, rotated as a single transform. One animated element. */
+.bd-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    opacity: .95;
+    /* Wider slivers and a wider band than the first pass: at 40px the old
+       1.2deg ticks inside a 16%-wide band rounded away to nothing. */
+    background: repeating-conic-gradient(from 0deg,
+        var(--bundle-dust) 0 2.6deg, transparent 2.6deg 6.1deg,
+        var(--bundle-dust) 6.1deg 7.4deg, transparent 7.4deg 13.2deg,
+        var(--bundle-dust) 13.2deg 14.3deg, transparent 14.3deg 17.1deg,
+        var(--bundle-dust) 17.1deg 19.8deg, transparent 19.8deg 26.5deg);
+    -webkit-mask: radial-gradient(circle, transparent 0 68%, #000 73% 95%, transparent 100%);
+    mask: radial-gradient(circle, transparent 0 68%, #000 73% 95%, transparent 100%);
+    animation: bdRing calc(var(--bundle-motion-scale) * 96s) linear infinite;
+    will-change: transform;
+}
+
+@keyframes bdRing { to { transform: rotate(360deg); } }
+
+/* ── Orbiting bodies ──
+   One rotating box per body. The body sits at the top of its box, so
+   rotating the box carries it round; the motes trail it along the same
+   radius, which is why a plain negative x offset reads as a wake.
+
+   Sizes and mote counts are authored irregular (see BundleDecoration):
+   a set of identical bodies at even spacing looks like a progress ring. */
+/* --bd-start is what makes the POSTER FRAME composed.
+   Without it every body sits at the top of its own circle when still, so
+   the stopped decoration is four dots piled at twelve o'clock with their
+   motes trailing off to the left — which is exactly the failure of a
+   bundle that is only good in motion. Each body gets an authored angle
+   instead, and the keyframes rotate a full turn FROM that angle, so the
+   still and the motion agree with each other. */
+.bd-orbit {
+    position: absolute;
+    inset: var(--bd-in, 0%);
+    border-radius: 50%;
+    transform: rotate(var(--bd-start, 0deg));
+    animation: bdOrbit calc(var(--bundle-motion-scale) * var(--bd-dur, 20s)) linear infinite;
+    animation-direction: var(--bd-dir, normal);
+    will-change: transform;
+}
+
+@keyframes bdOrbit {
+    from { transform: rotate(var(--bd-start, 0deg)); }
+    to   { transform: rotate(calc(var(--bd-start, 0deg) + 360deg)); }
+}
+
+.bd-body,
+.bd-mote {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    border-radius: 50%;
+    background: var(--bd-col, var(--bundle-core));
+}
+
+.bd-body {
+    width: var(--bd-sz, 6px);
+    height: var(--bd-sz, 6px);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 calc(var(--bd-sz, 6px) * 1.4) var(--bundle-glow);
+}
+
+/* Motes are the dust the body drags behind it. Each one is placed a
+   little further back along the orbit and a little fainter. */
+.bd-mote {
+    width: var(--bd-msz, 2px);
+    height: var(--bd-msz, 2px);
+    opacity: var(--bd-mo, .4);
+    transform: translate(calc(-50% - var(--bd-md, 6px)), -50%);
+}
+
+/* ── The solar system behind the rim ──
+   Several bodies, one sun, one shared centre: the clipboard-sync feature
+   with the wires taken out. It sits BEHIND the rim and the dust ring, at
+   low opacity, and only at the full tier. The whole layer drifts on a
+   long cycle so the arrangement never looks pinned. */
+/* Small, distant, and entirely INSIDE the canvas.
+   The first pass put this at inset -12% with orbits up to 74% wide, which
+   made it a second large structure rather than a distant one: at 112px it
+   reached across the name beneath the share card's avatar and into the
+   next avatar along in a row. A thing drifting behind the rim has to read
+   as far away, and staying inside the 1.25× canvas is also what keeps a
+   decoration from overlapping its neighbours. */
+.bd-system {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    z-index: 0;
+    opacity: .95;
+    animation: bdDrift calc(var(--bundle-motion-scale) * 64s) ease-in-out infinite alternate;
+    will-change: transform;
+}
+
+/* The planets carry the same translate as their base transform, so the
+   keyframes have to restate it — a transform is replaced wholesale, not
+   composed. */
+@keyframes bdPlanet {
+    from { transform: translate(-50%, 50%) rotate(var(--bd-start, 0deg)); }
+    to   { transform: translate(-50%, 50%) rotate(calc(var(--bd-start, 0deg) + 360deg)); }
+}
+
+@keyframes bdDrift {
+    from { transform: translate3d(0, 0, 0) rotate(0deg); }
+    to   { transform: translate3d(calc(var(--bundle-motion-scale) * 3%),
+                                  calc(var(--bundle-motion-scale) * -2%), 0)
+                      rotate(calc(var(--bundle-motion-scale) * 10deg)); }
+}
+
+/* The sun sits off-centre, low and left, so the composition has a
+   direction. Its light is what tints the dust on that side. */
+.bd-sun {
+    position: absolute;
+    left: 16%;
+    bottom: 18%;
+    width: var(--bd-sun-sz, 9px);
+    height: var(--bd-sun-sz, 9px);
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 34%, var(--bundle-core), var(--bundle-ember) 55%, transparent 80%);
+    transform: translate(-50%, 50%);
+    box-shadow: 0 0 calc(var(--avatar-size, 48px) * .14) var(--bundle-ember);
+}
+
+/* Each planet's box is CENTRED ON THE SUN, so rotating it sweeps the
+   planet round the sun rather than round the avatar. */
+.bd-sys-orbit {
+    position: absolute;
+    left: 16%;
+    bottom: 18%;
+    width: var(--bd-pr, 24%);
+    height: var(--bd-pr, 24%);
+    margin: 0;
+    transform: translate(-50%, 50%);
+    border-radius: 50%;
+    /* The paths are a hint, not a diagram. At full strength they read as
+       structural rings and the eye follows them instead of the planets. */
+    box-shadow: inset 0 0 0 1px var(--bundle-dust);
+    opacity: .3;
+    transform: translate(-50%, 50%) rotate(var(--bd-start, 0deg));
+    animation: bdPlanet calc(var(--bundle-motion-scale) * var(--bd-pdur, 30s)) linear infinite;
+    will-change: transform;
+}
+
+.bd-planet {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: var(--bd-psz, 4px);
+    height: var(--bd-psz, 4px);
+    border-radius: 50%;
+    background: var(--bd-col, var(--bundle-accent-soft));
+    transform: translate(-50%, -50%);
+}
+
+/* Stacking, bottom to top: the system, the dust ring, the rim, the
+   orbiting bodies. The avatar image is below all of it and the presence
+   dot above — the status indicator is functional and always wins. */
+/* Bottom to top: atmosphere, the distant system, the colour band, the
+   debris, the bright sweep, the crisp edge, the stars, then the captured
+   bodies nearest the viewer. All of it inside .bd's own stacking context. */
+.bd-corona  { z-index: 0; }
+.bd-system  { z-index: 1; }
+.bd-aurora  { z-index: 2; }
+.bd-ring    { z-index: 3; }
+.bd-arc     { z-index: 4; }
+.bd-rim     { z-index: 5; }
+.bd-twinkle { z-index: 6; }
+.bd-orbit   { z-index: 7; }
+
+/* Degrade by size. The tier is decided in JS (tierFor) and the element
+   count follows it; these rules are the belt to that braces, so a wrong
+   tier can never put a nine-element system on a 24px chip. */
+/* 24px keeps the rim, the aurora and the corona - colour and glow survive
+   at any size, where detail does not - and drops everything that would be
+   a sub-pixel smudge down there. */
+.bav[data-tier="ring"] .bd-ring,
+.bav[data-tier="ring"] .bd-orbit,
+.bav[data-tier="ring"] .bd-arc,
+.bav[data-tier="ring"] .bd-twinkle,
+.bav[data-tier="ring"] .bd-system { display: none; }
+
+.bav[data-tier="simple"] .bd-system,
+.bav[data-tier="simple"] .bd-twinkle { display: none; }
+.bav[data-tier="simple"] .bd-ring { opacity: .7; }
+.bav[data-tier="simple"] .bd-arc { opacity: .75; }
+
+/* Android's WebView composites transforms well and paints blur badly, and
+   a mid-range phone is the device most people actually hold. Halve the
+   moving parts there rather than shipping something that looks fine on a
+   development machine. */
+[data-bundle-perf="low"] .bav[data-tier="full"] .bd-orbit:nth-of-type(n + 3),
+[data-bundle-perf="low"] .bd-sys-orbit:nth-of-type(n + 3),
+[data-bundle-perf="low"] .bd-twinkle.b { display: none; }
+/* The blur is the expensive half of the aurora, not the gradient. Keep the
+   colour, drop the blur, and stop the corona breathing. */
+[data-bundle-perf="low"] .bd-aurora { filter: none; }
+[data-bundle-perf="low"] .bd-corona { animation: none; opacity: .8; }
+
+/* ═══════════ 3 · BACKGROUND LAYER ═══════════
+   Allowed on: the profile panel, the collection screen, the share page.
+   Never on the editor, the note list, the capture panel or settings rows
+   — text and ambient motion do not share space.
+
+   contain: strict, so nothing inside can reach the rest of the page, and
+   so the browser can skip it entirely when it is off screen. */
+
+.bnb {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    contain: strict;
+    pointer-events: none;
+}
+
+/* Blur a SMALL element and scale it up, rather than blurring a large
+   one: same look, a fraction of the paint cost. */
+.bnb-field {
+    position: absolute;
+    width: 46%;
+    height: 46%;
+    border-radius: 50%;
+    filter: blur(26px);
+    will-change: transform;
+}
+
+.bnb-f1 {
+    left: -8%;
+    top: -14%;
+    background: radial-gradient(circle at 40% 38%, var(--bundle-accent), transparent 66%);
+    opacity: .5;
+    transform: scale(1.9);
+    animation: bnbDrift1 calc(var(--bundle-motion-scale) * 38s) ease-in-out infinite alternate;
+}
+
+.bnb-f2 {
+    right: -12%;
+    bottom: -18%;
+    background: radial-gradient(circle at 56% 52%, var(--bundle-spark), transparent 64%);
+    opacity: .34;
+    transform: scale(2.2);
+    animation: bnbDrift2 calc(var(--bundle-motion-scale) * 56s) ease-in-out infinite alternate;
+}
+
+/* Long, offset cycles that never resynchronise. Anything under ~20s
+   registers as movement rather than atmosphere and is tiring in minutes. */
+@keyframes bnbDrift1 {
+    from { transform: translate3d(0, 0, 0) scale(1.9); }
+    to   { transform: translate3d(14%, 10%, 0) scale(2.25); }
+}
+@keyframes bnbDrift2 {
+    from { transform: translate3d(0, 0, 0) scale(2.2); }
+    to   { transform: translate3d(-11%, -8%, 0) scale(1.85); }
+}
+
+/* A third field, warm, low and slow. Two blobs read as two blobs; an odd
+   number with no shared rhythm reads as cloud. */
+.bnb-f3 {
+    left: 34%;
+    bottom: -22%;
+    background: radial-gradient(circle at 48% 44%, var(--bundle-ember), transparent 62%);
+    opacity: .22;
+    transform: scale(1.7);
+    animation: bnbDrift3 calc(var(--bundle-motion-scale) * 71s) ease-in-out infinite alternate;
+}
+
+@keyframes bnbDrift3 {
+    from { transform: translate3d(0, 0, 0) scale(1.7); }
+    to   { transform: translate3d(9%, -12%, 0) scale(2.05); }
+}
+
+/* The starfield is BAKED, not animated: three tiled radial-gradients
+   painted once. Animating noise per frame is the single most expensive
+   thing a decoration can do. */
+/* Two starfields, different densities, drifting at different rates. The
+   parallax between them is what turns a flat wash into depth; a single
+   layer reads as wallpaper however many dots are in it.
+
+   Both are BAKED tiled gradients that only ever translate. Animating
+   turbulence or regenerating noise per frame is the single most expensive
+   thing a decoration can do, and it buys nothing here. */
+.bnb-stars {
+    position: absolute;
+    inset: -20%;
+    will-change: transform;
+}
+
+.bnb-stars-far {
+    opacity: .38;
+    background-image:
+        radial-gradient(1px 1px at 18% 24%, var(--bundle-core), transparent 100%),
+        radial-gradient(1px 1px at 67% 12%, var(--bundle-dust), transparent 100%),
+        radial-gradient(1px 1px at 41% 71%, var(--bundle-core), transparent 100%),
+        radial-gradient(1px 1px at 84% 58%, var(--bundle-dust), transparent 100%),
+        radial-gradient(1px 1px at 9% 83%, var(--bundle-core), transparent 100%),
+        radial-gradient(1px 1px at 55% 37%, var(--bundle-dust), transparent 100%);
+    background-size: 110px 110px, 90px 90px, 130px 130px, 100px 100px, 120px 120px, 85px 85px;
+    animation: bnbStarsFar calc(var(--bundle-motion-scale) * 120s) linear infinite alternate;
+}
+
+.bnb-stars-near {
+    opacity: .6;
+    background-image:
+        radial-gradient(1.8px 1.8px at 28% 16%, var(--bundle-core), transparent 100%),
+        radial-gradient(2.2px 2.2px at 74% 66%, var(--bundle-spark), transparent 100%),
+        radial-gradient(1.6px 1.6px at 52% 88%, var(--bundle-core), transparent 100%),
+        radial-gradient(1.4px 1.4px at 91% 31%, var(--bundle-accent-soft), transparent 100%);
+    background-size: 260px 260px, 320px 320px, 290px 290px, 240px 240px;
+    animation: bnbStarsNear calc(var(--bundle-motion-scale) * 78s) linear infinite alternate;
+}
+
+@keyframes bnbStarsFar {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(2.5%, 1.6%, 0); }
+}
+@keyframes bnbStarsNear {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(-5%, -3.4%, 0); }
+}
+
+/* Streaks. Each crosses in about a sixth of its cycle and then waits out
+   the rest, so they land as something you happened to catch rather than a
+   loop you start anticipating. Transform and opacity only; the tail is a
+   static gradient carried along by the head. */
+.bnb-comet {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--bundle-core);
+    box-shadow: 0 0 8px var(--bundle-core);
+    opacity: 0;
+    will-change: transform, opacity;
+}
+
+.bnb-comet::after {
+    content: '';
+    position: absolute;
+    right: 2px;
+    top: 1px;
+    width: 74px;
+    height: 1px;
+    background: linear-gradient(to left, var(--bundle-core), transparent);
+    opacity: .7;
+}
+
+.bnb-c1 {
+    left: -8%; top: 12%;
+    --bc-x: 128%; --bc-y: 62%;
+    animation: bnbComet calc(var(--bundle-motion-scale) * 19s) linear infinite;
+}
+
+.bnb-c2 {
+    left: -8%; top: 58%;
+    --bc-x: 122%; --bc-y: -36%;
+    --bc-tilt: -18deg;
+    animation: bnbComet calc(var(--bundle-motion-scale) * 27s) linear 7s infinite;
+}
+
+@keyframes bnbComet {
+    0%   { opacity: 0; transform: translate3d(0, 0, 0) rotate(var(--bc-tilt, 26deg)); }
+    3%   { opacity: .85; }
+    15%  { opacity: 0; transform: translate3d(var(--bc-x, 120%), var(--bc-y, 60%), 0) rotate(var(--bc-tilt, 26deg)); }
+    100% { opacity: 0; transform: translate3d(var(--bc-x, 120%), var(--bc-y, 60%), 0) rotate(var(--bc-tilt, 26deg)); }
+}
+
+/* Contrast protection is part of the background, not an afterthought.
+   The scrim is the PAPER colour, so it works in any theme the user has
+   built and holds text contrast at every frame of the drift — not just
+   at the poster frame. */
+.bnb-scrim {
+    position: absolute;
+    inset: 0;
+    background: var(--paper);
+    opacity: .46;
+}
+
+/* Intensity is the user's setting, defaulting to subtle: people choose a
+   bundle for how it looks in the collection, then want it calmer all day. */
+/* The ladder had to move. At .26 opacity under a .58 scrim, "subtle" was
+   not calm — it was invisible, which is why the background read as missing
+   rather than as understated. Subtle now means "clearly there, quietly":
+   about two thirds of full, with the scrim backed off to match. The
+   contrast guarantee is unchanged, because the scrim still sits between
+   the fields and every piece of text. */
+[data-intensity="subtle"] .bnb-field { opacity: .4; }
+[data-intensity="subtle"] .bnb-f2 { opacity: .3; }
+[data-intensity="subtle"] .bnb-f3 { opacity: .18; }
+[data-intensity="subtle"] .bnb-stars-far { opacity: .3; }
+[data-intensity="subtle"] .bnb-stars-near { opacity: .45; }
+[data-intensity="subtle"] .bnb-scrim { opacity: .42; }
+[data-intensity="subtle"] .bnb-comet { opacity: 0; animation-duration: calc(var(--bundle-motion-scale) * 34s); }
+
+[data-intensity="off"] .bnb-field,
+[data-intensity="off"] .bnb-comet,
+[data-intensity="off"] .bnb-stars { display: none; }
+
+/* Android: keep the composition, drop the moving blur. A static poster
+   frame is a legitimate answer on a platform, not a failure. */
+[data-bundle-perf="low"] .bnb-field { animation: none; filter: blur(18px); }
+[data-bundle-perf="low"] .bnb-comet,
+[data-bundle-perf="low"] .bnb-stars-far { animation: none; }
+
+/* Any surface carrying a background needs a stacking context and its
+   content lifted above the layer. */
+.bnb-host { position: relative; }
+.bnb-host > *:not(.bnb) { position: relative; z-index: 1; }
+
+/* ═══════════ 4 · SUPERNOVA — the click ═══════════
+   A bright core flashes and a ring of light with heavier particles
+   expands past the button's border.
+
+   Injected by installSupernova() as one throwaway span, removed on
+   animationend. It is pointer-events: none and never a child of anything
+   whose innerHTML is read back, so it cannot reach a note or a form.
+
+   Scoped to bundle surfaces. The app's own chrome keeps its plain
+   buttons: the capture path is sacred, and a flourish on every button in
+   the product is how a charming effect becomes a browser toolbar. */
+
+.nova {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 4;
+}
+
+.nova-core,
+.nova-ring {
+    position: absolute;
+    left: 0;
+    top: 0;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.nova-core {
+    width: 46px;
+    height: 46px;
+    background: radial-gradient(circle, var(--bundle-core) 0 22%, var(--bundle-accent-soft) 46%, transparent 72%);
+    animation: novaCore 220ms cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+.nova-ring {
+    width: 34px;
+    height: 34px;
+    border: 2px solid var(--bundle-accent-soft);
+    box-shadow: 0 0 16px var(--bundle-glow), inset 0 0 10px var(--bundle-glow);
+    animation: novaRing 560ms cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+/* A second, wider ring a beat later: one ring reads as a ripple, two
+   read as a shockwave, which is what a supernova is. */
+.nova-ring.late {
+    animation-delay: 90ms;
+    border-color: var(--bundle-spark);
+    opacity: .7;
+}
+
+.nova-p {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: var(--np-sz, 3px);
+    height: var(--np-sz, 3px);
+    border-radius: 50%;
+    background: var(--np-col, var(--bundle-core));
+    box-shadow: 0 0 6px var(--bundle-glow);
+    transform: rotate(var(--np-a, 0deg)) translateY(0) scale(1);
+    animation: novaP var(--np-dur, 620ms) cubic-bezier(.16, .84, .3, 1) forwards;
+}
+
+@keyframes novaCore {
+    from { opacity: 1;  transform: translate(-50%, -50%) scale(.2); }
+    to   { opacity: 0;  transform: translate(-50%, -50%) scale(1.7); }
+}
+
+@keyframes novaRing {
+    from { opacity: .95; transform: translate(-50%, -50%) scale(.3); }
+    to   { opacity: 0;   transform: translate(-50%, -50%) scale(3.4); }
+}
+
+@keyframes novaP {
+    from { opacity: 1; transform: rotate(var(--np-a, 0deg)) translateY(0) scale(1); }
+    to   { opacity: 0; transform: rotate(var(--np-a, 0deg)) translateY(calc(-1 * var(--np-d, 44px))) scale(.3); }
+}
+
+/* ═══════════ 5 · COMET CARET — typing ═══════════
+   Three effects, none of which touch the document.
+
+   This matters more than it sounds: the editor saves
+   sanitizeHtml(editor.innerHTML), so a per-character <span> wrapper
+   would end up INSIDE saved notes, fight the caret and the undo stack,
+   and change what syncs to other devices. Every effect below is drawn in
+   a fixed overlay that is a sibling of nothing and a child of <body>, so
+   the note content is bit-for-bit what the user typed.
+
+     · the caret trail — one element that TRANSITIONS between caret
+       positions, so the streak is the transition itself
+     · arriving characters — a lit ghost glyph over the real character,
+       cooling to transparent while the ink underneath is already normal
+     · deleted characters — the glyph dissolving into drifting dust */
+
+.comet-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 820;          /* above the editor sheet, below every modal */
+    pointer-events: none;
+    contain: strict;
+}
+
+/* left/top pinned to 0 so the caret's transform is read as plain viewport
+   coordinates. Without them a fixed element with auto offsets sits at its
+   STATIC position, which would silently shift the moment the layer gained
+   another child before it. */
+.comet-caret {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 2px;
+    background: var(--bundle-core);
+    box-shadow: 0 0 8px var(--bundle-glow), 0 0 2px var(--bundle-accent-soft);
+    opacity: .9;
+    /* The trail IS this transition. Easing out means the streak stretches
+       as the caret leaves and settles as it arrives. */
+    transition: transform 130ms cubic-bezier(.22, 1, .36, 1),
+                height 130ms ease,
+                opacity 180ms ease;
+    will-change: transform;
+}
+
+/* The wake: a short horizontal smear behind the caret, pointing back
+   along the direction of travel. */
+.comet-caret::before {
+    content: '';
+    position: absolute;
+    right: 1px;
+    top: 12%;
+    height: 76%;
+    width: var(--comet-trail, 0px);
+    background: linear-gradient(to left, var(--bundle-accent-soft), transparent);
+    opacity: .55;
+    filter: blur(1.5px);
+    transition: width 200ms ease-out, opacity 240ms ease-out;
+}
+
+/* New characters arrive lit, then cool to normal ink over ~400ms. The
+   real character is already normal ink underneath; this is the heat
+   leaving it. */
+.comet-glyph {
+    position: fixed;
+    white-space: pre;
+    color: var(--bundle-core);
+    text-shadow: 0 0 9px var(--bundle-glow), 0 0 3px var(--bundle-accent-soft);
+    animation: cometCool 400ms ease-out forwards;
+}
+
+@keyframes cometCool {
+    from { opacity: 1; }
+    60%  { opacity: .45; }
+    to   { opacity: 0; }
+}
+
+/* Deleting dissolves the character into drifting dust that falls away. */
+.comet-ghost {
+    position: fixed;
+    white-space: pre;
+    color: var(--bundle-accent-soft);
+    animation: cometDissolve 420ms ease-in forwards;
+}
+
+@keyframes cometDissolve {
+    from { opacity: .85; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); }
+    to   { opacity: 0;   transform: translate3d(0, 5px, 0) scale(.72); filter: blur(2px); }
+}
+
+.comet-speck {
+    position: fixed;
+    width: var(--cs-sz, 2px);
+    height: var(--cs-sz, 2px);
+    border-radius: 50%;
+    background: var(--bundle-dust);
+    animation: cometFall var(--cs-dur, 620ms) cubic-bezier(.3, .5, .5, 1) forwards;
+}
+
+@keyframes cometFall {
+    from { opacity: .9; transform: translate3d(0, 0, 0); }
+    to   { opacity: 0;  transform: translate3d(var(--cs-x, 3px), var(--cs-y, 16px), 0); }
+}
+
+/* ═══════════ 6 · SHARE CARD (v-card) ═══════════
+   The card IS the page; the note opens from it. This is the one surface
+   someone who has never used Mah Notes will see, so it is doing
+   recruitment as well as decoration.
+
+   Square corners, 2px rules, uppercase micro-labels: the app's own
+   Modernist language, with the bundle supplying only the accent. */
+
+.vc-page {
+    position: relative;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: calc(28px + var(--safe-t)) 22px calc(36px + var(--safe-b));
+    overflow: hidden;
+}
+
+.vc-card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 520px;
+    padding: 38px 34px 30px;
+    background: var(--sheet);
+    box-shadow: inset 0 0 0 1px var(--ink-16), var(--shadow-lg);
+    text-align: center;
+    /* Entrance: staggered with animation-delay, not a JS timeline. The
+       card is readable from the first frame — a spinner followed by a
+       flourish is worse than no flourish. */
+    animation: vcCard 520ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes vcCard {
+    from { opacity: 0; transform: translate3d(0, 14px, 0) scale(.985); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+/* 60–100ms between parts: card, then avatar, then text, then action. */
+.vc-avatar { animation: vcRise 460ms cubic-bezier(.22, 1, .36, 1) 90ms both; display: inline-flex; }
+.vc-ident  { animation: vcRise 460ms cubic-bezier(.22, 1, .36, 1) 170ms both; }
+.vc-note   { animation: vcRise 460ms cubic-bezier(.22, 1, .36, 1) 250ms both; }
+.vc-act    { animation: vcRise 460ms cubic-bezier(.22, 1, .36, 1) 330ms both; }
+
+@keyframes vcRise {
+    from { opacity: 0; transform: translate3d(0, 10px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.vc-kicker {
+    font-family: var(--font-heading); font-weight: 800; font-size: 9px;
+    letter-spacing: .18em; text-transform: uppercase; color: var(--ink-64);
+    margin-bottom: 18px;
+}
+
+.vc-name {
+    font-family: var(--font-heading); font-weight: 800; font-size: 26px;
+    line-height: 1.15; letter-spacing: -.01em; color: var(--ink);
+    margin-top: 16px; word-break: break-word;
+}
+
+.vc-handle { font-size: 13px; color: var(--ink-64); margin-top: 4px; }
+
+/* "Equipped: Galaxy" — the bundle names itself on the card, which is how
+   a free catalogue gets discovered: by being seen on someone else's page. */
+.vc-bundle {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 14px;
+    padding: 7px 11px; box-shadow: inset 0 0 0 1px var(--bundle-accent);
+    background: var(--bundle-surface-tint); color: var(--ink-80);
+    font-family: var(--font-heading); font-weight: 800; font-size: 9px;
+    letter-spacing: .14em; text-transform: uppercase;
+}
+
+.vc-bundle-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex: none;
+    background: var(--bundle-accent);
+    box-shadow: 0 0 8px var(--bundle-glow);
+}
+
+.vc-note {
+    margin-top: 28px; padding-top: 24px;
+    border-top: 2px solid var(--ink-24); text-align: left;
+}
+
+.vc-note-label {
+    font-family: var(--font-heading); font-weight: 800; font-size: 9px;
+    letter-spacing: .18em; text-transform: uppercase; color: var(--ink-64);
+}
+
+.vc-note-title {
+    font-family: var(--font-heading); font-weight: 800; font-size: 21px;
+    line-height: 1.2; color: var(--ink); margin-top: 8px; word-break: break-word;
+}
+
+.vc-act { display: flex; flex-direction: column; gap: 2px; margin-top: 24px; }
+
+.vc-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    padding: 15px 18px; border: 1px solid transparent; border-radius: 0;
+    cursor: pointer; text-decoration: none;
+    font-family: var(--font-heading); font-weight: 800; font-size: 11px;
+    letter-spacing: .1em; text-transform: uppercase;
+    transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+
+.vc-btn.primary {
+    background: var(--bundle-accent); color: #fff;
+    box-shadow: 0 0 20px var(--bundle-glow);
+}
+.vc-btn.primary:hover { filter: brightness(1.08); }
+.vc-btn.ghost { background: var(--veil-2); color: var(--ink); border-color: var(--ink-24); }
+.vc-btn.ghost:hover { border-color: var(--bundle-accent); }
+.vc-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.vc-foot {
+    position: relative; z-index: 1; margin-top: 22px;
+    display: flex; align-items: center; gap: 9px;
+    font-family: var(--font-heading); font-weight: 800; font-size: 9.5px;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--ink-64);
+}
+.vc-foot img { width: 18px; height: 18px; object-fit: contain; }
+
+@media (max-width: 560px) {
+    .vc-card { padding: 30px 22px 24px; }
+    .vc-name { font-size: 22px; }
+    .vc-note-title { font-size: 18px; }
+}
+
+/* ═══════════ 7 · COLLECTION SCREEN ═══════════
+   The one place in Mah Notes meant to be browsed for pleasure rather
+   than used, so it gets the most design attention per pixel. Every tile
+   previews LIVE on the viewer's OWN avatar — the motion is the product,
+   and a screenshot of it is not. */
+
+.bcol { padding: 4px 0 8px; }
+
+.bcol-intro {
+    font-size: 12px; line-height: 1.7; color: var(--ink-64);
+    padding: 0 24px 16px;
+}
+
+.bcol-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 2px; padding: 0 24px;
+}
+
+/* overflow stays VISIBLE so the supernova's ring can leave the border,
+   which is the whole point of it. The nebula behind the tile is contained
+   by .bnb's own overflow + contain, not by clipping the tile. */
+.bcol-tile {
+    position: relative; overflow: visible; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 10px; padding: 26px 14px 16px;
+    border: 1px solid var(--ink-16); background: var(--veil-2);
+    border-radius: 0; text-align: center; font-family: var(--font-body);
+    transition: border-color .14s ease;
+}
+.bcol-tile:hover { border-color: var(--ink-40); }
+.bcol-tile.active { border-color: var(--bundle-accent); box-shadow: inset 0 0 0 1px var(--bundle-accent); }
+
+/* Animate what is in view, pause the rest. A grid of twenty live
+   animations drops frames on a mid-range phone, and the fix has to be in
+   place before the catalogue is big enough to prove it. */
+.bcol-tile[data-idle="1"] *,
+.bcol-tile[data-idle="1"] *::before,
+.bcol-tile[data-idle="1"] *::after { animation-play-state: paused !important; }
+
+/* The preview face. Sized here rather than reusing .settings-avatar so
+   the collection can show a larger, better-quality decoration than any
+   list row without touching that component's CSS. */
+.bcol-face {
+    width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent); color: var(--on-accent);
+    font-family: var(--font-heading); font-weight: 800; font-size: 25px;
+}
+
+/* Try-before-equip. Nothing is applied until this is confirmed, which is
+   what makes tapping through the grid safe to do idly. */
+.bcol-tryon {
+    display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+    margin: 18px 24px 0; padding: 12px 14px;
+    background: var(--bundle-surface-tint);
+    box-shadow: inset 0 0 0 1px var(--bundle-accent);
+}
+.bcol-tryon-label { flex: 1; min-width: 120px; font-size: 12px; color: var(--ink-80); }
+.bcol-tryon-label b { font-family: var(--font-heading); font-weight: 800; }
+.bcol-tryon-btn { padding: 11px 14px; font-size: 9.5px; }
+
+.bcol-sub-label {
+    font-family: var(--font-heading); font-weight: 800; font-size: 9px;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--ink-64);
+    padding: 22px 24px 0;
+}
+
+.bcol-stage {
+    position: relative; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 96px; width: 100%;
+}
+
+.bcol-name {
+    position: relative; z-index: 1;
+    font-family: var(--font-heading); font-weight: 800; font-size: 10px;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--ink);
+}
+
+.bcol-tag {
+    position: relative; z-index: 1;
+    font-size: 11px; line-height: 1.55; color: var(--ink-64);
+}
+
+.bcol-equipped {
+    position: absolute; top: 0; right: 0; z-index: 2;
+    padding: 5px 8px; background: var(--bundle-accent); color: #fff;
+    font-family: var(--font-heading); font-weight: 800; font-size: 8px;
+    letter-spacing: .14em; text-transform: uppercase;
+}
+
+/* The intensity control. Full, subtle, off — a segmented row in the
+   app's own hard-edged style, no gaps. */
+.bcol-intensity { display: flex; margin: 18px 24px 0; }
+
+.bcol-int-btn {
+    flex: 1; padding: 11px 8px; cursor: pointer;
+    border: 1px solid var(--ink-16); background: var(--veil-2); color: var(--ink-64);
+    font-family: var(--font-heading); font-weight: 800; font-size: 9px;
+    letter-spacing: .12em; text-transform: uppercase;
+    transition: color .14s ease, border-color .14s ease;
+}
+.bcol-int-btn + .bcol-int-btn { border-left: none; }
+.bcol-int-btn:hover { color: var(--ink); }
+.bcol-int-btn.on { color: var(--ink); border-color: var(--bundle-accent); box-shadow: inset 0 0 0 1px var(--bundle-accent); }
+
+.bcol-hint { font-size: 11.5px; line-height: 1.7; color: var(--ink-64); padding: 14px 24px 0; }
+
+/* ═══════════ 8 · INTRO ═══════════
+   Ignition: a core flashes, a shockwave passes, the dust ring and orbits
+   assemble around the app mark, the wordmark resolves. ~1.9s, skippable
+   on any tap or key.
+
+   It is an OVERLAY over an already-mounted app, never a gate in front of
+   one: the app is live underneath from the first frame, so nothing about
+   this delays reaching a note. */
+
+/* The field is its own two variables rather than the bundle's --bundle-void,
+   which for Nocturne is the PAPER colour — a light splash with white
+   wordmark on it. Nocturne gets a restrained near-black version of the
+   same sequence in the user's own accent; Galaxy makes it a galaxy. */
+.intro {
+    position: fixed; inset: 0; z-index: 3000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 26px; overflow: hidden; cursor: pointer;
+    --intro-mid: #1c1b24;
+    --intro-ground: #111015;
+    background: radial-gradient(circle at 50% 46%, var(--intro-mid) 0%, var(--intro-ground) 62%, #05040c 100%);
+    animation: introOut 420ms ease 1480ms forwards;
+}
+
+.intro[data-bundle="galaxy"] {
+    --intro-mid: #191537;
+    --intro-ground: #0b0a16;
+}
+
+/* Dismissing early, or finishing: the same fade either way, so a skip
+   never looks like a different event from a completion. */
+.intro.leaving { animation: introOut 300ms ease forwards; }
+
+@keyframes introOut {
+    from { opacity: 1; visibility: visible; }
+    to   { opacity: 0; visibility: hidden; }
+}
+
+.intro-stage { position: relative; width: 190px; height: 190px; }
+
+/* The flash. Bright, brief, and amplitude-limited: one luminance change,
+   nowhere near the three-per-second seizure-safety floor, which is a
+   hard floor and not a style preference. */
+.intro-flash {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(circle, #fff 0 12%, var(--bundle-accent-soft) 34%, transparent 70%);
+    animation: introFlash 620ms cubic-bezier(.16, .84, .3, 1) both;
+}
+
+@keyframes introFlash {
+    from { opacity: 0;   transform: scale(.05); }
+    18%  { opacity: 1;   transform: scale(.5); }
+    to   { opacity: 0;   transform: scale(2.3); }
+}
+
+.intro-wave {
+    position: absolute; inset: 22%; border-radius: 50%;
+    border: 2px solid var(--bundle-spark);
+    animation: introWave 900ms cubic-bezier(.16, .84, .3, 1) 100ms both;
+}
+
+@keyframes introWave {
+    from { opacity: .9; transform: scale(.2); }
+    to   { opacity: 0;  transform: scale(2.6); }
+}
+
+/* The ring draws itself in, then holds — the poster frame of the whole
+   bundle, assembled. */
+.intro-ring {
+    position: absolute; inset: 8%; border-radius: 50%;
+    box-shadow: inset 0 0 0 2px var(--bundle-accent), 0 0 26px var(--bundle-glow);
+    animation: introRing 700ms cubic-bezier(.22, 1, .36, 1) 260ms both;
+}
+
+@keyframes introRing {
+    from { opacity: 0; transform: scale(1.4) rotate(-30deg); }
+    to   { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+.intro-dust {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: repeating-conic-gradient(from 0deg,
+        var(--bundle-dust) 0 1.2deg, transparent 1.2deg 5.1deg,
+        var(--bundle-dust) 5.1deg 5.8deg, transparent 5.8deg 13.4deg);
+    -webkit-mask: radial-gradient(circle, transparent 0 78%, #000 81% 94%, transparent 97%);
+    mask: radial-gradient(circle, transparent 0 78%, #000 81% 94%, transparent 97%);
+    animation:
+        introRing 800ms cubic-bezier(.22, 1, .36, 1) 320ms both,
+        bdRing 40s linear 1.1s infinite;
+}
+
+.intro-orbit {
+    position: absolute; inset: var(--io-in, 2%); border-radius: 50%;
+    animation:
+        introRing 700ms cubic-bezier(.22, 1, .36, 1) var(--io-delay, 400ms) both,
+        bdOrbit var(--io-dur, 14s) linear var(--io-delay, 400ms) infinite;
+}
+
+.intro-mark {
+    position: absolute; left: 50%; top: 50%;
+    width: 62px; height: 62px; object-fit: contain;
+    transform: translate(-50%, -50%);
+    animation: introMark 620ms cubic-bezier(.22, 1, .36, 1) 420ms both;
+}
+
+@keyframes introMark {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(.7); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.intro-word {
+    font-family: var(--font-heading); font-weight: 800; font-size: 13px;
+    letter-spacing: .32em; text-transform: uppercase; color: #eaf2ff;
+    animation: introWord 620ms cubic-bezier(.22, 1, .36, 1) 640ms both;
+}
+
+@keyframes introWord {
+    from { opacity: 0; letter-spacing: .16em; }
+    to   { opacity: 1; letter-spacing: .32em; }
+}
+
+.intro-sub {
+    font-size: 11.5px; color: rgba(234, 242, 255, .58); margin-top: -16px;
+    animation: vcRise 560ms cubic-bezier(.22, 1, .36, 1) 800ms both;
+}
+
+.intro-skip {
+    position: absolute; bottom: calc(26px + var(--safe-b)); left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-heading); font-weight: 800; font-size: 8.5px;
+    letter-spacing: .18em; text-transform: uppercase;
+    color: rgba(234, 242, 255, .4);
+    animation: vcRise 400ms ease 1100ms both;
+}
+
+/* The flash and the shockwave are the two things reduced motion most
+   clearly does not want, so they are removed rather than slowed. The
+   composed still — ring, dust, orbits, mark, wordmark — remains, and the
+   timing for it lives in the reduced-motion block near the top of this
+   file, where it can carry the !important needed to beat app.css's
+   blanket override. */
+@media (prefers-reduced-motion: reduce) {
+    .intro-flash, .intro-wave { display: none; }
+}
+
+/* ═══════════ 9 · HOOKS INTO EXISTING SURFACES ═══════════
+   Classes the bundle owns on surfaces the app already had. Every rule
+   here styles a NEW element the bundle introduced — none of them reach
+   into .settings-avatar, .friend-avatar or .v-card, so a change to those
+   components cannot break a bundle and a bundle cannot break them. */
+
+/* The share card's face. Its own element rather than a resized
+   .view-author-avatar, because 112px is the tier where the decoration is
+   at its highest quality and the byline disc is a 40px component. */
+.vc-face {
+    width: 112px; height: 112px; border-radius: 50%; flex: none; object-fit: cover;
+    background: var(--accent); color: var(--on-accent);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-heading); font-weight: 800; font-size: 42px;
+}
+.vc-face i { font-size: 44px; opacity: .9; }
+
+@media (max-width: 560px) {
+    .vc-face { width: 92px; height: 92px; font-size: 34px; }
+    .vc-face i { font-size: 36px; }
+}
+
+/* The opened note, reached from the card. It keeps the sender's bundle
+   TOKENS so the byline's decoration still matches the card it came from,
+   and gets no background layer at all: this is a reading surface, and
+   motion beside a paragraph pulls attention involuntarily. */
+.view-page-shared { position: relative; }
+
+/* "You" in the friends sheet. The one avatar in there whose bundle is
+   actually known, so the one that wears a decoration. */
+.friend-me {
+    display: flex; align-items: center; gap: 12px;
+    padding: 4px 0 14px; margin-bottom: 14px;
+    border-bottom: 2px solid var(--ink-16);
+}
+
+/* The settings identity row, with room for the decoration to sit in.
+   Padding, not margin, and applied to a NEW wrapper class rather than to
+   .settings-user itself — a decoration that changes the row's height when
+   a bundle is equipped is a layout bug, not a flourish. */
+.settings-user-bundled { position: relative; }
+
+/* The profile panel's background. Clipped to the card, behind the rows. */
+.settings-card.bnb-host { position: relative; overflow: hidden; }
+
+/* The equipped-bundle line under the account name. */
+.settings-bundle-line {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 3px;
+    font-family: var(--font-heading); font-weight: 800; font-size: 8.5px;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--ink-64);
+}
+.settings-bundle-line .vc-bundle-dot { width: 6px; height: 6px; }
+
+/* ═══════════ 10 · SECOND PASS ═══════════
+   What the first pass got wrong, and the pieces it was missing. */
+
+/* ── The friends sheet ──
+   The scroll lives on an inner shell so the ground behind it does not
+   slide away: an absolutely positioned layer inside a scroll container is
+   anchored to the top of the CONTENT, not the viewport of that container. */
+.friend-popup { overflow: hidden; padding: 0; display: flex; flex-direction: column; }
+.friend-popup-scroll {
+    overflow-y: auto; min-height: 0; max-height: 88vh;
+    padding: 26px 24px calc(26px + var(--safe-b));
+}
+@media (min-width: 900px) {
+    .friend-popup-scroll { padding: 32px 34px; }
+}
+
+/* Rows sit ON the field rather than in a box of their own, so the sheet
+   reads as one surface. The hairline is the only separator they need. */
+.friend-popup .friend-row { border-bottom-color: var(--ink-14); }
+.friend-popup .friend-row:hover { background: var(--bundle-surface-tint); }
+
+/* ── The share card ──
+   A card the bundle actually reaches, rather than a white box with a
+   themed avatar dropped on it. */
+
+/* The bundle's own light along the top edge. */
+.vc-edge {
+    position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: linear-gradient(90deg,
+        transparent, var(--bundle-accent) 22%, var(--bundle-spark) 50%,
+        var(--bundle-accent-soft) 78%, transparent);
+    opacity: .95;
+}
+
+/* A small constellation in the upper corner. Static, one element, drawn
+   with gradients — no nodes, no animation, and it survives the poster
+   frame unchanged. */
+.vc-constellation {
+    position: absolute; right: 14px; top: 16px;
+    width: 92px; height: 68px; opacity: .5; pointer-events: none;
+    background-image:
+        radial-gradient(1.6px 1.6px at 12% 22%, var(--bundle-core), transparent 100%),
+        radial-gradient(2.2px 2.2px at 47% 8%, var(--bundle-spark), transparent 100%),
+        radial-gradient(1.4px 1.4px at 78% 34%, var(--bundle-core), transparent 100%),
+        radial-gradient(1.8px 1.8px at 33% 62%, var(--bundle-accent-soft), transparent 100%),
+        radial-gradient(1.2px 1.2px at 92% 74%, var(--bundle-core), transparent 100%);
+    background-repeat: no-repeat;
+}
+
+/* The app mark stands in when the sender shows neither name nor picture.
+   Better a deliberate fallback than a hole where a face should be. */
+.vc-face-mark { background: var(--bundle-surface-tint); box-shadow: inset 0 0 0 1px var(--ink-16); }
+.vc-face-mark img { width: 52%; height: 52%; object-fit: contain; opacity: .85; }
+
+.vc-name-anon { font-size: 21px; color: var(--ink-80); }
+
+/* The preview. The reason the card has something under its title. */
+.vc-preview {
+    margin-top: 12px; font-size: 14px; line-height: 1.7; color: var(--ink-64);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4;
+    overflow: hidden; word-break: break-word;
+}
+
+/* The card itself gets the bundle's glow, not just a shadow. */
+[data-bundle="galaxy"] .vc-card {
+    box-shadow:
+        inset 0 0 0 1px var(--ink-16),
+        0 0 0 1px var(--bundle-glow),
+        0 24px 70px rgba(0, 0, 0, .28),
+        0 0 90px var(--bundle-glow);
+}
+
+/* ── Collection: replay the intro ── */
+.bcol-replay {
+    display: inline-flex; align-items: center; gap: 9px; cursor: pointer;
+    margin: 10px 24px 0; padding: 12px 16px;
+    border: 1px solid var(--ink-24); background: var(--veil-2); color: var(--ink);
+    font-family: var(--font-heading); font-weight: 800; font-size: 9.5px;
+    letter-spacing: .1em; text-transform: uppercase;
+    transition: border-color .14s ease, color .14s ease;
+}
+.bcol-replay:hover { border-color: var(--bundle-accent); color: var(--bundle-accent); }
+
+/* ═══════════ 11 · GALAXY'S OWN GROUND ═══════════
+   Two surfaces belong to the BUNDLE rather than to the app's chrome: the
+   share card, and the tiles in the collection that advertise it. Both get
+   deep space under them in either theme.
+
+   This is the one place a bundle is allowed to own a surface, and it is
+   allowed for a reason: the share card is the sender's page, not the
+   reader's, and a galaxy rendered on white paper is a galaxy with the
+   lights on. Everything else — the profile panel, the friends sheet, the
+   editor — keeps the user's own theme, which is the whole point of the
+   bundle being an accent layer.
+
+   It is done by redefining TOKENS on the surface, never by restyling a
+   component. Components go on reading --ink / --sheet / --veil-2 exactly
+   as they always do and have no idea anything changed.
+
+   The ink ramp has to be restated in full rather than just --ink-rgb:
+   app.css derives --ink-04 … --ink-80 on :root, so those computed values
+   are inherited as-is and would still be near-black here. */
+
+.vc-page[data-bundle="galaxy"],
+.bcol-tile[data-bundle="galaxy"] {
+    color-scheme: dark;
+
+    --ink-rgb: 234 242 255;
+    --ink: rgb(234 242 255);
+    --ink-04: rgb(234 242 255 / .04);
+    --ink-08: rgb(234 242 255 / .08);
+    --ink-10: rgb(234 242 255 / .10);
+    --ink-14: rgb(234 242 255 / .14);
+    --ink-16: rgb(234 242 255 / .16);
+    --ink-24: rgb(234 242 255 / .24);
+    --ink-34: rgb(234 242 255 / .34);
+    --ink-40: rgb(234 242 255 / .40);
+    --ink-64: rgb(234 242 255 / .62);
+    --ink-80: rgb(234 242 255 / .80);
+
+    --paper: #0a0916;
+    --paper-2: #14122c;
+    --sheet: rgba(18, 16, 40, .78);
+    --veil-1: rgba(255, 255, 255, .04);
+    --veil-2: rgba(255, 255, 255, .07);
+    --veil-3: rgba(255, 255, 255, .10);
+    --shadow: 0 3px 10px rgba(0, 0, 0, .5);
+    --shadow-lg: 0 24px 70px rgba(0, 0, 0, .55);
+
+    /* The lit palette, not the ink one: this ground is dark whatever the
+       app around it is doing. */
+    --bundle-accent: #7b5cff;
+    --bundle-accent-soft: #b9a6ff;
+    --bundle-glow: rgba(123, 92, 255, .42);
+    --bundle-spark: #46d8ff;
+    --bundle-ember: #ffb347;
+    --bundle-core: #eaf2ff;
+    --bundle-dust: rgba(207, 228, 255, .55);
+    --bundle-surface-tint: rgba(123, 92, 255, .12);
+}
+
+/* Deep space, with the horizon glow low and left where the little solar
+   system sits. */
+.vc-page[data-bundle="galaxy"] {
+    background:
+        radial-gradient(120% 80% at 18% 108%, #241a52 0%, transparent 58%),
+        radial-gradient(90% 70% at 88% -12%, #123049 0%, transparent 60%),
+        linear-gradient(168deg, #12102a, #0a0916 52%, #07060f);
+}
+
+.bcol-tile[data-bundle="galaxy"] {
+    background: linear-gradient(168deg, #16133200, #0a0916 42%, #100e22);
+    border-color: rgba(123, 92, 255, .4);
+}
+
+/* Over a dark ground the paper-coloured scrim is doing the opposite of its
+   job — it would lift the field toward black and flatten the nebula.
+   Back it right off; contrast here comes from the ground itself. */
+.vc-page[data-bundle="galaxy"] .bnb-scrim,
+.bcol-tile[data-bundle="galaxy"] .bnb-scrim { opacity: .12; }
+
+/* ═══════════ 12 · LIGHT-GROUND STRENGTH ═══════════
+   On a light theme the ink palette was drawn too politely to register: the
+   decoration was technically visible and practically wasn't. More
+   saturation and a stronger glow, so the rim still reads as light rather
+   than as a thin purple outline.
+
+   The two surfaces that carry their own deep space are excluded — they are
+   dark whatever the app is doing, so they want the lit palette, and
+   section 11 gives it to them. */
+:root[data-theme="light"] [data-bundle="galaxy"]:not(.vc-page):not(.bcol-tile) {
+    --bundle-accent: #4b28d4;
+    --bundle-accent-soft: #7b5cff;
+    --bundle-glow: rgba(75, 40, 212, .34);
+    --bundle-spark: #0b7fa8;
+    --bundle-ember: #b8650d;
+    --bundle-core: #241b63;
+    --bundle-dust: rgba(36, 27, 99, .46);
+    --bundle-ring-width: 2.5px;
+}

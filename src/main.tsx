@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, HashRouter } from 'react-router-dom';
 import { isDesktop } from './lib/platform';
 import { installExternalLinkHandler } from './lib/externalLinks';
+import { installBundleMotion } from './lib/bundles';
+import { installSupernova } from './lib/supernova';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import App from './App';
@@ -20,6 +22,9 @@ import '@fontsource/archivo/800.css';
 import './styles/app.css';
 import './styles/viewer.css';
 import './styles/themes.css';
+// Cosmetic bundles. Last, so a bundle's accent layer sits on top of the
+// theme it decorates rather than under it.
+import './styles/bundles.css';
 
 // We deliberately do NOT load Google's GIS script (@react-oauth/google's
 // GoogleOAuthProvider). Web Google sign-in uses a plain OAuth *redirect* flow
@@ -35,6 +40,18 @@ const Router = isDesktop ? HashRouter : BrowserRouter;
 // way to honour on their own — the click lands on nothing. Installed once,
 // before render, so a link works on the very first painted note.
 installExternalLinkHandler();
+
+// Cosmetic bundles, both installed before render.
+//
+//  · installBundleMotion pauses every bundle animation on a hidden tab or a
+//    blurred window. That matters most on desktop, where this app sits open
+//    behind other windows all day: an idle animation burning battery in a
+//    background window is how a fun feature becomes the reason someone
+//    uninstalls.
+//  · installSupernova is one delegated listener for the button-press effect,
+//    so buttons rendered later are covered without any component knowing.
+installBundleMotion();
+installSupernova();
 
 const tree = (
   <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

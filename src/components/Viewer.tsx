@@ -18,6 +18,9 @@ import { isInAppBrowser } from '../lib/inAppBrowser';
 import { isMobileBrowser, isWindowsBrowser } from '../lib/deviceKind';
 import { previewTheme, restoreOwnTheme } from '../lib/palette';
 import { useTheme } from '../context/ThemeContext';
+import { getBundle, safeHandle } from '../lib/bundles';
+import BundleAvatar from './BundleAvatar';
+import BundleBackground from './BundleBackground';
 import logoUrl from '../images/mn_logo.png';
 
 const KNOWN_TABS = ['docs', 'plans', 'view', 'schedule', 'settings'];
@@ -33,6 +36,44 @@ const today = () => JS_DAY[new Date().getDay()];
 const POLL_MS = 15000;
 const POLL_MAX_MS = 60000;
 
+// A few lines of plain text for the share card.
+//
+// Derived in the client from what /api/share already returns — there is no
+// separate preview field, and inventing one would mean a second server path
+// that can disagree with the body the reader opens a moment later.
+// Tags are stripped rather than rendered: this is a summary line, not a
+// second copy of the document, and unrendered markup in a teaser looks
+// broken. Truncation is on a word boundary so it never cuts mid-word.
+const PREVIEW_MAX = 190;
+
+function previewOf(data) {
+  if (!data) return '';
+  let text = '';
+  if (data.kind === 'plan') {
+    // A plan's "content" is its week; the first few of today's items say
+    // more about it than the raw markup ever would.
+    const all = Object.values(data.days || {}).flat() as any[];
+    text = all.map((it) => it && it.text).filter(Boolean).join(' · ');
+  } else {
+    text = String(data.contentHtml || '')
+      .replace(/<br\s*\/?>/gi, ' ')
+      .replace(/<\/(p|div|li|h[1-6])>/gi, ' ')
+      .replace(/<[^>]*>/g, '');
+  }
+  // Entities survive tag-stripping, so decode the handful that actually
+  // show up in prose before measuring the length.
+  text = text
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length <= PREVIEW_MAX) return text;
+  const cut = text.slice(0, PREVIEW_MAX);
+  const sp = cut.lastIndexOf(' ');
+  return `${(sp > 80 ? cut.slice(0, sp) : cut).trimEnd()}…`;
+}
+
 const refKey = (tok) => 'mahnotes_ref_' + tok;
 const refLoad = (tok) => { try { return JSON.parse(localStorage.getItem(refKey(tok)) || '{}'); } catch { return {}; } };
 const refSave = (tok, state) => { try { localStorage.setItem(refKey(tok), JSON.stringify(state)); } catch {} };
@@ -44,7 +85,7 @@ const refSave = (tok, state) => { try { localStorage.setItem(refKey(tok), JSON.s
 // person sent you rather than a document dump. The author picks either, both
 // or neither in Settings → Privacy, so all four shapes have to render:
 // picture + name, initial + name, picture alone, or nothing at all.
-function AuthorBadge({ author }) {
+function AuthorBadge({ author, bundleId }) {
   const name = (author?.name || '').trim();
   const avatar = author?.avatar || '';
   const showAvatar = author?.showAvatar !== false;
@@ -65,6 +106,11 @@ function AuthorBadge({ author }) {
     );
   }
   if (!name && !disc) return null;
+
+  // At 40px this resolves to the 'simple' tier — the rim plus one orbiting
+  // body. The full system would be invisible detail at this size and would
+  // cost exactly the same to compute.
+  if (disc && bundleId) disc = <BundleAvatar size={40} bundleId={bundleId}>{disc}</BundleAvatar>;
 
   return (
     <div className="view-author">
@@ -168,6 +214,129 @@ function ViewerCta({ themed }) {
   );
 }
 
+// ── The share card (v-card) ─────────────────────────────
+//
+// The card IS the page; the note opens from it. This is the one surface
+// someone who has never used Mah Notes will ever see, so it is doing
+// recruitment as well as decoration — and it is the only place the bundle
+// catalogue gets discovered, by being seen on somebody else's page.
+//
+// Whose bundle: the SENDER'S, read from the link (?b=). The reader's own app
+// keeps its own theme and its own bundle — nothing here is persisted, which is
+// the same contract the author's colour theme already has (see previewTheme).
+//
+// What it shows: a decorated avatar, a name, a handle, the bundle's name,
+// the title, a few lines of preview, and one clear action.
+//
+// The preview earns its place. Without it the card is a title and two
+// buttons — a header with nothing under it — and a reader has no way to
+// tell whether the link is worth opening. It is a few lines, stripped to
+// plain text and truncated here in the client; the full body only arrives
+// when they ask for it.
+//
+// The identity block degrades in four directions, because the author's two
+// privacy switches make four shapes (picture and name, initial and name,
+// picture alone, neither) and a fifth case where the link predates bundles
+// and carries no handle at all. None of them may leave a hole: with no
+// identity to show, the card leads with the app mark instead and still
+// reads as something a person sent.
+function VCard({ bundleId, author, handle, title, preview, kind, mode, onOpen }) {
+  const signedIn = !!getToken();
+  const bundle = getBundle(bundleId);
+  const name = (author?.name || '').trim();
+  const avatar = author?.avatar || '';
+  const showAvatar = author?.showAvatar !== false;
+  const initial = name.charAt(0).toUpperCase();
+
+  let face = null;
+  if (avatar) face = <img className="vc-face" src={avatar} alt="" />;
+  else if (showAvatar) {
+    face = (
+      <span className="vc-face">
+        {initial || <i className="fas fa-user" aria-hidden="true" />}
+      </span>
+    );
+  }
+  // Nothing at all to show for the sender: draw the app mark in the same
+  // slot rather than collapsing the top of the card to nothing.
+  const anonymous = !face && !name;
+
+  // Signed in and the sender's handle travelled with the link → straight to
+  // the friends sheet with the search already run. Signed out → sign up, which
+  // is the only thing a stranger can usefully do with an add-friend button.
+  const addFriend = handle
+    ? (signedIn ? `/?tab=settings&friend=${encodeURIComponent(handle)}` : '/?signup=1')
+    : null;
+
+  return (
+    <div className="vc-page bnb-host" data-bundle={bundle.id} data-intensity="full">
+      {/* The share page is where the polish is worth spending, so the
+          background runs at full here rather than at the calmer setting
+          daily surfaces use. It still pauses on a hidden tab and still
+          collapses to its still composition under reduced motion. */}
+      <BundleBackground bundleId={bundle.id} intensity="full" />
+
+      <div className="vc-card">
+        {/* A hairline of the bundle's own light along the top edge, and a
+            faint constellation in the corner. Small, static, and the
+            difference between a themed card and a white box with a themed
+            avatar dropped on it. */}
+        <span className="vc-edge" aria-hidden="true" />
+        <span className="vc-constellation" aria-hidden="true" />
+
+        <div className="vc-kicker">Shared with you</div>
+
+        <span className="vc-avatar">
+          <BundleAvatar size={112} bundleId={bundle.id}>
+            {face || (
+              <span className="vc-face vc-face-mark">
+                <img src={logoUrl} alt="" />
+              </span>
+            )}
+          </BundleAvatar>
+        </span>
+
+        <div className="vc-ident">
+          {name ? <div className="vc-name">{name}</div>
+            : anonymous && <div className="vc-name vc-name-anon">Someone on Mah Notes</div>}
+          {handle && <div className="vc-handle">@{handle}</div>}
+          {bundle.id !== 'nocturne' && (
+            <div className="vc-bundle">
+              <span className="vc-bundle-dot" />
+              {bundle.name}
+            </div>
+          )}
+        </div>
+
+        <div className="vc-note">
+          <div className="vc-note-label">
+            {kind === 'plan' ? 'Weekly plan' : 'Document'}
+            {mode === 'live' ? ' · live' : mode === 'reference' ? ' · your own copy' : ''}
+          </div>
+          <div className="vc-note-title">{title || (kind === 'plan' ? 'Plan' : 'Untitled')}</div>
+          {preview && <p className="vc-preview">{preview}</p>}
+        </div>
+
+        <div className="vc-act">
+          <button type="button" className="vc-btn primary" onClick={onOpen}>
+            <i className="fas fa-arrow-right" /> Open the {kind === 'plan' ? 'plan' : 'note'}
+          </button>
+          {addFriend && (
+            <Link className="vc-btn ghost" to={addFriend}>
+              <i className="fas fa-user-plus" /> {signedIn ? 'Add friend' : 'Add on Mah Notes'}
+            </Link>
+          )}
+        </div>
+      </div>
+
+      <div className="vc-foot">
+        <img src={logoUrl} alt="" />
+        Mah Notes
+      </div>
+    </div>
+  );
+}
+
 function Message({ icon, title, desc, extra, busy }: any) {
   return (
     <div className="view-page">
@@ -215,6 +384,13 @@ export default function Viewer() {
   const ownerType = params.get('type');
   const ownerId = params.get('id');
   const from = params.get('from');
+  // The sender's cosmetics, carried by the link because the public share
+  // endpoint has nowhere to put them (see ShareModal). Both are validated
+  // here, not trusted: an unknown bundle id falls back to the default rather
+  // than rendering nothing, and the handle is reduced to the character set the
+  // server allows before it is ever drawn or put in a URL.
+  const senderBundle = getBundle(params.get('b')).id;
+  const senderHandle = safeHandle(params.get('h'));
   // Back returns to the tab the user opened this from (Docs/Plans/View), not
   // always the home default. Falls back to home when there's no/unknown source.
   const backTo = KNOWN_TABS.includes(from) ? `/?tab=${from}` : '/';
@@ -227,6 +403,9 @@ export default function Viewer() {
   // { name, avatar } when the author lets their identity show (Settings →
   // Privacy). Null otherwise, and always null for an owner view.
   const [author, setAuthor] = useState<any>(null);
+  // The card is the whole page; the note opens FROM it. Owner views skip the
+  // card entirely — it is a greeting for a recipient, and the owner is not one.
+  const [opened, setOpened] = useState(false);
   const docRef = useRef(null);
 
   // Paint the page in the author's colours while it is open. Nothing is
@@ -388,6 +567,24 @@ export default function Viewer() {
   }
 
   // ── Render ────────────────────────────────────────────
+  // A public link greets the reader with the card first. Note BODY content is
+  // never on it — only the title — so nothing is revealed before they ask.
+  const isShared = data.mode === 'live' || data.mode === 'reference';
+  if (isShared && !opened) {
+    return (
+      <VCard
+        bundleId={senderBundle}
+        author={author}
+        handle={senderHandle}
+        title={data.title}
+        preview={previewOf(data)}
+        kind={data.kind}
+        mode={data.mode}
+        onOpen={() => setOpened(true)}
+      />
+    );
+  }
+
   const badge = data.mode === 'live'
     ? <div className="live-badge"><span className="live-dot" /> Live · updates in real-time</div>
     : data.mode === 'reference'
@@ -397,8 +594,14 @@ export default function Viewer() {
   const sub = data.mode === 'live' ? 'live · shared' : data.mode === 'reference' ? 'your copy' : 'view mode';
 
   return (
-    <div className="view-page">
+    <div className={`view-page${isShared ? ' view-page-shared' : ''}`}
+      data-bundle={isShared ? senderBundle : undefined}>
       <div className="view-bar">
+        {isShared && (
+          <button className="icon-btn view-back" aria-label="Back to the card" onClick={() => setOpened(false)}>
+            <i className="fas fa-arrow-left" />
+          </button>
+        )}
         {data.mode === 'owner' && (
           <button className="icon-btn view-back" aria-label="Back" onClick={() => navigate(backTo)}>
             <i className="fas fa-arrow-left" />
@@ -408,7 +611,7 @@ export default function Viewer() {
         <span className="logo">Mah Notes</span><span className="sub">{sub}</span>
       </div>
       <div className="v-card">
-        <AuthorBadge author={author} />
+        <AuthorBadge author={author} bundleId={isShared ? senderBundle : undefined} />
         {badge}
         <h1 className="v-title">{data.title || (data.kind === 'plan' ? 'Plan' : 'Untitled')}</h1>
 

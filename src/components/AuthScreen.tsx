@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth';
 import WebGoogleButton from './WebGoogleButton';
 import EmailCautionModal from './EmailCautionModal';
+import BundleBackground from './BundleBackground';
+import { equippedId, equippedIntensity } from '../lib/bundles';
 import logoUrl from '../images/mn_logo.png';
 
 const ERROR_MAP = {
@@ -119,8 +121,15 @@ export default function AuthScreen() {
     doAuth();
   }
 
+  // Nobody is signed in yet, so there is no account bundle to read. The
+  // DEVICE's last equipped one stands in — it survives a sign-out in
+  // localStorage, so a returning user is greeted by their own bundle rather
+  // than by a blank screen, and a brand-new device simply gets Nocturne.
+  const bundleId = equippedId();
+
   return (
-    <section className="auth-screen">
+    <section className="auth-screen bnb-host" data-bundle={bundleId} data-intensity={equippedIntensity()}>
+      <BundleBackground bundleId={bundleId} intensity={equippedIntensity()} />
       <div className="auth-card">
         <div className="auth-brand">
           <img className="auth-logo" src={logoUrl} alt="Mah Notes" />

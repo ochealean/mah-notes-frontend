@@ -14,6 +14,9 @@ import { api } from '../lib/api';
 import { onRealtime } from '../lib/realtime';
 import { notify } from '../lib/notify';
 import { copyText } from '../lib/copyText';
+import BundleAvatar from './BundleAvatar';
+import BundleBackground from './BundleBackground';
+import { equippedId, equippedIntensity, getBundle } from '../lib/bundles';
 
 const initialOf = (p) => ((p?.displayName || p?.username || 'U')[0] || 'U').toUpperCase();
 
@@ -24,10 +27,24 @@ const initialOf = (p) => ((p?.displayName || p?.username || 'U')[0] || 'U').toUp
 // older accounts that predate usernames being required.
 const subtitleOf = (p) => (p?.username ? `@${p.username}` : '');
 
+// A row's decoration is the ROW'S OWN bundle, never the viewer's.
+//
+// Today the server sends no bundle with a friend (user.theme is a closed
+// {ink, paper, accent, ambient} sub-schema and this is a frontend-only
+// change), so `person.bundleId` is undefined and everyone else renders
+// undecorated — which is the truthful answer, not a missing feature. Wiring
+// it this way rather than reusing `equippedId()` is the point: the moment a
+// bundleId reaches this payload, friends' decorations appear with no further
+// change here. Painting your own ring on other people's faces would be a
+// decoration that lies about them.
 function Avatar({ person }) {
-  return person?.avatar
-    ? <img className="friend-avatar" src={person.avatar} alt="" />
-    : <div className="friend-avatar">{initialOf(person)}</div>;
+  return (
+    <BundleAvatar size={38} bundleId={person?.bundleId || 'nocturne'}>
+      {person?.avatar
+        ? <img className="friend-avatar" src={person.avatar} alt="" />
+        : <div className="friend-avatar">{initialOf(person)}</div>}
+    </BundleAvatar>
+  );
 }
 
 function Person({ person, children }) {
@@ -43,9 +60,13 @@ function Person({ person, children }) {
   );
 }
 
-export default function FriendsModal({ me, onClose }) {
+// `initialQuery` opens the sheet with a search already run. A share card's
+// "Add friend" action lands here with the sender's handle (see MainApp), so
+// the person who wanted to add someone does not have to retype the name they
+// just tapped.
+export default function FriendsModal({ me, onClose, initialQuery = '' }) {
   const [data, setData] = useState(null); // { friends, incoming, outgoing }
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(initialQuery);
   const [results, setResults] = useState(null); // null = idle, [] = no matches
   const [searching, setSearching] = useState(false);
   const [busyId, setBusyId] = useState('');
@@ -126,10 +147,43 @@ export default function FriendsModal({ me, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="popup">
+      {/* One ground for the whole sheet, so every friend row sits on the
+          same field the profile panel does.
+          ONE layer, not one per row: a nebula behind each of fifty rows
+          would be fifty blurred, animating boxes, and the rows scroll — so
+          the background would swim against them. Behind the sheet it stays
+          still relative to the list, and costs what a single panel costs.
+          The scrim keeps every name and handle above 4.5:1 at every frame. */}
+      <div className="popup bnb-host friend-popup" data-bundle={equippedId()} data-intensity={equippedIntensity()}>
+        <BundleBackground bundleId={equippedId()} intensity={equippedIntensity()} />
+        {/* The scroll moved off .popup and onto this inner shell. An
+            absolutely positioned layer inside a scroll container is
+            anchored to the top of the CONTENT, so the ground would slide
+            up and off as soon as anyone scrolled the friends list. The
+            shell scrolls; the sheet, and the sky behind it, stay put. */}
+        <div className="friend-popup-scroll">
         <div className="popup-head">
           <h3><i className="fas fa-user-group" /> Friends</h3>
           <button className="icon-btn" aria-label="Close" onClick={onClose}><i className="fas fa-times" /></button>
+        </div>
+
+        {/* You, then your ID. The one avatar in this sheet whose bundle we
+            actually know is the viewer's own, so it is the one that wears a
+            decoration — and seeing it beside undecorated rows is what makes
+            the feature legible without claiming anything about anyone else. */}
+        <div className="friend-me">
+          <BundleAvatar size={38} bundleId={equippedId()}>
+            {me?.avatar
+              ? <img className="friend-avatar" src={me.avatar} alt="" />
+              : <div className="friend-avatar">{initialOf(me)}</div>}
+          </BundleAvatar>
+          <div className="friend-meta">
+            <div className="friend-name">{me?.displayName || 'You'}</div>
+            <div className="friend-email">
+              {subtitleOf(me) || 'You'}
+              {equippedId() !== 'nocturne' && <> · {getBundle(equippedId()).name}</>}
+            </div>
+          </div>
         </div>
 
         {/* Your ID — share this so people can find you. */}
@@ -194,6 +248,7 @@ export default function FriendsModal({ me, onClose }) {
               </button>
             </Person>
           ))}
+        </div>
         </div>
       </div>
     </div>

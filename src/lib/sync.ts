@@ -14,6 +14,7 @@ import { localdb } from './localdb';
 import { api, getToken } from './api';
 import { newUid } from './uid';
 import { onRealtime } from './realtime';
+import { publishClipsChanged } from './clipsBus';
 
 const PENDING_KEY = 'pendingDeletes';
 const ENABLED_KEY = 'syncEnabled';
@@ -174,6 +175,13 @@ export async function getDeviceId() {
 const toLocal = (it) => ({ ...it, id: it.uid });
 
 let debounceTimer = null;
+// Set when a sync is asked for while one is already running. Without it that
+// request was DROPPED: syncNow() returns early on state.syncing, so a
+// "another device changed something" arriving mid-sync was lost, and the clip
+// it was announcing did not appear until the next unrelated trigger — an edit,
+// a tab focus, or a restart. That is the worst case of "syncing takes a while"
+// and it is a lost event, not a slow one.
+let syncAgain = false;
 
 // Can we actually talk to the server right now?
 export function canSync() {
@@ -234,12 +242,15 @@ export async function initSync() {
 
   set({ initialized: true, enabled, clipSync, lastSync });
   if (typeof window !== 'undefined') {
-    window.addEventListener('online', () => { set({ online: true }); requestSync(); });
+    // Back online, or back on screen: pull now. Both are moments the user is
+    // looking at the app expecting it to be current, so the coalescing delay
+    // that suits a burst of typing is exactly wrong here.
+    window.addEventListener('online', () => { set({ online: true }); requestSync('remote'); });
     window.addEventListener('offline', () => set({ online: false }));
     // A laptop that slept for eight hours comes back holding a dead socket and
     // a stale store. Pull on the way back in rather than waiting for an edit.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') requestSync();
+      if (document.visibilityState === 'visible') requestSync('remote');
     });
   }
 
@@ -249,7 +260,10 @@ export async function initSync() {
   const myId = await getDeviceId();
   onRealtime('data:changed', (p) => {
     if (p?.origin && p.origin === myId) return;   // our own echo
-    requestSync();
+    // No debounce. This event IS the coalescing — the server sent it once,
+    // after the write landed — so the only thing another 1.2s wait buys is
+    // 1.2s of the user looking at a list that does not have their clip in it.
+    requestSync('remote');
   });
   if (canSync()) syncNow();
 }
@@ -301,11 +315,25 @@ export async function setSyncEnabled(enabled) {
   if (enabled && state.online && getToken()) await syncNow();
 }
 
-// Debounced trigger after a local mutation.
-export function requestSync() {
+// How long to wait before a triggered sync actually goes.
+//
+// The old single 1.2s applied to everything, which cost 2.4s of pure waiting
+// on the most common cross-device path: capture on the desktop (1.2s) → push →
+// server announces → phone waits again (1.2s) → pull.
+//
+//   edit     a burst of keystrokes or checkbox taps, worth coalescing
+//   capture  one clip, already complete the moment it exists — there is no
+//            burst to wait for, only a round trip to start sooner
+//   remote   another device already told us. The server has coalesced it, so
+//            waiting again adds latency and saves nothing.
+const DELAY = { edit: 1200, capture: 150, remote: 0 };
+
+export function requestSync(kind = 'edit') {
   if (!canSync()) return;
+  const wait = DELAY[kind] ?? DELAY.edit;
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => { syncNow(); }, 1200);
+  if (wait === 0) { syncNow(); return; }
+  debounceTimer = setTimeout(() => { syncNow(); }, wait);
 }
 
 // Full two-way merge. `onMerged` lets the UI refresh after local is replaced.
@@ -313,7 +341,11 @@ let onMergedCb = null;
 export function setOnMerged(cb) { onMergedCb = cb; }
 
 export async function syncNow() {
-  if (!state.enabled || !state.online || !getToken() || state.syncing) return;
+  if (!state.enabled || !state.online || !getToken()) return;
+  // Already running: remember that someone asked, and run again the moment
+  // this one lands. Returning silently here is what used to lose remote
+  // notifications outright.
+  if (state.syncing) { syncAgain = true; return; }
   set({ syncing: true, error: null });
   try {
     const [notes, plans, schedules, pending, clipsSince] = await Promise.all([
@@ -362,11 +394,14 @@ export async function syncNow() {
     // holds only what changed, so replacing the store would wipe everything the
     // server didn't happen to mention. Do not "fix" this to match the three
     // lines above.
+    let clipsTouched = false;
     if (state.clipSync && Array.isArray(res.clips) && res.clips.length) {
       await localdb.bulkPut('clips', res.clips.map(toLocal));
+      clipsTouched = true;
     }
     for (const uid of (state.clipSync ? res.clipsRemovedUids : []) || []) {
       await localdb.remove('clips', uid); // eslint-disable-line no-await-in-loop
+      clipsTouched = true;
     }
     if (state.clipSync && res.clipsServerTime) await localdb.metaSet(CLIPSYNC_KEY, res.clipsServerTime);
 
@@ -375,9 +410,22 @@ export async function syncNow() {
     const pr = res.pendingReconcile || { notes: [], plans: [] };
     set({ syncing: false, lastSync, pendingReconcile: { notes: pr.notes || [], plans: pr.plans || [] } });
     if (onMergedCb) onMergedCb();
+    // The Alt+M paste panel is a different WebView with its own React tree and
+    // no sync engine of its own. It shares this IndexedDB, so all it needs is
+    // to be told to re-read it.
+    if (clipsTouched) publishClipsChanged();
+    drainAgain();
   } catch (err) {
     set({ syncing: false, error: err?.message || 'Sync failed' });
+    drainAgain();
   }
+}
+
+// Run the sync that was asked for while the last one was in flight.
+function drainAgain() {
+  if (!syncAgain) return;
+  syncAgain = false;
+  if (canSync()) syncNow();
 }
 
 // Resolve a batch of web-deleted items.

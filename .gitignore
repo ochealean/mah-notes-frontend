@@ -10,3 +10,4 @@ dist/
 *.keystore
 *keystore*base64*
 keystore.properties
+.claude/skills/mah-notes-bundle-creator
