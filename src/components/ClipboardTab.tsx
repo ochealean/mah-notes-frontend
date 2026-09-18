@@ -18,6 +18,7 @@ import { timeAgo } from '../lib/timeAgo';
 import { copyClip, deleteClip, setClipPinned } from '../lib/clips';
 import { expiryLabel } from '../lib/clipRetention';
 import { useSync } from '../lib/sync';
+import { dissolveAway } from '../lib/galaxyFarewell';
 
 // First line of a clip, used as its title.
 export function clipTitle(text) {
@@ -114,8 +115,10 @@ export function ClipPane({ clip, onChanged, onBack }) {
   }
 
   async function remove() {
+    const restore = await dissolveAway([document.querySelector('.pane .pane-scroll'), document.querySelector('.rail-list .row.active')]);
     try { await deleteClip(clip.id); onChanged(); }
     catch (err) { notify(err.message || 'Could not delete', 'error'); }
+    finally { restore(); } // the same pane goes on to show the next clip
   }
 
   // Pinning is the only thing that saves a clip from the 30-day sweep, so the

@@ -15,6 +15,8 @@
 // ============================================================
 import { useEffect, useRef, useState } from 'react';
 import { repo } from '../lib/repo';
+import { celebrateCheck } from '../lib/checkFx';
+import { dissolveAway } from '../lib/galaxyFarewell';
 import { notify } from '../lib/notify';
 import { contentToHtml, escapeHtml, sanitizeHtml } from '../lib/richtext';
 import { loadDraft, clearDraft } from '../lib/drafts';
@@ -147,14 +149,20 @@ export function DocPane({ note, onEdit, onTogglePin, onToggleHidden, onShare, on
     if (e.clientX - rect.left > 32) return;
     const now = item.getAttribute('data-checked') !== 'true';
     item.setAttribute('data-checked', now ? 'true' : 'false');
+    if (now) celebrateCheck(item);
     try { await repo.updateNote(note.id, { content: sanitizeHtml(proseRef.current.innerHTML) }); }
     catch { notify('Failed to save', 'error'); }
   }
 
   async function remove() {
     if (!confirm('Delete this document? This cannot be undone.')) return;
+    // Galaxy: the page sweeps away into stardust first. Resolves at once
+    // without a bundle that has farewells.
+    const restore = await dissolveAway([document.querySelector('.pane .pane-scroll'), document.querySelector('.rail-list .row.active')]);
     try { await repo.deleteNote(note.id); notify('Document deleted', 'success'); onDelete(); }
     catch (err) { notify(err.message, 'error'); }
+    // Always: the same pane goes on to show the next document.
+    finally { restore(); }
   }
 
   return (

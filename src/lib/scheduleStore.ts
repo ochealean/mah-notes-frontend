@@ -105,7 +105,22 @@ const local = {
     requestSync();
     return { ok: true };
   },
+  // Local writes cost nothing, and the sync engine already sends every change
+  // in one debounced request — so a batch here is just a loop.
+  async createSchedules(list) {
+    const out = [];
+    for (const data of list) out.push(await local.createSchedule(data)); // eslint-disable-line no-await-in-loop
+    return out;
+  },
+  async deleteSchedules(ids) {
+    for (const id of ids) await local.deleteSchedule(id); // eslint-disable-line no-await-in-loop
+    return { ok: true, deleted: ids.length };
+  },
 };
+
+// Matches the server's cap on one bulk request.
+const BULK_MAX = 200;
+const chunks = (list, n) => Array.from({ length: Math.ceil(list.length / n) }, (_, i) => list.slice(i * n, i * n + n));
 
 // ── Web (REST; the server sorts by day then start) ──
 const web = {
@@ -114,6 +129,39 @@ const web = {
   createSchedule: (data) => api.post('/api/schedules', payload(data)),
   updateSchedule: (id, patch) => api.put(`/api/schedules/${id}`, payload(patch)),
   deleteSchedule: (id) => api.del(`/api/schedules/${id}`),
+  // A scanned timetable is dozens of blocks. One request per block spent the
+  // whole write rate limit on a single scan (429 partway through), so the
+  // batch goes up as ONE request. An older server without the bulk route
+  // answers 404, and then it falls back to one at a time.
+  async createSchedules(list) {
+    const out = [];
+    try {
+      for (const part of chunks(list, BULK_MAX)) {
+        // eslint-disable-next-line no-await-in-loop
+        out.push(...await api.post('/api/schedules/bulk', { blocks: part.map((d) => payload(d)) }));
+      }
+      return out;
+    } catch (err) {
+      if (err?.status !== 404 || out.length) throw err;
+    }
+    for (const d of list) out.push(await web.createSchedule(d)); // eslint-disable-line no-await-in-loop
+    return out;
+  },
+  async deleteSchedules(ids) {
+    let deleted = 0;
+    try {
+      for (const part of chunks(ids, BULK_MAX)) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await api.post('/api/schedules/bulk-delete', { ids: part });
+        deleted += res?.deleted || 0;
+      }
+      return { ok: true, deleted };
+    } catch (err) {
+      if (err?.status !== 404 || deleted) throw err;
+    }
+    for (const id of ids) await web.deleteSchedule(id); // eslint-disable-line no-await-in-loop
+    return { ok: true, deleted: ids.length };
+  },
 };
 
 // Offline store on Android and desktop; REST on the web. Reminders and
@@ -126,3 +174,7 @@ export const listGroups = (...a) => store.listGroups(...a);
 export const createSchedule = (...a) => store.createSchedule(...a);
 export const updateSchedule = (...a) => store.updateSchedule(...a);
 export const deleteSchedule = (...a) => store.deleteSchedule(...a);
+/** Many blocks in one go — a scanned timetable. */
+export const createSchedules = (list) => store.createSchedules(list);
+/** Many blocks in one go — delete all, or delete a group. */
+export const deleteSchedules = (ids) => store.deleteSchedules(ids);

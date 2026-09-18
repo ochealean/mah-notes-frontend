@@ -1,15 +1,11 @@
 // ============================================================
-//  "Get the app" — shown from Settings → About & updates (web only).
+//  "Get the app" — opened by the single Download button under a shared
+//  link, and from Settings → About & updates (web only).
 //
-//  One release carries every platform's build, so this offers whichever
-//  ones are actually attached: the Android .apk and the Windows
-//  installer. Both are read from the latest release rather than
-//  hardcoded, so neither can go stale.
-//
-//  A phone is offered the APK alone — it cannot run a Windows installer,
-//  so the second button would only be noise. A desktop gets both, since
-//  someone at a computer may well be fetching the app for their phone,
-//  with Windows first when that is what they are running.
+//  Always two choices, Windows and mobile, with the one that matches the
+//  device you are on first. Both come from the latest release rather than
+//  hardcoded links, so neither can go stale; if a build is missing from the
+//  release, its button falls back to the releases page.
 // ============================================================
 import { useEffect, useState } from 'react';
 import { UPDATE_REPO, fetchLatestRelease } from '../lib/updates';
@@ -49,27 +45,32 @@ export default function DownloadAppModal({ onClose }) {
 
   // The Windows installer is an ordinary download; none of the APK's
   // new-tab handling applies, so a plain link is right.
-  const windowsBtn = installerUrl && !onMobile ? (
+  // Whichever matches this device leads, and is the solid button.
+  const windowsFirst = onWindows && !onMobile;
+
+  const windowsBtn = (
     <a
-      className={`btn btn-block ${onWindows ? 'btn-primary' : 'btn-ghost'}`}
-      style={onWindows ? undefined : { marginTop: 9 }}
-      href={installerUrl}
+      className={`btn btn-block ${windowsFirst ? 'btn-primary' : 'btn-ghost'}`}
+      style={windowsFirst ? undefined : { marginTop: 9 }}
+      href={installerUrl || RELEASES_URL}
+      target={installerUrl ? undefined : '_blank'}
+      rel={installerUrl ? undefined : 'noopener noreferrer'}
       onClick={onClose}
     >
       <i className="fab fa-windows" /> Download for Windows
     </a>
-  ) : null;
+  );
 
   const androidBtn = (
     <a
-      className={`btn btn-block ${onWindows ? 'btn-ghost' : 'btn-primary'}`}
-      style={onWindows && installerUrl ? { marginTop: 9 } : undefined}
+      className={`btn btn-block ${windowsFirst ? 'btn-ghost' : 'btn-primary'}`}
+      style={windowsFirst ? { marginTop: 9 } : undefined}
       href={isDirectApk ? '/download' : downloadUrl}
       target="_blank"
       rel="noopener noreferrer"
       onClick={onClose}
     >
-      <i className="fab fa-android" /> Download for Android
+      <i className="fab fa-android" /> Download for mobile (Android)
     </a>
   );
 
@@ -96,7 +97,7 @@ export default function DownloadAppModal({ onClose }) {
             : <>
                 {release && <>Latest version: <b>{release.version}</b>. </>}
                 Android installs from an APK, so it may ask you to allow installs from your browser the first time.
-                {windowsBtn && ' Windows installs per-user, with no admin prompt.'}
+                {' '}Windows installs per-user, with no admin prompt.
               </>}
         </p>
 
@@ -106,10 +107,10 @@ export default function DownloadAppModal({ onClose }) {
             so Android never finalises the handoff to the download manager.
             Pasting the same URL by hand works because that tab does end up with
             a page. */}
-        {onWindows ? <>{windowsBtn}{androidBtn}</> : <>{androidBtn}{windowsBtn}</>}
-        <a className="btn btn-ghost btn-block" style={{ marginTop: 9 }} href={RELEASES_URL} target="_blank" rel="noopener noreferrer" onClick={onClose}>
-          <i className="fas fa-list" /> View versions
-        </a>
+        {windowsFirst ? <>{windowsBtn}{androidBtn}</> : <>{androidBtn}{windowsBtn}</>}
+        <p className="download-more">
+          <a href={RELEASES_URL} target="_blank" rel="noopener noreferrer" onClick={onClose}>Older versions</a>
+        </p>
 
       </div>
     </div>

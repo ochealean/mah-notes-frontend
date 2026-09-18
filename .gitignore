@@ -10,3 +10,8 @@ dist/
 *.keystore
 *keystore*base64*
 keystore.properties
+
+# Local working files — not part of the app
+# Claude skills installed for this project, and the design prompt
+.claude/skills/
+PROMPT_MAH_NOTES.md

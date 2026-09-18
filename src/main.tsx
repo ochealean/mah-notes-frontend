@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, HashRouter } from 'react-router-dom';
 import { isDesktop } from './lib/platform';
 import { installExternalLinkHandler } from './lib/externalLinks';
+import { installBundleRuntime } from './lib/bundles';
+import { installStarCollapse } from './lib/starCollapse';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import App from './App';
@@ -20,6 +22,9 @@ import '@fontsource/archivo/800.css';
 import './styles/app.css';
 import './styles/viewer.css';
 import './styles/themes.css';
+// Cosmetic bundles. Last, so a bundle's accent layer sits on top of the
+// theme it decorates rather than under it.
+import './styles/bundles.css';
 
 // We deliberately do NOT load Google's GIS script (@react-oauth/google's
 // GoogleOAuthProvider). Web Google sign-in uses a plain OAuth *redirect* flow
@@ -35,6 +40,15 @@ const Router = isDesktop ? HashRouter : BrowserRouter;
 // way to honour on their own — the click lands on nothing. Installed once,
 // before render, so a link works on the very first painted note.
 installExternalLinkHandler();
+
+// Cosmetic bundles, both installed before render:
+//  · the runtime pauses every bundle animation on a hidden tab or a blurred
+//    window, marks Android for the reduced sky, and follows the system's
+//    reduced-motion setting;
+//  · the star-collapse click effect is one delegated listener, so buttons
+//    rendered later are covered without any component knowing about it.
+installBundleRuntime();
+installStarCollapse();
 
 const tree = (
   <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

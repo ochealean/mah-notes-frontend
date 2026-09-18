@@ -9,6 +9,8 @@ import { notify } from '../lib/notify';
 import { rateGate } from '../lib/rateLimit';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
 import { saveDraft, loadDraft, clearDraft } from '../lib/drafts';
+import { celebrateCheck } from '../lib/checkFx';
+import { attachGalaxyCaret } from '../lib/galaxyCaret';
 import UnsavedChangesModal from './UnsavedChangesModal';
 
 export default function DocEditor({ initial, onClose, onSaved }) {
@@ -85,6 +87,14 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     refreshChecklist();
     setTimeout(() => { (initial?.title ? editor : null)?.focus(); updateToolbarState(); }, 60);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Galaxy: a caret of starlight, characters that arrive lit and leave as
+  // dust. Drawn in an overlay on <body> — this element is never touched, so
+  // nothing the effect draws can end up saved in the note.
+  useEffect(() => {
+    const el = editorRef.current;
+    return el ? attachGalaxyCaret(el) : undefined;
   }, []);
 
   // Autosave the in-progress doc to a local draft (debounced) whenever it
@@ -314,7 +324,11 @@ export default function DocEditor({ initial, onClose, onSaved }) {
     const rect = item.getBoundingClientRect();
     if (e.clientX - rect.left <= 30) {
       e.preventDefault();
-      item.setAttribute('data-checked', item.getAttribute('data-checked') === 'true' ? 'false' : 'true');
+      const now = item.getAttribute('data-checked') !== 'true';
+      item.setAttribute('data-checked', now ? 'true' : 'false');
+      // The class it adds is temporary and never saved: the sanitiser only
+      // keeps the checklist classes.
+      if (now) celebrateCheck(item);
       markChanged();
     }
   }

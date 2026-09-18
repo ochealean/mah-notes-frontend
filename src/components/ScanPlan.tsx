@@ -110,7 +110,7 @@ export default function ScanPlan({ onAdded, openToken = 0, hideTrigger = false }
               <h3><i className="fas fa-wand-magic-sparkles" /> Review plan</h3>
               <button className="icon-btn" aria-label="Close" onClick={() => setRows(null)}><i className="fas fa-times" /></button>
             </div>
-            <p className="settings-hint-text" style={{ padding: '0 2px 8px' }}>Untick anything wrong; you can edit the plan afterwards.</p>
+            <p className="settings-hint-text" style={{ padding: '0 2px 8px' }}>Uncheck anything wrong; you can edit the plan afterwards.</p>
             <div className="field" style={{ marginBottom: 10 }}>
               <i className="fas fa-pen field-icon" />
               <input className="field-input" placeholder="Plan name" value={title} onChange={(e) => setTitle(e.target.value)} />

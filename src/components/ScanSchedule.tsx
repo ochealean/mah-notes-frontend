@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getToken } from '../lib/api';
 import { scanScheduleImage } from '../lib/scanSchedule';
-import { createSchedule } from '../lib/scheduleStore';
+import { createSchedules } from '../lib/scheduleStore';
 import { notify } from '../lib/notify';
 
 const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
@@ -71,14 +71,13 @@ export default function ScanSchedule({ onAdded, openToken = 0, hideTrigger = fal
     if (saving || !kept.length) return;
     setSaving(true);
     try {
-      for (const b of kept) {
-        // eslint-disable-next-line no-await-in-loop
-        await createSchedule({
-          title: b.title, sub: b.sub, group: group.trim(),
-          day: b.day, start: b.start, end: b.end,
-          notify: true, alarm: false,
-        });
-      }
+      // One request for the whole timetable, not one per block — a full week
+      // is easily 70+ blocks, which used to trip the server's rate limit.
+      await createSchedules(kept.map((b) => ({
+        title: b.title, sub: b.sub, group: group.trim(),
+        day: b.day, start: b.start, end: b.end,
+        notify: true, alarm: false,
+      })));
       notify(`Added ${kept.length} block${kept.length > 1 ? 's' : ''} to your schedule`, 'success');
       setRows(null);
       if (onAdded) onAdded();
@@ -107,7 +106,7 @@ export default function ScanSchedule({ onAdded, openToken = 0, hideTrigger = fal
               <button className="icon-btn" aria-label="Close" onClick={() => setRows(null)}><i className="fas fa-times" /></button>
             </div>
             <p className="settings-hint-text" style={{ padding: '0 2px 8px' }}>
-              Untick anything that’s wrong — you can edit any block after adding (times, alarm, ringtone…).
+              Uncheck anything that’s wrong — you can edit any block after adding (times, alarm, ringtone…).
             </p>
 
             <div className="scan-rows">

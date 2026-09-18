@@ -9,6 +9,7 @@ import DownloadPage from './components/DownloadPage';
 import Toast from './components/Toast';
 import ClipPanel from './components/ClipPanel';
 import Loader from './components/Loader';
+import IntroAnimation from './components/IntroAnimation';
 
 function Home() {
   const { user, ready, googlePending } = useAuth();
@@ -27,15 +28,22 @@ function Home() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/view" element={<Viewer />} />
-      <Route path="/download" element={<DownloadPage />} />
-      {/* Desktop only, each in its own borderless window: the Alt+N toast
-          and the Alt+M paste panel. */}
-      <Route path="/toast" element={<Toast />} />
-      <Route path="/clip-panel" element={<ClipPanel />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-    </Routes>
+    <>
+      {/* The bundle's intro: an overlay OVER the routes, never a gate in
+          front of them — the app mounts underneath on the first frame, and
+          any tap or key dismisses it. It refuses /toast and /clip-panel
+          outright (see lib/introGate): those windows exist to open instantly. */}
+      <IntroAnimation />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/view" element={<Viewer />} />
+        <Route path="/download" element={<DownloadPage />} />
+        {/* Desktop only, each in its own borderless window: the Alt+N toast
+            and the Alt+M paste panel. */}
+        <Route path="/toast" element={<Toast />} />
+        <Route path="/clip-panel" element={<ClipPanel />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+      </Routes>
+    </>
   );
 }
