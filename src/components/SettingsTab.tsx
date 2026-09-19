@@ -1016,7 +1016,8 @@ function FriendsSection({ user, refreshInbox, onReload }) {
 // Default bundle is back on.
 function AppearanceSection({ onOpenSection }) {
   const { bundle } = useBundle();
-  // Locked when the equipped bundle brings its own appearance.
+  // Every bundle but Default brings its own partner theme, so the editor is
+  // locked whenever one is equipped (bundles.ts checks the rule at load).
   const locked = !!bundle.theme;
   // A disabled fieldset only reaches real form controls; the colour pickers
   // are drag-and-arrow-key widgets, so the whole editor is made inert too —

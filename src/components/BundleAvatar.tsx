@@ -15,7 +15,7 @@
 // ============================================================
 import { useMemo, type ReactNode } from 'react';
 import { useBundle, getBundle, isLowPerf, type BundleMotion } from '../lib/bundles';
-import { decorationHtml } from '../lib/galaxy';
+import { decorationFor } from '../lib/bundleArt';
 
 type Props = {
   /** The avatar's rendered diameter in px. Decides the tier. */
@@ -33,8 +33,8 @@ export default function BundleAvatar({ size, bundleId, motion, children, classNa
   const bundle = getBundle(bundleId ?? b.id);
   const m: BundleMotion = b.reduced ? 'off' : (motion || b.effectiveMotion);
   const deco = useMemo(
-    () => (bundle.decoration ? decorationHtml(size, m, isLowPerf()) : null),
-    [bundle.decoration, size, m],
+    () => (bundle.decoration ? decorationFor(bundle.id, size, m, isLowPerf()) : null),
+    [bundle.id, bundle.decoration, size, m],
   );
   const D = size * 1.25;
   const off = (D - size) / 2;

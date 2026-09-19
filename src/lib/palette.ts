@@ -223,6 +223,24 @@ export function previewTheme(theme: Theme, mode: 'light' | 'dark' = 'light') {
   else delete el.dataset.motion;
 }
 
+// A bundle theme's own motion. Every bundle but Default brings a partner
+// theme, and every partner theme moves: its three colours drift slowly across
+// the ground behind the app (bundles.css, "A bundle theme's motion"). Your own
+// theme has none, and the ordinary ambient drift is all there is.
+export type ThemeMotion = { kind: 'drift'; colors: [string, string, string]; period: number };
+
+export function applyThemeMotion(m: ThemeMotion | null | undefined) {
+  const el = document.documentElement;
+  if (!m) {
+    delete el.dataset.themeMotion;
+    ['--tm-1', '--tm-2', '--tm-3', '--tm-period'].forEach((v) => el.style.removeProperty(v));
+    return;
+  }
+  el.dataset.themeMotion = m.kind;
+  m.colors.forEach((c, i) => el.style.setProperty(`--tm-${i + 1}`, c));
+  el.style.setProperty('--tm-period', `${m.period}s`);
+}
+
 // Put the reader's own theme back after a preview.
 export function restoreOwnTheme(mode: 'light' | 'dark' = 'light') {
   applyTheme(loadTheme(), mode);

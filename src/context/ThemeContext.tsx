@@ -24,7 +24,7 @@
 //  account, and comes straight back when the bundle comes off.
 // ============================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { loadPalette, savePalette, applyPalette, previewTheme, isDarkColor, DEFAULT_THEME } from '../lib/palette';
+import { loadPalette, savePalette, applyPalette, previewTheme, applyThemeMotion, isDarkColor, DEFAULT_THEME } from '../lib/palette';
 import { api, getToken } from '../lib/api';
 import { useBundle, getBundle } from '../lib/bundles';
 
@@ -111,6 +111,9 @@ export function ThemeProvider({ children }) {
     apply(effective);
     if (pageTheme) previewTheme(pageTheme, effective);
     else applyPalette(applied, effective);
+    // A bundle theme's own motion travels with it: equipped, tried on in
+    // Settings → Bundles, or worn by a shared link. Your own theme has none.
+    applyThemeMotion((applied as any)?.motion);
   }, [applied, effective, pageTheme]);
 
   return (

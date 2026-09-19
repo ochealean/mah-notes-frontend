@@ -10,12 +10,47 @@
    so they can never collide with the app's own (spin, pulse, …).
    ============================================================ */
 
-:root {
+/* The bundle's colours as tokens. They follow the bundle in force on the
+   page (html[data-bundle]) — or, on a surface that shows someone else's
+   bundle (a shared card, a friend's card, a shop tile, an intro), that
+   surface's own [data-bscope]. Custom properties inherit, so one attribute
+   re-dresses everything inside it. --g-on is the text colour ON an accent
+   fill: white on Galaxy's violet, the void on Cyberpunk's light cyan. */
+:root, [data-bscope="galaxy"] {
     --g-accent: #7b5cff;
     --g-soft: #b9a6ff;
     --g-spark: #46d8ff;
     --g-glow: rgba(123, 92, 255, .45);
     --g-glow-soft: rgba(123, 92, 255, .22);
+    --g-on: #fff;
+    --g-bubble: linear-gradient(140deg, #46d8ff 0%, #8f7bff 52%, #7b5cff 100%);
+    /* The still wash behind the reading pane and a shared page: a hairline
+       along the top, violet from the upper right, cyan from the lower left,
+       a trace of H-alpha red low on the right. */
+    --bundle-wash:
+        linear-gradient(90deg, rgba(123, 92, 255, .6), rgba(70, 216, 255, .38) 38%, transparent 72%) top left / 100% 2px no-repeat,
+        radial-gradient(120% 62% at 100% 0%, rgba(123, 92, 255, .20) 0%, transparent 62%),
+        radial-gradient(70% 48% at 0% 100%, rgba(70, 216, 255, .10) 0%, transparent 70%),
+        radial-gradient(52% 38% at 86% 92%, rgba(255, 39, 72, .08) 0%, transparent 72%);
+}
+[data-bundle="cyberpunk"], [data-bscope="cyberpunk"] {
+    --g-accent: #00e5ff;
+    --g-soft: #7de9ff;
+    --g-spark: #ff2d95;
+    --g-glow: rgba(0, 229, 255, .45);
+    --g-glow-soft: rgba(0, 229, 255, .22);
+    --g-on: #04050d;
+    --g-bubble: linear-gradient(140deg, #ff2d95 0%, #7b2fff 50%, #00e5ff 100%);
+    /* Signage light: a cyan-to-magenta hairline, magenta from the upper
+       right, cyan from the lower left, violet haze low on the right. */
+    --bundle-wash:
+        linear-gradient(90deg, rgba(0, 229, 255, .62), rgba(255, 45, 149, .42) 40%, transparent 74%) top left / 100% 2px no-repeat,
+        radial-gradient(120% 62% at 100% 0%, rgba(255, 45, 149, .16) 0%, transparent 62%),
+        radial-gradient(70% 48% at 0% 100%, rgba(0, 229, 255, .12) 0%, transparent 70%),
+        radial-gradient(52% 38% at 86% 92%, rgba(123, 47, 255, .14) 0%, transparent 72%);
+}
+
+:root {
     /* A glyph-level scrim: paper-coloured halos under text that sits over an
        animated sky. The text colour itself is never touched. An engine
        without color-mix simply draws no halo; the sky's own scrim still holds. */
@@ -193,7 +228,7 @@
 .bcol-name { display: flex; align-items: center; gap: 8px; font-family: var(--font-heading); font-weight: 800; font-size: 15px; }
 .bcol-chip {
     font-family: var(--font-heading); font-weight: 800; font-size: 8.5px; letter-spacing: .14em;
-    text-transform: uppercase; background: var(--g-accent); color: #fff; padding: 3px 6px;
+    text-transform: uppercase; background: var(--g-accent); color: var(--g-on); padding: 3px 6px;
 }
 .bcol-chip.ghost { background: transparent; color: var(--ink-80); box-shadow: inset 0 0 0 1px var(--ink-40); }
 .bcol-tag { font-size: 12.5px; line-height: 1.45; color: var(--ink-80); }
@@ -222,7 +257,7 @@
 }
 .bmotion button + button { border-left: 1px solid var(--ink-24); }
 .bmotion button:hover { color: var(--ink); background: var(--veil-1); }
-.bmotion button[aria-pressed="true"] { background: var(--g-accent); color: #fff; }
+.bmotion button[aria-pressed="true"] { background: var(--g-accent); color: var(--g-on); }
 .bcol-cols {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 22px 30px;
     margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--ink-14);
@@ -259,7 +294,7 @@
     font-family: var(--font-heading); font-weight: 800; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
     transition: border-color .14s ease, filter .14s ease;
 }
-.vc-btn.primary { background: var(--g-accent); border-color: var(--g-accent); color: #fff; text-shadow: none; }
+.vc-btn.primary { background: var(--g-accent); border-color: var(--g-accent); color: var(--g-on); text-shadow: none; }
 .vc-btn.primary:hover { filter: brightness(1.1); }
 .vc-btn.ghost:hover { border-color: var(--g-accent); }
 [data-bundle-motion="off"] .vcard-c { animation: none; }
@@ -330,7 +365,7 @@
 .bintro-logo {
     position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: contain;
     pointer-events: none; user-select: none; -webkit-user-drag: none;
-    filter: drop-shadow(0 0 10px rgba(123, 92, 255, .6)) drop-shadow(0 0 26px rgba(123, 92, 255, .3));
+    filter: drop-shadow(0 0 10px var(--g-glow)) drop-shadow(0 0 26px var(--g-glow-soft));
 }
 .bintro-word { position: absolute; left: 0; right: 0; top: calc(46% + 46px); text-align: center; }
 .bintro-w { position: relative; display: inline-block; overflow: hidden; padding: 8px 16px; }
@@ -348,7 +383,7 @@
     position: absolute; inset: 0; padding: 8px 16px; white-space: nowrap; pointer-events: none;
     font-kerning: none; font-variant-ligatures: none;
     color: transparent; -webkit-text-fill-color: transparent;
-    background-image: linear-gradient(105deg, transparent 43%, rgba(185, 166, 255, .55) 47%, #fff 50%, rgba(159, 233, 255, .6) 53%, transparent 57%);
+    background-image: linear-gradient(105deg, transparent 43%, color-mix(in srgb, var(--g-soft) 55%, transparent) 47%, #fff 50%, color-mix(in srgb, var(--g-spark) 60%, transparent) 53%, transparent 57%);
     background-size: 300% 100%; background-repeat: no-repeat; background-position: 100% 0;
     -webkit-background-clip: text; background-clip: text;
     filter: drop-shadow(0 0 6px rgba(255, 255, 255, .55));
@@ -367,9 +402,9 @@
 /* ── Galaxy caret (document editor) ───────────────────── */
 /* Every text field gets the bundle's colour on its ordinary caret. The
    document editor goes further: its own caret is hidden and drawn here. */
-[data-bundle="galaxy"] input,
-[data-bundle="galaxy"] textarea,
-[data-bundle="galaxy"] [contenteditable="true"] { caret-color: var(--g-spark); }
+[data-bundle]:not([data-bundle="default"]) input,
+[data-bundle]:not([data-bundle="default"]) textarea,
+[data-bundle]:not([data-bundle="default"]) [contenteditable="true"] { caret-color: var(--g-spark); }
 
 .gcaret-layer { position: fixed; inset: 0; z-index: 250; pointer-events: none; contain: strict; }
 /* Pinned at 0,0 so the transform reads as plain viewport coordinates. */
@@ -483,40 +518,30 @@
 .friend-hero-act { margin-left: auto; display: flex; gap: 2px; align-self: center; text-shadow: none; }
 .friend-hero-act .friend-btn { background: var(--veil-2); }
 
-/* ── The Galaxy wash ─────────────────────────────────── */
-/* A still field of the galaxy's colours — a violet hairline along the top,
-   violet from the upper right, cyan from the lower left, a trace of H-alpha
-   red low on the right. Deliberately motionless, because motion beside a
-   paragraph pulls the eye off it, and faint enough that text contrast never
-   moves. ONE definition, worn everywhere Galaxy shows so it always matches:
-     · behind the reading pane, while Galaxy is equipped
-     · behind a shared link from someone wearing Galaxy — the card page, the
-       panel beside the card, and the note page — whatever the reader has
-       equipped themselves */
-:root {
-    --galaxy-wash:
-        linear-gradient(90deg, rgba(123, 92, 255, .6), rgba(70, 216, 255, .38) 38%, transparent 72%) top left / 100% 2px no-repeat,
-        radial-gradient(120% 62% at 100% 0%, rgba(123, 92, 255, .20) 0%, transparent 62%),
-        radial-gradient(70% 48% at 0% 100%, rgba(70, 216, 255, .10) 0%, transparent 70%),
-        radial-gradient(52% 38% at 86% 92%, rgba(255, 39, 72, .08) 0%, transparent 72%);
-}
-[data-bundle="galaxy"] .pane { isolation: isolate; }
-[data-bundle="galaxy"] .pane::before {
+/* ── The bundle wash ───────────────────────────────── */
+/* A still field of the bundle's colours (--bundle-wash, above).
+   Deliberately motionless, because motion beside a paragraph pulls the eye
+   off it — the moving colour lives on the ground behind (a theme's motion).
+   Faint enough that text contrast never moves. Worn behind the reading pane
+   while any bundle but Default is equipped, and behind a shared link from
+   someone wearing one — whatever the reader has equipped. */
+[data-bundle]:not([data-bundle="default"]) .pane { isolation: isolate; }
+[data-bundle]:not([data-bundle="default"]) .pane::before {
     content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-    background: var(--galaxy-wash);
+    background: var(--bundle-wash);
 }
 /* A shared page scrolls the whole document, so its wash is fixed to the
    screen: the colour stays put behind the glass card as you read. */
-.galaxy-amb::before {
+.bundle-amb::before {
     content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background: var(--galaxy-wash);
+    background: var(--bundle-wash);
 }
 /* The "get the app" panel beside a Galaxy card is dressed as the Galaxy
    pane is: the bundle's paper with the same wash over it. */
-.galaxy-amb .vcard-wrap .view-cta { position: relative; isolation: isolate; }
-.galaxy-amb .vcard-wrap .view-cta::before {
+.bundle-amb .vcard-wrap .view-cta { position: relative; isolation: isolate; }
+.bundle-amb .vcard-wrap .view-cta::before {
     content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-    background: var(--galaxy-wash);
+    background: var(--bundle-wash);
 }
 
 /* A pane that wears the sky (the Time tab on a phone). */
@@ -546,17 +571,17 @@
    Subtle drifts slower. Off and reduced motion keep the bubble raised and
    still, and the notch simply there. */
 .nav-bg { display: none; }
-[data-bundle="galaxy"] .bottom-nav {
+[data-bundle]:not([data-bundle="default"]) .bottom-nav {
     background: transparent; border-top: 0;
     backdrop-filter: none; -webkit-backdrop-filter: none;
     --nx: calc(6px + (100vw - 12px) * (var(--i, 0) + .5) / var(--n, 4));
 }
-[data-bundle="galaxy"] .nav-bg {
+[data-bundle]:not([data-bundle="default"]) .nav-bg {
     display: block; position: absolute; inset: 0; pointer-events: none;
-    filter: drop-shadow(0 -1px 0 rgba(185, 166, 255, .22)) drop-shadow(0 -10px 22px rgba(0, 0, 0, .35));
+    filter: drop-shadow(0 -1px 0 color-mix(in srgb, var(--g-soft) 22%, transparent)) drop-shadow(0 -10px 22px rgba(0, 0, 0, .35));
 }
-[data-bundle="galaxy"] .nav-bg-fill {
-    position: absolute; inset: 0; background: rgba(19, 17, 31, .96);
+[data-bundle]:not([data-bundle="default"]) .nav-bg-fill {
+    position: absolute; inset: 0; background: color-mix(in srgb, var(--paper) 96%, transparent);
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40'%3E%3Cpath d='M0 0C14 0 20 2 24 10C30 26 42 34 60 34C78 34 90 26 96 10C100 2 106 0 120 0Z'/%3E%3C/svg%3E"), linear-gradient(#000, #000);
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40'%3E%3Cpath d='M0 0C14 0 20 2 24 10C30 26 42 34 60 34C78 34 90 26 96 10C100 2 106 0 120 0Z'/%3E%3C/svg%3E"), linear-gradient(#000, #000);
     -webkit-mask-size: 120px 40px, 100% 100%; mask-size: 120px 40px, 100% 100%;
@@ -566,30 +591,70 @@
     animation: bx-notchOpen .2s cubic-bezier(.2, .9, .3, 1.15) both;
 }
 /* The notch marks the open tab now, so the accent rule stands down. */
-[data-bundle="galaxy"] .nav-item::before { display: none; }
-[data-bundle="galaxy"] .nav-item .nav-icon-wrap { transition: transform .24s cubic-bezier(.2, .9, .3, 1.15), color .15s ease; }
-[data-bundle="galaxy"] .nav-item.active .nav-icon-wrap {
+[data-bundle]:not([data-bundle="default"]) .nav-item::before { display: none; }
+[data-bundle]:not([data-bundle="default"]) .nav-item .nav-icon-wrap { transition: transform .24s cubic-bezier(.2, .9, .3, 1.15), color .15s ease; }
+[data-bundle]:not([data-bundle="default"]) .nav-item.active .nav-icon-wrap {
     color: #fff; isolation: isolate; transform: translateY(-24px);
     animation: bx-navFloat 3.4s ease-in-out .28s infinite;
 }
-[data-bundle="galaxy"] .nav-item.active .nav-icon-wrap::before {
+[data-bundle]:not([data-bundle="default"]) .nav-item.active .nav-icon-wrap::before {
     content: ''; position: absolute; left: 50%; top: 50%; z-index: -1;
     width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
-    background: linear-gradient(140deg, #46d8ff 0%, #8f7bff 52%, #7b5cff 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 0 1px rgba(185, 166, 255, .28), 0 8px 22px rgba(123, 92, 255, .5);
+    background: var(--g-bubble);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 0 1px color-mix(in srgb, var(--g-soft) 28%, transparent), 0 8px 22px var(--g-glow);
     animation: bx-bubbleIn .22s cubic-bezier(.2, .9, .3, 1.2) both;
 }
-[data-bundle="galaxy"][data-bundle-motion="subtle"] .nav-item.active .nav-icon-wrap { animation-duration: 4.8s; }
-[data-bundle="galaxy"][data-bundle-motion="off"] .nav-item .nav-icon-wrap { transition: none; }
-[data-bundle="galaxy"][data-bundle-motion="off"] .nav-bg-fill,
-[data-bundle="galaxy"][data-bundle-motion="off"] .nav-item.active .nav-icon-wrap,
-[data-bundle="galaxy"][data-bundle-motion="off"] .nav-item.active .nav-icon-wrap::before { animation: none; }
+[data-bundle]:not([data-bundle="default"])[data-bundle-motion="subtle"] .nav-item.active .nav-icon-wrap { animation-duration: 4.8s; }
+[data-bundle]:not([data-bundle="default"])[data-bundle-motion="off"] .nav-item .nav-icon-wrap { transition: none; }
+[data-bundle]:not([data-bundle="default"])[data-bundle-motion="off"] .nav-bg-fill,
+[data-bundle]:not([data-bundle="default"])[data-bundle-motion="off"] .nav-item.active .nav-icon-wrap,
+[data-bundle]:not([data-bundle="default"])[data-bundle-motion="off"] .nav-item.active .nav-icon-wrap::before { animation: none; }
 .bundle-paused .nav-item.active .nav-icon-wrap { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
-    [data-bundle="galaxy"] .nav-item .nav-icon-wrap { transition: none; }
-    [data-bundle="galaxy"] .nav-bg-fill,
-    [data-bundle="galaxy"] .nav-item.active .nav-icon-wrap,
-    [data-bundle="galaxy"] .nav-item.active .nav-icon-wrap::before { animation: none; }
+    [data-bundle]:not([data-bundle="default"]) .nav-item .nav-icon-wrap { transition: none; }
+    [data-bundle]:not([data-bundle="default"]) .nav-bg-fill,
+    [data-bundle]:not([data-bundle="default"]) .nav-item.active .nav-icon-wrap,
+    [data-bundle]:not([data-bundle="default"]) .nav-item.active .nav-icon-wrap::before { animation: none; }
+}
+
+/* ── A bundle theme's motion: its colours drift across the ground ──
+   Every bundle brings a partner theme, and every partner theme moves. The
+   ground behind the app — under the reading pane, Settings, the phone's
+   panes and a shared link — carries three slow glows in the theme's own
+   colours (--tm-1..3, set by palette.applyThemeMotion), each on its own
+   path and period, so the colours cross and blend and the frame never
+   quite repeats. They take the place of the ordinary two-blob ambient.
+   Only transform animates. Subtle is slower; Off and reduced motion keep
+   the composition, still. Never in the floating capture windows. */
+:root:not([data-chrome="floating"])[data-theme-motion="drift"] body::before,
+:root:not([data-chrome="floating"])[data-theme-motion="drift"] body::after,
+:root:not([data-chrome="floating"])[data-theme-motion="drift"] #root::before {
+    content: ''; position: fixed; z-index: -1; pointer-events: none; display: block; border-radius: 50%;
+}
+:root:not([data-chrome="floating"])[data-theme-motion="drift"] body::before {
+    width: 76vmax; height: 76vmax; left: -26vmax; top: -30vmax;
+    background: radial-gradient(circle, color-mix(in srgb, var(--tm-1) 30%, transparent) 0%, transparent 64%);
+    animation: bx-tmDrift1 var(--tm-period) ease-in-out infinite alternate;
+}
+:root:not([data-chrome="floating"])[data-theme-motion="drift"] body::after {
+    width: 70vmax; height: 70vmax; right: -24vmax; bottom: -30vmax;
+    background: radial-gradient(circle, color-mix(in srgb, var(--tm-2) 24%, transparent) 0%, transparent 64%);
+    animation: bx-tmDrift2 calc(var(--tm-period) * 1.3) ease-in-out infinite alternate;
+}
+:root:not([data-chrome="floating"])[data-theme-motion="drift"] #root::before {
+    width: 54vmax; height: 54vmax; left: 38vw; top: 30vh;
+    background: radial-gradient(circle, color-mix(in srgb, var(--tm-3) 20%, transparent) 0%, transparent 62%);
+    animation: bx-tmDrift3 calc(var(--tm-period) * .8) ease-in-out infinite alternate;
+}
+:root:not([data-chrome="floating"])[data-theme-motion="drift"][data-bundle-motion="subtle"] body::before { animation-duration: calc(var(--tm-period) * 1.4); }
+:root:not([data-chrome="floating"])[data-theme-motion="drift"][data-bundle-motion="subtle"] body::after { animation-duration: calc(var(--tm-period) * 1.82); }
+:root:not([data-chrome="floating"])[data-theme-motion="drift"][data-bundle-motion="subtle"] #root::before { animation-duration: calc(var(--tm-period) * 1.12); }
+:root:not([data-chrome="floating"])[data-theme-motion="drift"][data-bundle-motion="off"] body::before,
+:root:not([data-chrome="floating"])[data-theme-motion="drift"][data-bundle-motion="off"] body::after,
+:root:not([data-chrome="floating"])[data-theme-motion="drift"][data-bundle-motion="off"] #root::before { animation: none; }
+.bundle-paused body::before, .bundle-paused body::after, .bundle-paused #root::before { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+    :root:not([data-chrome="floating"])[data-theme-motion="drift"] body::before, :root:not([data-chrome="floating"])[data-theme-motion="drift"] body::after, :root:not([data-chrome="floating"])[data-theme-motion="drift"] #root::before { animation: none; }
 }
 
 /* ── Phone ────────────────────────────────────────────── */
@@ -630,7 +695,42 @@
 @keyframes bx-sysdrift{0%{transform:translate3d(0,0,0)}50%{transform:translate3d(-22px,16px,0)}100%{transform:translate3d(0,0,0)}}
 @keyframes bx-rise{0%{opacity:0;transform:translateY(16px)}100%{opacity:1;transform:none}}
 @keyframes bx-navFloat{0%,100%{transform:translateY(-24px) rotate(-2deg)}50%{transform:translateY(-28px) rotate(2deg)}}
+/* Cyberpunk */
+@keyframes bx-hazeDrift{0%{transform:translate3d(-7%,0,0)}50%{transform:translate3d(9%,-2%,0)}100%{transform:translate3d(-7%,0,0)}}
+@keyframes bx-beamSweep{0%{transform:rotate(var(--b0)) scaleY(.9);opacity:.3}50%{transform:rotate(var(--b1)) scaleY(1.08);opacity:.92}100%{transform:rotate(var(--b0)) scaleY(.9);opacity:.3}}
+@keyframes bx-flicker{0%,41%{opacity:1}43%{opacity:.2}45%{opacity:.95}70%{opacity:.9}72%{opacity:.3}74%,100%{opacity:1}}
+@keyframes bx-neonPulse{0%,100%{opacity:.72;filter:brightness(1)}50%{opacity:1;filter:brightness(1.4)}}
+@keyframes bx-flyBy{0%{transform:translate3d(var(--fx0),0,0);opacity:0}9%{opacity:.95}86%{opacity:.95}100%{transform:translate3d(var(--fx1),0,0);opacity:0}}
+@keyframes bx-rainFall{0%{transform:translate3d(0,-140%,0);opacity:0}14%{opacity:.55}100%{transform:translate3d(-16%,700%,0);opacity:0}}
+@keyframes bx-trafficRun{to{transform:translateX(-50%)}}
+@keyframes bx-trafficRunRev{from{transform:translateX(-50%)}to{transform:translateX(0)}}
+@keyframes bx-signScroll{to{transform:translateY(-50%)}}
+@keyframes bx-navBlink{0%,86%{opacity:0}90%{opacity:1}95%{opacity:0}100%{opacity:0}}
+@keyframes bx-elevator{0%{transform:translateY(0);opacity:0}11%{opacity:.95}86%{opacity:.95}100%{transform:translateY(var(--ev));opacity:0}}
+@keyframes bx-steamRise{0%{transform:translateY(0) scale(.65);opacity:0}22%{opacity:.5}100%{transform:translateY(-150%) scale(1.6);opacity:0}}
+@keyframes bx-fogBreathe{0%,100%{opacity:.42;transform:translateX(-3%) scaleY(1)}50%{opacity:.88;transform:translateX(5%) scaleY(1.24)}}
+@keyframes bx-ambientCycle{0%,100%{opacity:.28}50%{opacity:.85}}
+@keyframes bx-shimmer{0%,100%{opacity:.3;transform:scaleX(1)}50%{opacity:.72;transform:scaleX(1.07)}}
+@keyframes bx-eqBar{0%,100%{transform:scaleY(.36);opacity:.4}50%{transform:scaleY(1.32);opacity:1}}
+@keyframes bx-ping{0%{transform:scale(.86);opacity:.8}70%{opacity:.18}100%{transform:scale(1.62);opacity:0}}
+@keyframes bx-arcBlink{0%,70%{opacity:0}73%{opacity:1}76%{opacity:.15}79%{opacity:.95}84%{opacity:0}100%{opacity:0}}
+@keyframes bx-lockOn{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(.93);opacity:1}}
+@keyframes bx-glitchShift{0%,46%{transform:translate3d(0,0,0)}48%{transform:translate3d(-2px,1px,0)}51%{transform:translate3d(2px,-1px,0)}54%,100%{transform:translate3d(0,0,0)}}
+@keyframes bx-scanDown{0%{transform:translateY(-140%);opacity:0}12%{opacity:1}88%{opacity:1}100%{transform:translateY(540%);opacity:0}}
+@keyframes bx-glitchBar{0%,38%{transform:translateY(-320%) scaleX(.4);opacity:0}42%{transform:translateY(60%) scaleX(1);opacity:.9}46%{transform:translateY(190%) scaleX(.6);opacity:0}100%{opacity:0}}
+@keyframes bx-gridRush{0%{transform:translateY(0);opacity:0}18%{opacity:.85}100%{transform:translateY(-96px);opacity:.12}}
+@keyframes bx-dataFall{0%{transform:translateY(-110%);opacity:0}16%{opacity:.85}100%{transform:translateY(320%);opacity:0}}
+@keyframes bx-bootScan{0%{transform:translateY(-40px);opacity:0}9%{opacity:1}91%{opacity:1}100%{transform:translateY(340px);opacity:0}}
+@keyframes bx-bracketIn{0%{opacity:0;transform:translate3d(var(--kx),var(--ky),0) scale(1.5)}100%{opacity:1;transform:none}}
+@keyframes bx-glitchIn{0%{opacity:0;transform:translateX(-9px) skewX(16deg);filter:blur(5px)}38%{opacity:1;transform:translateX(4px) skewX(-7deg);filter:none}62%{transform:translateX(-2px) skewX(3deg)}80%{transform:translateX(1px) skewX(-1deg)}100%{opacity:1;transform:none}}
+@keyframes bx-shardOut{0%{transform:translate3d(0,0,0) scaleX(.18);opacity:1}100%{transform:translate3d(var(--sx),var(--sy),0) scaleX(1.7);opacity:0}}
+@keyframes bx-hexPop{0%{transform:scale(.28) rotate(0deg);opacity:1}100%{transform:scale(2.5) rotate(58deg);opacity:0}}
+/* An old CRT switching off: the picture squashes to a line, the line to a point. */
+@keyframes bx-crtOff{0%{transform:scale(1,1);opacity:0}12%{opacity:.95}48%{transform:scale(1,.004);opacity:1}78%{transform:scale(.004,.004);opacity:1}100%{transform:scale(0,0);opacity:0}}
 @keyframes bx-bubbleIn{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes bx-tmDrift1{0%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(22vw,14vh,0) scale(1.12)}100%{transform:translate3d(8vw,30vh,0) scale(.94)}}
+@keyframes bx-tmDrift2{0%{transform:translate3d(0,0,0) scale(1.05)}50%{transform:translate3d(-26vw,-10vh,0) scale(.92)}100%{transform:translate3d(-10vw,-28vh,0) scale(1.1)}}
+@keyframes bx-tmDrift3{0%{transform:translate3d(0,0,0) scale(.9)}50%{transform:translate3d(-30vw,12vh,0) scale(1.15)}100%{transform:translate3d(14vw,-24vh,0) scale(1)}}
 @keyframes bx-notchOpen{0%{-webkit-mask-size:120px 0px,100% 100%;mask-size:120px 0px,100% 100%}100%{-webkit-mask-size:120px 40px,100% 100%;mask-size:120px 40px,100% 100%}}
 /* caret */
 @keyframes bx-caretBlink{0%,48%{opacity:1}62%,86%{opacity:.22}100%{opacity:1}}

@@ -12,10 +12,11 @@
         // isDarkColor() in src/lib/palette.ts; keep the two in step.
         var t = JSON.parse(localStorage.getItem('mahnotes_theme_v2') || 'null');
         var paper = (t && t.paper) || '#f3f2f2';
-        // A bundle with its own appearance decides the ground while it is
-        // equipped (Galaxy is deep space). Mirrors GALAXY.theme.paper in
-        // src/lib/bundles.ts; keep the two in step.
-        if (localStorage.getItem('mahnotes_bundle') === 'galaxy') paper = '#161421';
+        // A bundle's partner theme decides the ground while it is equipped.
+        // Mirrors each bundle's theme.paper in src/lib/bundles.ts; keep the
+        // two in step when a bundle is added.
+        var bundlePaper = { galaxy: '#161421', cyberpunk: '#0b0c1a' }[localStorage.getItem('mahnotes_bundle')];
+        if (bundlePaper) paper = bundlePaper;
         var m = /^#?([0-9a-f]{6})$/i.exec(String(paper).trim());
         if (m) {
             var n = parseInt(m[1], 16);

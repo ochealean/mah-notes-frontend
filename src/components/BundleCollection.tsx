@@ -25,7 +25,8 @@ import {
   BUNDLES, getBundle, equipBundle, setBundleMotion, useBundle, isLowPerf,
   type Bundle, type BundleMotion,
 } from '../lib/bundles';
-import { tileScapeHtml, tierFor } from '../lib/galaxy';
+import { tierFor } from '../lib/galaxy';
+import { tileFor } from '../lib/bundleArt';
 import { replayIntro } from '../lib/introGate';
 
 const MOTIONS: { key: BundleMotion; label: string }[] = [
@@ -40,11 +41,12 @@ function Tile({ bundle, equipped, active, user, onPick }: { bundle: Bundle; equi
   // is deep space even while you are wearing Default in a light theme.
   const g = useGround(bundle.theme ? resolveTheme(bundle.theme) : null);
   const m: BundleMotion = b.reduced ? 'off' : 'full';
-  const scape = useMemo(() => (bundle.sky ? tileScapeHtml(g.dark, g.paper, g.paper, m) : ''), [bundle.sky, g.dark, g.paper, m]);
+  const scape = useMemo(() => (bundle.sky ? tileFor(bundle.id, g.dark, g.paper, m) : ''), [bundle.id, bundle.sky, g.dark, g.paper, m]);
   const name = user?.displayName || user?.username || 'You';
 
   return (
-    <button type="button" className={`bcol-tile${active ? ' active' : ''}`} aria-pressed={active} onClick={() => onPick(bundle.id)}>
+    <button type="button" className={`bcol-tile${active ? ' active' : ''}`} aria-pressed={active} onClick={() => onPick(bundle.id)}
+      data-bscope={bundle.id}>
       <span className="bcol-pv">
         {scape && <span className="bcol-scape" aria-hidden="true" dangerouslySetInnerHTML={{ __html: scape }} />}
         <span className="bcol-av">
@@ -99,7 +101,7 @@ export default function BundleCollection({ user, onShareCard }: Props) {
   }
 
   return (
-    <div className="bcol">
+    <div className="bcol" data-bscope={shown.id}>
       <p className="bcol-lead">
         Every bundle is free for a limited time. A bundle is a whole look — its own colours
         and its own decoration, made to go together. Pick one to try it on; nothing is saved
@@ -123,11 +125,7 @@ export default function BundleCollection({ user, onShareCard }: Props) {
       {shown.decoration && (
         <section className="bcol-block">
           <div className="kicker">Decoration</div>
-          <p className="bcol-hint">
-            It degrades by size on its own: a plain ring on small chips, one orbiting body in
-            lists, the whole system on your profile and your share card. The middle of your face
-            always stays clear.
-          </p>
+          <p className="bcol-hint">{shown.decorationHint}</p>
           <div className="bcol-tiers">
             {[28, 44, 64, 112].map((s) => (
               <figure key={s} className="bcol-tier">
