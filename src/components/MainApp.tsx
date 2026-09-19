@@ -32,7 +32,12 @@ import DocsTab, { DocPane } from './DocsTab';
 import PlansTab, { PlanPane } from './PlansTab';
 import ClipboardTab, { ClipPane } from './ClipboardTab';
 import ScheduleTab from './ScheduleTab';
-import SettingsTab from './SettingsTab';
+import { SettingsNav, SettingsPane, useSettingsSections, useInboxCount } from './SettingsTab';
+import BundleSky from './BundleSky';
+import RailFoot from './RailFoot';
+import { ShareCardPreview } from './ShareCard';
+import { useBundle } from '../lib/bundles';
+import { dissolveAway, playSignOut } from '../lib/galaxyFarewell';
 import DocEditor from './DocEditor';
 import PlanEditor from './PlanEditor';
 import ScheduleEditor from './ScheduleEditor';
@@ -91,9 +96,13 @@ function useDesktop() {
 
 export default function MainApp() {
   const { user, logout } = useAuth();
+  // Signing out from Settings: Galaxy warps the app away first, and the
+  // sign-in screen is already underneath when the dark lifts.
+  const logoutWithFarewell = useCallback(async () => { await playSignOut(); logout(); }, [logout]);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isDesktop = useDesktop();
+  const { bundle } = useBundle();
 
   // Rail width is a device preference, not account state — it depends on the
   // screen you are sitting at, so it never syncs.
@@ -168,6 +177,9 @@ export default function MainApp() {
   const [selDoc, setSelDoc] = useState(null);
   const [selPlan, setSelPlan] = useState(null);
   const [selClip, setSelClip] = useState(null);
+  // Settings is a list too: the rail names the sections, the pane shows one.
+  const [selSet, setSelSet] = useState(null);
+  const [shareCard, setShareCard] = useState(null); // bundle id to preview | null
 
   const [docEditor, setDocEditor] = useState(null);   // { note } | { } (new) | null
   const [planEditor, setPlanEditor] = useState(null); // { plan } | { } | null
@@ -186,6 +198,9 @@ export default function MainApp() {
   // ever breaks. `hasPassword === false` also covers accounts created before
   // `hasGoogle` existed (see ConnectGoogle.tsx).
   const needsPassword = !!user && user.hasPassword === false;
+  // After the first load, never during it: the dot must not slow a cold start.
+  const inbox = useInboxCount(user, !loading);
+  const sections = useSettingsSections({ user, inboxCount: inbox.count, inboxUnseen: inbox.unseen, updateAvailable, needsPassword });
   const syncState = useSync();
   // A cold backend can hold the first fetch for tens of seconds — say so rather
   // than spinning silently.
@@ -438,8 +453,18 @@ export default function MainApp() {
   const TABS = tabsFor(isWeb ? clips.length : 0);
   const LIST_TABS = TABS.filter((t) => RAIL_TABS.includes(t.key)).map((t) => t.key);
   const isListTab = LIST_TABS.includes(tab);
-  const openItem = tab === 'docs' ? selDoc && curDoc : tab === 'plans' ? selPlan && curPlan : tab === 'clipboard' ? selClip && curClip : null;
-  const hasDetail = !isListTab || (!isDesktop && !!openItem);
+  // Settings owns a list in the rail too — its sections — but it has no
+  // search, sort, AI menu or privacy toggle, so it is not a "list tab".
+  const railList = isListTab || tab === 'settings';
+  const curSet = sections.some((s) => s.id === selSet) ? selSet : (isDesktop ? sections[0]?.id : null);
+  const openItem = tab === 'docs' ? selDoc && curDoc : tab === 'plans' ? selPlan && curPlan
+    : tab === 'clipboard' ? selClip && curClip : tab === 'settings' ? selSet && curSet : null;
+  const hasDetail = !railList || (!isDesktop && !!openItem);
+  // Time has no list, so on a phone its pane IS the screen from the start.
+  // It still gets the app bar (logo and title) and the bundle's sky, like
+  // every other tab's first screen — not a bare page that looks like a detail.
+  const fullPane = !railList;
+  const paneSky = fullPane && !isDesktop && bundle.sky;
 
   // The rows currently on screen — what "Select all" actually means.
   const visibleForTab = tab === 'plans' ? visiblePlans : tab === 'clipboard' ? visibleClips : visibleNotes;
@@ -465,6 +490,9 @@ export default function MainApp() {
     const label = `${ids.length} ${noun}${ids.length > 1 ? 's' : ''}`;
     if (!confirm(`Delete ${label}? This cannot be undone.`)) return;
     setBulkBusy(true);
+    // Every selected row turns to stardust at once, then they go. Any row
+    // that survives a failed delete is given back.
+    const restoreRows = await dissolveAway([...document.querySelectorAll('.rail-list .row.checked')]);
     try {
       for (const id of ids) {
         // eslint-disable-next-line no-await-in-loop
@@ -475,6 +503,7 @@ export default function MainApp() {
       notify(`Deleted ${label}`, 'success');
     } catch (err) { notify(err.message || 'Could not delete everything', 'error'); }
     finally {
+      restoreRows();
       setBulkBusy(false);
       stopSelecting();
       closeDetail();
@@ -487,10 +516,24 @@ export default function MainApp() {
     setQ('');
     stopSelecting();
     // Leaving an item open across tabs would strand the phone in the pane.
-    setSelDoc(null); setSelPlan(null); setSelClip(null);
+    setSelDoc(null); setSelPlan(null); setSelClip(null); setSelSet(null);
   }
 
-  const closeDetail = () => { setSelDoc(null); setSelPlan(null); setSelClip(null); };
+  const closeDetail = () => { setSelDoc(null); setSelPlan(null); setSelClip(null); setSelSet(null); };
+
+  // Jump straight to one settings section (the rail footer, the share card
+  // preview's "Change what it shows").
+  function openSettings(section) {
+    if (tab !== 'settings') goTab('settings');
+    setSelSet(section);
+  }
+
+  // What the share card preview shows as its note: the open document, else
+  // the newest one, else a placeholder title.
+  const shareSample = useMemo(() => {
+    const d = curDoc || notes[0];
+    return { kind: 'note' as const, title: d ? (d.title || 'Untitled document') : 'Your note’s title' };
+  }, [curDoc, notes]);
 
   // Phone: opening an item replaces the list in place rather than navigating,
   // so Back would otherwise leave the app entirely. Push a throwaway history
@@ -508,7 +551,7 @@ export default function MainApp() {
     }
   }, [detailOpen]);
   useEffect(() => {
-    const onPop = () => { detailPushed.current = false; setSelDoc(null); setSelPlan(null); setSelClip(null); };
+    const onPop = () => { detailPushed.current = false; setSelDoc(null); setSelPlan(null); setSelClip(null); setSelSet(null); };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -580,7 +623,7 @@ export default function MainApp() {
   const listCount = tab === 'docs' ? visibleNotes.length : tab === 'plans' ? visiblePlans.length : visibleClips.length;
 
   return (
-    <div className={`app${hasDetail ? ' has-detail' : ''}`}
+    <div className={`app${hasDetail ? ' has-detail' : ''}${fullPane ? ' full-pane' : ''}`}
       style={railW ? ({ '--rail-w': `${railW}px` } as any) : undefined}>
       {/* Phone-only bar. The rail head covers this on a desktop. */}
       <header className="appbar">
@@ -607,7 +650,11 @@ export default function MainApp() {
         </div>
       </header>
 
-      <aside className="rail" ref={railRef}>
+      <aside className={`rail${bundle.sky ? ' has-sky' : ''}`} ref={railRef}>
+        {/* The bundle's sky. Renders nothing for Default. The rail's own
+            content sits above it, and the sky's scrim plus a halo under
+            every line of text keep the list readable at every frame. */}
+        <BundleSky preset="rail" />
         <button
           className={`rail-resize${dragging ? ' dragging' : ''}`}
           aria-label="Resize the list. Double-click to reset."
@@ -647,7 +694,7 @@ export default function MainApp() {
               onClick={() => goTab(t.key)}>
               <span className="nav-icon-wrap">
                 <i className={`fas ${t.icon}`} />
-                {t.key === 'settings' && (updateAvailable || needsPassword) && <span className="nav-dot" />}
+                {t.key === 'settings' && (updateAvailable || needsPassword || inbox.unseen > 0) && <span className="nav-dot" />}
               </span>
               <span>{t.label}</span>
             </button>
@@ -697,7 +744,9 @@ export default function MainApp() {
         )}
 
         <div className="rail-list">
-          {loading ? (
+          {tab === 'settings' ? (
+            <SettingsNav sections={sections} current={curSet} onPick={setSelSet} user={user} onLogout={logoutWithFarewell} />
+          ) : loading ? (
             <div className="screen-loading">
               <i className="fas fa-circle-notch fa-spin" />
               <span>{slowLoad ? 'Waking up the server — this can take a moment…' : 'Loading…'}</span>
@@ -722,9 +771,12 @@ export default function MainApp() {
             </>
           )}
         </div>
+
+        <RailFoot user={user} onAccount={() => openSettings('account')} onShareCard={() => setShareCard(bundle.id)} />
       </aside>
 
-      <main className="pane">
+      <main className={`pane${paneSky ? ' has-sky' : ''}`}>
+        {paneSky && <BundleSky preset="rail" />}
         {tab === 'docs' && (
           <DocPane note={curDoc} onBack={closeDetail}
             onEdit={(note) => setDocEditor({ note })}
@@ -753,13 +805,22 @@ export default function MainApp() {
           </div>
         )}
         {tab === 'settings' && (
-          <div className="pane-scroll full">
-            <div className="pane-head"><span className="pane-tag">Settings</span></div>
-            <h1 className="pane-title">{user?.name || user?.username || 'Your account'}</h1>
-            <SettingsTab user={user} onPrivacy={togglePrivacyAll} onLogout={logout}
-              onReload={refreshAfterSave} reloadLists={reload}
-              updateAvailable={updateAvailable} needsPassword={needsPassword} />
-          </div>
+          <SettingsPane
+            section={curSet}
+            sections={sections}
+            user={user}
+            onBack={closeDetail}
+            onPrivacy={togglePrivacyAll}
+            onLogout={logoutWithFarewell}
+            onReload={refreshAfterSave}
+            reloadLists={reload}
+            updateAvailable={updateAvailable}
+            needsPassword={needsPassword}
+            inboxCount={inbox.count}
+            refreshInbox={inbox.refresh}
+            onShareCard={(id) => setShareCard(id)}
+            onOpenSection={(id) => setSelSet(id)}
+          />
         )}
       </main>
 
@@ -776,7 +837,7 @@ export default function MainApp() {
             onClick={() => goTab(t.key)}>
             <span className="nav-icon-wrap">
               <i className={`fas ${t.icon}`} />
-              {t.key === 'settings' && (updateAvailable || needsPassword) && <span className="nav-dot" />}
+              {t.key === 'settings' && (updateAvailable || needsPassword || inbox.unseen > 0) && <span className="nav-dot" />}
             </span>
             <span>{t.label}</span>
           </button>
@@ -809,6 +870,15 @@ export default function MainApp() {
       )}
       {reconcile && (
         <ReconcileModal data={reconcile} onApply={onReconcileApply} onClose={onReconcileClose} />
+      )}
+      {shareCard && (
+        <ShareCardPreview
+          user={user}
+          bundleId={shareCard}
+          sample={shareSample}
+          onClose={() => setShareCard(null)}
+          onPrivacy={() => { setShareCard(null); openSettings('privacy'); }}
+        />
       )}
       {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
       {update && <UpdateModal update={update} onClose={() => setUpdate(null)} />}

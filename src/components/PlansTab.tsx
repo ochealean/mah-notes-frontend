@@ -9,6 +9,8 @@
 //  shows the plan in full.
 // ============================================================
 import { repo } from '../lib/repo';
+import { celebrateCheck } from '../lib/checkFx';
+import { dissolveAway } from '../lib/galaxyFarewell';
 import { notify } from '../lib/notify';
 import { timeAgo } from '../lib/timeAgo';
 
@@ -91,8 +93,10 @@ export function PlanPane({ plan, onEdit, onToggleHidden, onShare, onDelete, onTo
 
   async function remove() {
     if (!confirm('Delete this plan? This cannot be undone.')) return;
+    const restore = await dissolveAway([document.querySelector('.pane .pane-scroll'), document.querySelector('.rail-list .row.active')]);
     try { await repo.deletePlan(plan.id); notify('Plan deleted', 'success'); onDelete(); }
     catch (err) { notify(err.message, 'error'); }
+    finally { restore(); } // the same pane goes on to show the next plan
   }
 
   return (
@@ -136,6 +140,7 @@ export function PlanPane({ plan, onEdit, onToggleHidden, onShare, onDelete, onTo
               onClick={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 if (e.clientX - rect.left > 32) return;
+                if (!it.checked) celebrateCheck(e.currentTarget);
                 onToggleCheck(plan.id, today, i, !it.checked);
               }}>
               {it.text}

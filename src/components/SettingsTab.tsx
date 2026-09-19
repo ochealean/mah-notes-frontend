@@ -13,14 +13,16 @@ import {
 } from '../lib/desktopPrefs';
 import { listClips } from '../lib/clips';
 import { api, getToken } from '../lib/api';
+import { onRealtime } from '../lib/realtime';
 import { notify } from '../lib/notify';
 import { APP_VERSION } from '../lib/appInfo';
 import { checkForUpdate, autoUpdateEnabled, setAutoUpdate } from '../lib/updates';
 import { pushWidgetData } from '../lib/widget';
 import { clearStrayAlarms } from '../lib/alarm';
 import { listSchedules } from '../lib/scheduleStore';
-import FriendsModal from './FriendsModal';
-import InboxModal from './InboxModal';
+import FriendsPanel from './FriendsPanel';
+import InboxPanel from './InboxPanel';
+import { playSignOut } from '../lib/galaxyFarewell';
 import ConnectGoogle from './ConnectGoogle';
 import SetAccountPassword from './SetAccountPassword';
 import AccountUsername from './AccountUsername';
@@ -30,9 +32,11 @@ import DownloadAppModal from './DownloadAppModal';
 import ThemeCustomizer from './ThemeCustomizer';
 import WhatsNewModal from './WhatsNewModal';
 import UpdateModal from './UpdateModal';
-
-// Shown on the collapsed Appearance header so the current choice is readable
-// without opening the section.
+import BundleAvatar, { Face } from './BundleAvatar';
+import BundleSky from './BundleSky';
+import BundleCollection from './BundleCollection';
+import { useBundle } from '../lib/bundles';
+import { PRESETS, activePresetId } from '../lib/palette';
 
 // ── Offline-first builds: connect an account and control sync ──
 //  Android and desktop both open without a login gate, so signing in lives
@@ -121,6 +125,8 @@ function AccountSync({ reloadLists }) {
     try {
       if (removeData) await removeAccountData(); // keeps the device's own notes
       await resetSyncForLogout();
+      setSignOut(null);
+      await playSignOut(); // Galaxy warps out; resolves at once otherwise
       logout();
       if (reloadLists) reloadLists();
     } finally { setSigningOut(false); setSignOut(null); }
@@ -686,84 +692,186 @@ function DesktopCard() {
   );
 }
 
-// ── A settings group, as a dialog ─────────────────────
+// ============================================================
+//  Settings, as sections.
 //
-// These used to expand in place. With several open at once the screen turned
-// into a long scroll where the thing you had just changed was somewhere off
-// the top, and on a phone the list under an open section was unreachable
-// without closing it again. A dialog gives each group the whole screen and
-// leaves the list itself short enough to scan.
-function SettingsGroupModal({ title, icon, onClose, children }) {
-  // Escape closes, matching every other dialog in the app.
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+//  The rail lists the sections; the pane shows exactly one. Picking
+//  Bundles shows Bundles and nothing else — no scrolling up into Account,
+//  and nothing from another section sitting above it. On a phone the list
+//  is the screen and a section opens over it, like a note does.
+//
+//  These used to be one long page, then a stack of dialogs. A section per
+//  pane gives each one the whole screen and keeps the list short enough
+//  to scan.
+// ============================================================
+export type SettingsSectionId =
+  | 'account' | 'friends' | 'bundles' | 'appearance' | 'privacy'
+  | 'clipboard' | 'desktop' | 'troubleshooting' | 'about';
 
-  return (
-    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="popup settings-group-popup">
-        <div className="popup-head">
-          <h3><i className={`fas ${icon}`} /> {title}</h3>
-          <button className="icon-btn" aria-label="Close" onClick={onClose}><i className="fas fa-times" /></button>
-        </div>
-        <div className="settings-group-body">{children}</div>
-      </div>
-    </div>
-  );
+export type SettingsSection = {
+  id: SettingsSectionId;
+  group: string;
+  title: string;
+  icon: string;
+  /** One line, readable without opening the section. */
+  summary: string;
+  /** Something here needs attention. */
+  dot?: boolean;
+};
+
+/** What friends have sent me, for the red dots: `count` waiting, `unseen` not
+    opened yet. Asked once the app has finished loading (`ready`), never during
+    its cold start; after that the server's `inbox:changed` event keeps it
+    current on every device, and coming back to the app asks again in case the
+    socket was asleep meanwhile. */
+export function useInboxCount(user, ready = true) {
+  const [counts, setCounts] = useState({ count: 0, unseen: 0 });
+  const userId = user?.id;
+  const refresh = useCallback(async () => {
+    if (!userId || !getToken()) { setCounts({ count: 0, unseen: 0 }); return; }
+    try {
+      const res = await api.get('/api/friend-shares/count');
+      setCounts({ count: res.total || 0, unseen: res.unseen || 0 });
+    } catch { /* offline / non-critical */ }
+  }, [userId]);
+  useEffect(() => { if (ready) refresh(); }, [refresh, ready]);
+  useEffect(() => onRealtime('inbox:changed', (p) => {
+    if (p && typeof p.total === 'number') setCounts({ count: p.total, unseen: p.unseen || 0 });
+    else refresh();
+  }), [refresh]);
+  useEffect(() => {
+    if (!ready) return undefined;
+    let last = Date.now();
+    const onShow = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 60000) return;
+      last = Date.now();
+      refresh();
+    };
+    document.addEventListener('visibilitychange', onShow);
+    return () => document.removeEventListener('visibilitychange', onShow);
+  }, [ready, refresh]);
+  return { ...counts, refresh };
 }
 
-export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloadLists, updateAvailable, needsPassword = false }) {
-  const name = user?.displayName || (user?.email || 'You').split('@')[0];
-  const initial = (name[0] || 'U').toUpperCase();
-  const { effective } = useTheme();
+export function useSettingsSections({ user, inboxCount = 0, inboxUnseen = 0, updateAvailable = null, needsPassword = false }) {
+  const { bundle } = useBundle();
+  const { effective, palette } = useTheme();
+  const sync = useSync();
+  const presetId = activePresetId(palette);
+  const presetName = PRESETS.find((p) => p.id === presetId)?.name || 'Custom';
+  const name = user ? (user.displayName || user.username || 'Your account') : '';
+
+  const list: SettingsSection[] = [];
+  list.push({
+    id: 'account', group: 'You', title: 'Account', icon: 'fa-circle-user',
+    summary: user ? (user.username ? `${name} · @${user.username}` : name) : 'Not signed in',
+    dot: needsPassword,
+  });
+  if (user) {
+    list.push({
+      id: 'friends', group: 'You', title: 'Friends', icon: 'fa-user-group',
+      summary: inboxUnseen
+        ? `${inboxUnseen} new from friends`
+        : inboxCount ? `${inboxCount} shared with you` : 'Find people by @username',
+      // New, not merely waiting: once you have looked, the dot goes.
+      dot: inboxUnseen > 0,
+    });
+  }
+  list.push({ id: 'bundles', group: 'Look & feel', title: 'Bundles', icon: 'fa-meteor', summary: `${bundle.name} equipped` });
+  list.push({
+    id: 'appearance', group: 'Look & feel', title: 'Appearance', icon: 'fa-palette',
+    summary: bundle.theme
+      ? `${bundle.name} colours while it is equipped`
+      : `${presetName} · ${effective === 'dark' ? 'dark' : 'light'} ground`,
+  });
+  list.push({
+    id: 'privacy', group: 'Privacy & data', title: 'Privacy', icon: 'fa-lock',
+    summary: user ? `Shared links show: ${shareSummary(user).toLowerCase()}` : 'Hide content in the list',
+  });
+  if (hasClips) {
+    list.push({
+      id: 'clipboard', group: 'Privacy & data', title: 'Clipboard', icon: 'fa-clipboard',
+      summary: sync.clipSync ? 'Syncing to your account' : 'On this device only',
+    });
+  }
+  if (isDesktop) {
+    list.push({ id: 'desktop', group: 'This device', title: 'Startup & shortcuts', icon: 'fa-keyboard', summary: 'Alt+N capture · Alt+M paste panel' });
+  }
+  if (isNative) {
+    list.push({ id: 'troubleshooting', group: 'This device', title: 'Troubleshooting', icon: 'fa-screwdriver-wrench', summary: 'Widget data and stray alarms' });
+  }
+  list.push({
+    id: 'about', group: 'App', title: 'About & updates', icon: 'fa-circle-info',
+    summary: updateAvailable ? `v${updateAvailable.version} ready to install` : `Version ${APP_VERSION}`,
+    dot: !!updateAvailable,
+  });
+  return list;
+}
+
+// ── The rail list ──────────────────────────────────────
+export function SettingsNav({ sections, current, onPick, user, onLogout }) {
+  const out = [];
+  let group = '';
+  sections.forEach((s) => {
+    if (s.group !== group) {
+      group = s.group;
+      out.push(<div key={`g-${group}`} className="rail-group kicker">{group}</div>);
+    }
+    const on = current === s.id;
+    out.push(
+      <button key={s.id} className={`row set-row${on ? ' active' : ''}`} aria-current={on ? 'page' : undefined} onClick={() => onPick(s.id)}>
+        <div className="row-head">
+          <i className={`fas ${s.icon} set-row-icon`} aria-hidden="true" />
+          <span className="row-title">{s.title}</span>
+          {s.dot && <span className="set-row-dot" title="Needs attention" />}
+          <i className="fas fa-chevron-right set-row-chev" aria-hidden="true" />
+        </div>
+        <div className="row-snippet">{s.summary}</div>
+      </button>,
+    );
+  });
+  // Log out is an action, not a section, and it must never hide behind one.
+  if (user && !isNative && onLogout) {
+    out.push(<div key="g-session" className="rail-group kicker">Session</div>);
+    out.push(
+      <button key="logout" className="row set-row danger" onClick={() => { if (confirm('Log out of Mah Notes?')) onLogout(); }}>
+        <div className="row-head">
+          <i className="fas fa-sign-out-alt set-row-icon" aria-hidden="true" />
+          <span className="row-title">Log out</span>
+        </div>
+        <div className="row-snippet">{isWeb ? 'Sign out of this browser' : 'Sign out of this computer'}</div>
+      </button>,
+    );
+  }
+  return <>{out}</>;
+}
+
+// ── Account ────────────────────────────────────────────
+function AccountSection({ user, reloadLists, needsPassword, onLogout }) {
   const { updateProfile, setAvatar } = useAuth();
-  const [showFriends, setShowFriends] = useState(false);
-  const [showInbox, setShowInbox] = useState(false);
-  const [inboxCount, setInboxCount] = useState(0);
+  const { bundle } = useBundle();
+  const name = user?.displayName || (user?.email || 'You').split('@')[0];
+
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
-  const [showWhatsNew, setShowWhatsNew] = useState(false);
-  const [showDownload, setShowDownload] = useState(false);
-  const [update, setUpdate] = useState(null);
-  const [checking, setChecking] = useState(false);
-  const [autoUpd, setAutoUpd] = useState(autoUpdateEnabled());
-  // Recovery actions, collapsed by default: they only matter when something has
-  // already gone wrong, so they shouldn't take up room in everyday settings.
-  // Which settings group is open as a dialog, or null. One value rather than
-  // a boolean each, so opening one closes the last.
-  const [openGroup, setOpenGroup] = useState(null);
-  // Account Info starts collapsed to just the identity row (avatar/name/email) —
-  // password, username, and Google linking are settled-once, rarely-revisited
-  // controls that don't need to sit open on every visit to Settings.
-  const [accountExpanded, setAccountExpanded] = useState(false);
-  // Appearance retracts like Account Info. It is the section most likely to
-  // grow (background, gradients, per-surface colours), so it stays closed by
-  // default rather than pushing everything else off the screen.
 
-  // ── Profile picture ───────────────────────────────────
-  // The avatar itself is the button: clicking it opens the file picker. A
-  // separate "change picture" row would be one more thing in a screen that is
-  // already long, and tapping your own face is what people try first.
+  // The avatar itself is the button: tapping your own face is what people
+  // try first. The upload only starts once the crop dialog has decided which
+  // square of the photo is actually them.
   const pictureInput = useRef(null);
   const [uploadingPicture, setUploadingPicture] = useState(false);
-  // The file waiting to be cropped. The upload only starts once the user has
-  // decided which square of it is actually them.
   const [pendingPicture, setPendingPicture] = useState(null);
 
   function onPicturePicked(e) {
     const file = e.target.files && e.target.files[0];
-    // Clear it either way, so picking the SAME file again still fires onChange.
-    e.target.value = '';
+    e.target.value = ''; // so picking the SAME file again still fires onChange
     if (!file) return;
     const problem = pictureProblem(file);
     if (problem) { notify(problem, 'error'); return; }
     setPendingPicture(file);
   }
 
-  // Called by the crop dialog with the square it produced.
   async function onCropped(blob) {
     setUploadingPicture(true);
     try {
@@ -773,22 +881,236 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
       notify('Picture updated', 'success');
     } catch (err) {
       notify(err?.message || 'Could not update your picture', 'error');
-    } finally {
-      setUploadingPicture(false);
-    }
+    } finally { setUploadingPicture(false); }
   }
 
   async function removePicture() {
     setUploadingPicture(true);
-    try {
-      await setAvatar('');
-      notify('Picture removed', 'success');
-    } catch (err) {
-      notify(err?.message || 'Could not remove your picture', 'error');
-    } finally {
-      setUploadingPicture(false);
-    }
+    try { await setAvatar(''); notify('Picture removed', 'success'); }
+    catch (err) { notify(err?.message || 'Could not remove your picture', 'error'); }
+    finally { setUploadingPicture(false); }
   }
+
+  // Seed with the *custom* name (blank on the email fallback), so saving an
+  // untouched field doesn't overwrite the fallback with a literal.
+  function startEditName() { setNameDraft(user?.displayName || ''); setEditingName(true); }
+  async function saveName(e) {
+    e?.preventDefault?.();
+    if (savingName) return;
+    setSavingName(true);
+    try {
+      await updateProfile(nameDraft.trim());
+      setEditingName(false);
+      notify('Name updated', 'success');
+    } catch (err) {
+      notify(err.message || 'Could not update name', 'error');
+    } finally { setSavingName(false); }
+  }
+
+  return (
+    <>
+      {user && (
+        <section className="acct-hero">
+          <BundleSky preset="header" />
+          <div className="acct-hero-c">
+            <span className="acct-av">
+              <button type="button" className="acct-av-btn" title="Change your picture" aria-label="Change your picture"
+                disabled={uploadingPicture} onClick={() => pictureInput.current?.click()}>
+                <BundleAvatar size={112}><Face src={user.avatar} name={name} /></BundleAvatar>
+              </button>
+              <span className="acct-cam" aria-hidden="true">
+                <i className={`fas ${uploadingPicture ? 'fa-circle-notch fa-spin' : 'fa-camera'}`} />
+              </span>
+            </span>
+            <input ref={pictureInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={onPicturePicked} />
+            <div className="acct-id">
+              <div className="kicker">Signed in as</div>
+              {editingName ? (
+                <form className="acct-name-edit" onSubmit={saveName}>
+                  <input className="field-input" type="text" value={nameDraft} maxLength={60} autoFocus disabled={savingName}
+                    aria-label="Display name" placeholder={(user?.email || 'You').split('@')[0]}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') setEditingName(false); }} />
+                  <button className="icon-btn" type="submit" title="Save name" disabled={savingName}>
+                    <i className={`fas ${savingName ? 'fa-circle-notch fa-spin' : 'fa-check'}`} />
+                  </button>
+                  <button className="icon-btn" type="button" title="Cancel" disabled={savingName} onClick={() => setEditingName(false)}>
+                    <i className="fas fa-times" />
+                  </button>
+                </form>
+              ) : (
+                <div className="acct-name-row">
+                  <span className="acct-name">{name}</span>
+                  <button className="icon-btn" title="Edit name" aria-label="Edit name" onClick={startEditName}><i className="fas fa-pen" /></button>
+                </div>
+              )}
+              {/* The username is the more useful line: it is what they type
+                  to sign in, and it doesn't show the backing email at a glance. */}
+              <div className="acct-handle">{user.username ? `@${user.username}` : user.email}</div>
+              {user.username && user.email && <div className="acct-email">{user.email}</div>}
+              {bundle.id !== 'default' && <div className="acct-bundle"><span className="bsq" />{bundle.name} equipped</div>}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {user && (
+        <div className="settings-card">
+          <div className="settings-section-label">Sign-in &amp; security</div>
+          {!!user.avatar && (
+            <button className="settings-row" disabled={uploadingPicture} onClick={removePicture}>
+              <span><i className="fas fa-user-slash" /> Remove profile picture</span>
+              <i className="fas fa-chevron-right" />
+            </button>
+          )}
+          {needsPassword && (
+            <p className="settings-hint-text">
+              <i className="fas fa-triangle-exclamation" style={{ color: 'var(--accent-700)', marginRight: 8 }} />
+              This account has no password yet. Set one so you can still sign in if Google sign-in ever fails.
+            </p>
+          )}
+          <SetAccountPassword />
+          <AccountUsername />
+          <ConnectGoogle />
+          {/* Irreversible — deliberately last, and styled as a danger row. */}
+          <DeleteAccount />
+        </div>
+      )}
+
+      {/* Android and desktop: sign in here, and control sync. */}
+      {hasLocalStore && <AccountSync reloadLists={reloadLists} />}
+
+      {user && !isNative && (
+        <div className="settings-card">
+          <button className="settings-row danger" onClick={() => { if (confirm('Log out of Mah Notes?')) onLogout(); }}>
+            <span><i className="fas fa-sign-out-alt" /> Log out</span>
+            <i className="fas fa-chevron-right" />
+          </button>
+        </div>
+      )}
+
+      {pendingPicture && (
+        <AvatarCropModal file={pendingPicture} onCancel={() => setPendingPicture(null)} onDone={onCropped} />
+      )}
+    </>
+  );
+}
+
+// ── Friends ────────────────────────────────────────────
+// Everything is right here — Settings → Friends, not Settings → Friends →
+// a pop-up. What friends sent you comes first (it is waiting on you), then
+// finding people, then your friends, each in their own bundle.
+function FriendsSection({ user, refreshInbox, onReload }) {
+  return (
+    <>
+      <InboxPanel onSaved={() => { if (onReload) onReload(); }} onChange={refreshInbox} />
+      <FriendsPanel me={user} />
+    </>
+  );
+}
+
+// ── Appearance ─────────────────────────────────────────
+// A bundle dresses the whole app, so while one is equipped the colours are
+// the bundle's call, not the theme editor's. The editor stays visible — you
+// can see what you would be changing — but it is switched off until the
+// Default bundle is back on.
+function AppearanceSection({ onOpenSection }) {
+  const { bundle } = useBundle();
+  // Locked when the equipped bundle brings its own appearance.
+  const locked = !!bundle.theme;
+  // A disabled fieldset only reaches real form controls; the colour pickers
+  // are drag-and-arrow-key widgets, so the whole editor is made inert too —
+  // no pointer, no focus, no keys.
+  const editorRef = useRef(null);
+  useEffect(() => { if (editorRef.current) editorRef.current.inert = locked; }, [locked]);
+  return (
+    <>
+      {locked && (
+        <div className="set-lock-note" role="note">
+          <i className="fas fa-lock" aria-hidden="true" />
+          <div>
+            <b>{bundle.name} brings its own colours.</b>
+            <p>
+              A bundle is a whole look, so while {bundle.name} is equipped the app wears its
+              appearance. Your own theme is kept exactly as you left it — equip the <b>Default</b>
+              bundle and it comes straight back, ready to edit here.
+            </p>
+            <button type="button" className="btn btn-ghost" onClick={() => onOpenSection && onOpenSection('bundles')}>
+              <i className="fas fa-meteor" /> Go to Bundles
+            </button>
+          </div>
+        </div>
+      )}
+      {/* A disabled fieldset switches off every control inside it at once. */}
+      <fieldset ref={editorRef} className={`settings-card set-tc set-fieldset${locked ? ' is-locked' : ''}`} disabled={locked} aria-disabled={locked}>
+        {/* No light/dark/system switch: a light paper is a light theme, a
+            dark one (Midnight, or your own) is a dark theme. */}
+        <ThemeCustomizer />
+      </fieldset>
+    </>
+  );
+}
+
+// ── Privacy ────────────────────────────────────────────
+function PrivacySection({ user, onPrivacy }) {
+  return (
+    <>
+      <div className="settings-card">
+        <div className="settings-section-label">In this app</div>
+        <button className="settings-row" onClick={onPrivacy}>
+          <span><i className="fas fa-eye-slash" /> Hide all content in the list</span>
+          <i className="fas fa-chevron-right" />
+        </button>
+        <p className="settings-hint-text">
+          Hiding blanks the rows in the list, so nobody reads your notes over your shoulder while
+          you scroll. Opening an item still shows it in full.
+        </p>
+      </div>
+      {user && (
+        <div className="settings-card">
+          <div className="settings-section-label">On shared links</div>
+          <SharePrivacy user={user} />
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Troubleshooting (Android) ──────────────────────────
+function TroubleshootingSection() {
+  return (
+    <div className="settings-card">
+      <p className="settings-hint-text" style={{ paddingTop: 18 }}>
+        Only needed if something looks wrong — the app keeps both of these in step on its own.
+      </p>
+      <button className="settings-row" onClick={async () => {
+        const c = await pushWidgetData();
+        notify(`Widget updated — ${c.notes} notes, ${c.plans} plans, ${c.schedule} schedule items`, 'success');
+      }}>
+        <span><i className="fas fa-table-cells-large" /> Refresh widget data</span>
+        <i className="fas fa-rotate-right" />
+      </button>
+      <button className="settings-row" onClick={async () => {
+        try {
+          const blocks = await listSchedules();
+          const removed = await clearStrayAlarms(blocks);
+          notify(removed ? `Cleared ${removed} stray alarm${removed === 1 ? '' : 's'}` : 'No stray alarms found', 'success');
+        } catch (err) { notify(err.message, 'error'); }
+      }}>
+        <span><i className="fas fa-bell-slash" /> Clear stray alarms</span>
+        <i className="fas fa-broom" />
+      </button>
+    </div>
+  );
+}
+
+// ── About & updates ────────────────────────────────────
+function AboutSection({ updateAvailable }) {
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showDownload, setShowDownload] = useState(false);
+  const [update, setUpdate] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [autoUpd, setAutoUpd] = useState(autoUpdateEnabled());
 
   function toggleAuto(on) { setAutoUpd(on); setAutoUpdate(on); }
   async function checkUpdates() {
@@ -802,233 +1124,23 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
     finally { setChecking(false); }
   }
 
-  // Seed the editor with the *custom* name (blank when on the email fallback),
-  // so saving an untouched field doesn't overwrite the fallback with a literal.
-  function startEditName() {
-    setNameDraft(user?.displayName || '');
-    setEditingName(true);
-  }
-  async function saveName() {
-    if (savingName) return;
-    setSavingName(true);
-    try {
-      await updateProfile(nameDraft.trim());
-      setEditingName(false);
-      notify('Name updated', 'success');
-    } catch (err) {
-      notify(err.message || 'Could not update name', 'error');
-    } finally {
-      setSavingName(false);
-    }
-  }
-
-  // How many items friends have shared with me (badge).
-  const refreshInbox = useCallback(async () => {
-    if (!user || !getToken()) { setInboxCount(0); return; }
-    try { const res = await api.get('/api/friend-shares'); setInboxCount((res.shares || []).length); }
-    catch { /* offline / non-critical */ }
-  }, [user]);
-  useEffect(() => { refreshInbox(); }, [refreshInbox]);
-
   return (
-    <section className="screen" style={{ maxWidth: 640, margin: '0 auto' }}>
-      {/* Account Info — identity is always visible; password, username, and
-          Google linking retract behind it (web always; native when signed in). */}
-      {user && (
-        <div className="settings-card">
-          <div className="settings-section-label">Account Info</div>
-          <div
-            className="settings-user settings-user-toggle"
-            role="button"
-            tabIndex={0}
-            aria-expanded={accountExpanded}
-            onClick={() => { if (!editingName) setAccountExpanded((v) => !v); }}
-            onKeyDown={(e) => {
-              if (editingName) return;
-              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAccountExpanded((v) => !v); }
-            }}
-          >
-            <span
-              className="settings-avatar-pick"
-              role="button"
-              tabIndex={0}
-              title="Change your picture"
-              aria-label="Change your picture"
-              onClick={(e) => { e.stopPropagation(); if (!uploadingPicture) pictureInput.current?.click(); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault(); e.stopPropagation();
-                  if (!uploadingPicture) pictureInput.current?.click();
-                }
-              }}
-            >
-              {user.avatar
-                ? <img className="settings-avatar" src={user.avatar} alt="" />
-                : <div className="settings-avatar">{initial}</div>}
-              <span className="settings-avatar-badge">
-                <i className={`fas ${uploadingPicture ? 'fa-circle-notch fa-spin' : 'fa-camera'}`} />
-              </span>
-            </span>
-            <input
-              ref={pictureInput}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              hidden
-              onChange={onPicturePicked}
-            />
-            {editingName ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={nameDraft}
-                  onChange={(e) => setNameDraft(e.target.value)}
-                  placeholder={(user?.email || 'You').split('@')[0]}
-                  maxLength={60}
-                  autoFocus
-                  disabled={savingName}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); saveName(); }
-                    if (e.key === 'Escape') setEditingName(false);
-                  }}
-                />
-                <button className="icon-btn" title="Save name" disabled={savingName} onClick={saveName}>
-                  <i className={`fas ${savingName ? 'fa-circle-notch fa-spin' : 'fa-check'}`} />
-                </button>
-                <button className="icon-btn" title="Cancel" disabled={savingName} onClick={() => setEditingName(false)}>
-                  <i className="fas fa-times" />
-                </button>
-              </div>
-            ) : (
-              <>
-                <div style={{ minWidth: 0 }}>
-                  <div className="settings-name">{name}</div>
-                  {/* A username, once set, is the more useful line here — it's what
-                      they'd actually type to sign in, and it doesn't reveal the
-                      backing Gmail/email address at a glance. */}
-                  <div className="settings-email">{user?.username ? `@${user.username}` : (user?.email || '')}</div>
-                </div>
-                <button className="icon-btn" title="Edit name" style={{ marginLeft: 'auto' }}
-                  onClick={(e) => { e.stopPropagation(); startEditName(); }}>
-                  <i className="fas fa-pen" />
-                </button>
-                <i className={`fas fa-chevron-${accountExpanded ? 'up' : 'down'} settings-user-chevron`} />
-              </>
-            )}
-          </div>
-
-          {accountExpanded && (
-            <>
-              {/* Only worth offering when there is something to remove. Clearing
-                  it falls back to the initial, which is also what a Google
-                  account gets if it never had a photo. */}
-              {!!user.avatar && (
-                <button className="settings-row" disabled={uploadingPicture} onClick={removePicture}>
-                  <span><i className="fas fa-user-slash" /> Remove profile picture</span>
-                  <i className="fas fa-chevron-right" />
-                </button>
-              )}
-              {/* Set a password (Google-only accounts) or change the existing one.
-                  Without one, a broken Google sign-in locks the account out — so
-                  say so here rather than leaving it to be discovered. */}
-              {needsPassword && (
-                <p className="settings-hint-text">
-                  <i className="fas fa-triangle-exclamation" style={{ color: 'var(--accent-700)', marginRight: 8 }} />
-                  This account has no password yet. Set one so you can still sign in if Google sign-in ever fails.
-                </p>
-              )}
-              <SetAccountPassword />
-
-              {/* Add or change the login username. */}
-              <AccountUsername />
-
-              {/* Connect a Google account to an email/password account (web + native when signed in). */}
-              <ConnectGoogle />
-
-              {/* Irreversible — deliberately last, and styled as a danger row. */}
-              <DeleteAccount />
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Native: account + sync controls. */}
-      {hasLocalStore && <AccountSync reloadLists={reloadLists} />}
-      {hasClips && <ClipboardSync />}
-      {isDesktop && <DesktopCard />}
-
-      {/* Friends + sharing inbox — online features, need an account. */}
-      {user && (
-        <div className="settings-card">
-          <div className="settings-section-label">Connect</div>
-          <button className="settings-row" onClick={() => setShowFriends(true)}>
-            <span><i className="fas fa-user-group" /> Friends</span>
-            <i className="fas fa-chevron-right" />
-          </button>
-          <button className="settings-row" onClick={() => setShowInbox(true)}>
-            <span><i className="fas fa-inbox" /> Shared with me</span>
-            {inboxCount > 0 ? <span className="inbox-badge">{inboxCount}</span> : <i className="fas fa-chevron-right" />}
-          </button>
-        </div>
-      )}
-
+    <>
       <div className="settings-card">
-        <button className="settings-row" onClick={() => setOpenGroup('appearance')}>
-          <span><i className="fas fa-palette" /> Appearance</span>
-          <span className="settings-collapse-right">
-            <span className="settings-collapse-hint">{effective === 'dark' ? 'Dark' : 'Light'}</span>
-            <i className="fas fa-chevron-right" />
-          </span>
-        </button>
-      </div>
-
-      {isNative && (
-        <div className="settings-card">
-          <button className="settings-row" onClick={() => setOpenGroup('troubleshooting')}>
-            <span><i className="fas fa-screwdriver-wrench" /> Troubleshooting</span>
-            <i className="fas fa-chevron-right" />
-          </button>
-        </div>
-      )}
-
-      <div className="settings-card">
-        <button className="settings-row" onClick={() => setOpenGroup('privacy')}>
-          <span><i className="fas fa-lock" /> Privacy</span>
-          <span className="settings-collapse-right">
-            <span className="settings-collapse-hint">{shareSummary(user)}</span>
-            <i className="fas fa-chevron-right" />
-          </span>
-        </button>
-      </div>
-
-      {/* Log out sits in its own card: it is not a privacy setting, and it
-          must not disappear when the section above is collapsed. */}
-      {!isNative && (
-        <div className="settings-card">
-          <button className="settings-row danger" onClick={() => { if (confirm('Log out of Mah Notes?')) onLogout(); }}>
-            <span><i className="fas fa-sign-out-alt" /> Log out</span>
-            <i className="fas fa-chevron-right" />
-          </button>
-        </div>
-      )}
-
-      <div className="settings-card">
-        <div className="settings-section-label">About &amp; updates</div>
         <button className="settings-row" onClick={() => setShowWhatsNew(true)}>
           <span><i className="fas fa-gift" /> What’s new</span>
           <span className="settings-sub">v{APP_VERSION}</span>
         </button>
-        {/* Web only. On a phone or the desktop app you are ALREADY running the
-            thing this would offer to download — it used to show there because
-            the check was "not Android", which the desktop build also satisfies. */}
+        {/* Web only. On a phone or the desktop app you are already running the
+            thing this would offer to download. */}
         {isWeb && (
           <button className="settings-row" onClick={() => setShowDownload(true)}>
             <span><i className="fas fa-download" /> Get the app for Windows or Android</span>
             <i className="fas fa-chevron-right" />
           </button>
         )}
-        {/* The installed apps check GitHub Releases for themselves; the website
-            updates whenever you deploy it, so it has nothing to offer here. */}
+        {/* The installed apps check GitHub Releases themselves; the website
+            updates whenever it is deployed. */}
         {!isWeb && (
           <>
             <div className="settings-row" style={{ cursor: 'default' }}>
@@ -1050,79 +1162,66 @@ export default function SettingsTab({ user, onPrivacy, onLogout, onReload, reloa
           </>
         )}
       </div>
-
       <p className="settings-about">Mah Notes · MERN edition</p>
-
-      {pendingPicture && (
-        <AvatarCropModal
-          file={pendingPicture}
-          onCancel={() => setPendingPicture(null)}
-          onDone={onCropped}
-        />
-      )}
-      {openGroup === 'appearance' && (
-        <SettingsGroupModal title="Appearance" icon="fa-palette" onClose={() => setOpenGroup(null)}>
-          {/* The light/dark/system buttons used to sit here. They are gone: the
-              colours below decide it. A light paper is a light theme, a dark
-              one (Midnight, or your own) is a dark theme. */}
-          <ThemeCustomizer />
-        </SettingsGroupModal>
-      )}
-
-      {openGroup === 'privacy' && (
-        <SettingsGroupModal title="Privacy" icon="fa-lock" onClose={() => setOpenGroup(null)}>
-          <div className="settings-sub-label">In this app</div>
-          <button className="settings-row" onClick={() => { setOpenGroup(null); onPrivacy(); }}>
-            <span><i className="fas fa-eye-slash" /> Hide all content in the list</span>
-            <i className="fas fa-chevron-right" />
-          </button>
-
-          <div className="settings-sub-label">On shared links</div>
-          {user && <SharePrivacy user={user} />}
-        </SettingsGroupModal>
-      )}
-
-      {openGroup === 'troubleshooting' && (
-        <SettingsGroupModal title="Troubleshooting" icon="fa-screwdriver-wrench" onClose={() => setOpenGroup(null)}>
-          <p className="settings-hint-text">
-            Only needed if something looks wrong — the app keeps both of these in
-            step on its own.
-          </p>
-          <button className="settings-row" onClick={async () => {
-            const c = await pushWidgetData();
-            notify(`Widget updated — ${c.notes} notes, ${c.plans} plans, ${c.schedule} schedule items`, 'success');
-          }}>
-            <span><i className="fas fa-table-cells-large" /> Refresh widget data</span>
-            <i className="fas fa-rotate-right" />
-          </button>
-          <button className="settings-row" onClick={async () => {
-            try {
-              const blocks = await listSchedules();
-              const removed = await clearStrayAlarms(blocks);
-              notify(
-                removed ? `Cleared ${removed} stray alarm${removed === 1 ? '' : 's'}`
-                  : 'No stray alarms found',
-                'success',
-              );
-            } catch (err) {
-              notify(err.message, 'error');
-            }
-          }}>
-            <span><i className="fas fa-bell-slash" /> Clear stray alarms</span>
-            <i className="fas fa-broom" />
-          </button>
-        </SettingsGroupModal>
-      )}
       {showWhatsNew && <WhatsNewModal onClose={() => setShowWhatsNew(false)} />}
       {showDownload && <DownloadAppModal onClose={() => setShowDownload(false)} />}
       {update && <UpdateModal update={update} onClose={() => setUpdate(null)} />}
-      {showFriends && <FriendsModal me={user} onClose={() => setShowFriends(false)} />}
-      {showInbox && (
-        <InboxModal
-          onClose={() => { setShowInbox(false); refreshInbox(); }}
-          onSaved={() => { if (onReload) onReload(); refreshInbox(); }}
-        />
-      )}
-    </section>
+    </>
+  );
+}
+
+// ── The pane ───────────────────────────────────────────
+export function SettingsPane({
+  section, sections, user, onBack, onPrivacy, onLogout, onReload, reloadLists,
+  updateAvailable, needsPassword, inboxCount, refreshInbox, onShareCard, onOpenSection,
+}) {
+  const meta = sections.find((s) => s.id === section);
+  if (!meta) {
+    return (
+      <div className="pane-empty">
+        <div className="kicker accent">Settings</div>
+        <h2>Nothing selected</h2>
+        <p>Pick a section on the left. Each one opens here on its own.</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="detail-bar">
+        <button className="icon-btn" aria-label="Back to settings" onClick={onBack}>
+          <i className="fas fa-chevron-left" />
+        </button>
+        <span className="detail-status"><span className="pane-dot" />Settings</span>
+      </div>
+      {/* Keyed by section, so switching sections starts at the top rather than
+          at wherever the last one was scrolled to. */}
+      <div className="pane-scroll set-pane" key={meta.id}>
+        {/* One centred column: the header, the title and every card in the
+            section share the same width. */}
+        <div className="set-col">
+        <div className="pane-head">
+          <span className="pane-tag">Settings</span>
+          <span className="pane-status"><span className="pane-dot" />{meta.summary}</span>
+        </div>
+        <h1 className="pane-title">{meta.title}</h1>
+        <div className="set-body">
+          {meta.id === 'account' && (
+            <AccountSection user={user} reloadLists={reloadLists} needsPassword={needsPassword} onLogout={onLogout} />
+          )}
+          {meta.id === 'friends' && (
+            <FriendsSection user={user} refreshInbox={refreshInbox} onReload={onReload} />
+          )}
+          {meta.id === 'bundles' && <BundleCollection user={user} onShareCard={onShareCard} />}
+          {meta.id === 'appearance' && <AppearanceSection onOpenSection={onOpenSection} />}
+          {meta.id === 'privacy' && <PrivacySection user={user} onPrivacy={onPrivacy} />}
+          {meta.id === 'clipboard' && <ClipboardSync />}
+          {meta.id === 'desktop' && <DesktopCard />}
+          {meta.id === 'troubleshooting' && <TroubleshootingSection />}
+          {meta.id === 'about' && <AboutSection updateAvailable={updateAvailable} />}
+        </div>
+        </div>
+      </div>
+    </>
   );
 }

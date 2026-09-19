@@ -12,6 +12,10 @@
         // isDarkColor() in src/lib/palette.ts; keep the two in step.
         var t = JSON.parse(localStorage.getItem('mahnotes_theme_v2') || 'null');
         var paper = (t && t.paper) || '#f3f2f2';
+        // A bundle with its own appearance decides the ground while it is
+        // equipped (Galaxy is deep space). Mirrors GALAXY.theme.paper in
+        // src/lib/bundles.ts; keep the two in step.
+        if (localStorage.getItem('mahnotes_bundle') === 'galaxy') paper = '#161421';
         var m = /^#?([0-9a-f]{6})$/i.exec(String(paper).trim());
         if (m) {
             var n = parseInt(m[1], 16);

@@ -275,7 +275,16 @@ input[type="password"]::-ms-clear { display: none; width: 0; height: 0; }
 .btn-google:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ═══════════ APP SHELL ═══════════ */
-.app { min-height: 100dvh; height: 100dvh; display: flex; }
+.app {
+    min-height: 100dvh; height: 100dvh; display: flex;
+    /* The shell is exactly one screen; the rail list and the pane scroll on
+       their own. Clipping here means nothing decorative that pokes past the
+       bottom edge (a rotating avatar decoration in the rail footer) can make
+       the whole page scroll — which showed up as a scrollbar blinking in and
+       out over the pane. `clip`, not `hidden`, so this never becomes a scroll
+       container of its own. */
+    overflow: hidden; overflow: clip;
+}
 
 /* ── The rail: brand, tabs, search, and the list ──────── */
 .rail {
@@ -324,8 +333,10 @@ body.rail-resizing * { pointer-events: none; }
 .rail-btn.solid:hover { background: var(--accent-600); }
 .rail-btn-dot { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; background: var(--accent); }
 
-/* Tabs — five, evenly split, underlined when active */
-.rail-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 0 14px 14px; }
+/* Tabs — evenly split, underlined when active. Auto columns rather than a
+   fixed five: the web shows four until the clipboard has something in it,
+   and a fixed five left an empty slot at the end. */
+.rail-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; padding: 0 14px 14px; }
 .rail-tab {
     height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
     border: none; border-bottom: 2px solid transparent; background: transparent;
@@ -480,7 +491,13 @@ body.rail-resizing * { pointer-events: none; }
 
 /* ── The pane: whatever you're reading ───────────────── */
 .pane { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; min-height: 0; }
-.pane-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 56px 68px 120px; }
+.pane-scroll {
+    flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 56px 68px 120px;
+    /* Vertical scrolling only. Anything that pokes out sideways (an animated
+       decoration, a long unbroken word) must not summon a second, horizontal
+       scrollbar that flickers as it moves. */
+    overflow-x: hidden;
+}
 .pane-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
 .pane-tag {
     font-family: var(--font-heading); font-weight: 800; font-size: 9.5px;
@@ -602,7 +619,9 @@ body.rail-resizing * { pointer-events: none; }
     background: var(--panel-2);
     backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
     border-top: 2px solid var(--ink-34);
-    grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start;
+    /* However many tabs this build shows (four or five), they share the
+       width equally — a fixed five left a gap when there were four. */
+    grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: start;
 }
 .nav-item {
     height: 56px; min-width: 0; border: none; background: none; cursor: pointer; color: var(--ink-64);
@@ -617,7 +636,11 @@ body.rail-resizing * { pointer-events: none; }
 .nav-item i { font-size: 17px; }
 .nav-item.active { color: var(--accent); }
 .nav-icon-wrap { position: relative; display: inline-flex; }
-.nav-dot { position: absolute; bottom: -2px; right: -5px; width: 7px; height: 7px; background: var(--accent); }
+.nav-dot { position: absolute; bottom: -2px; right: -5px; width: 7px; height: 7px; background: var(--alert-dot); }
+/* "Something new" is red whatever the theme or bundle — a violet or green
+   dot doesn't read as news. */
+:root { --alert-dot: #ff3b3b; }
+.new-dot { display: inline-block; width: 7px; height: 7px; flex: none; background: var(--alert-dot); }
 
 /* ═══════════ CARDS (viewer, inbox, reconcile) ═══════════ */
 .screens { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 20px 40px; }
@@ -691,6 +714,28 @@ body.rail-resizing * { pointer-events: none; }
     font-size: 12px; font-weight: 800; pointer-events: none;
 }
 .doc-check-item[data-checked="true"] { color: var(--ink-40); text-decoration: line-through; }
+.doc-check-item { transition: color .25s ease; }
+
+/* Checking a box is the small win this app is built around, so it gets a
+   moment: the box pops, the check mark springs in, a ring ripples out and the
+   row glows once. Only on checking — unchecking stays quiet. lib/checkFx adds
+   .ck-pop for ~700ms; the reduced-motion rule at the top collapses it. */
+.doc-check-item.ck-pop { animation: ck-row .7s ease-out; }
+.doc-check-item.ck-pop::before { animation: ck-box .46s cubic-bezier(.34, 1.56, .64, 1); }
+.doc-check-item.ck-pop[data-checked="true"]::after { animation: ck-mark .36s cubic-bezier(.34, 1.56, .64, 1) .06s both; }
+@keyframes ck-box {
+    0% { transform: scale(.7); box-shadow: 0 0 0 0 var(--accent-300); }
+    55% { transform: scale(1.14); }
+    100% { transform: scale(1); box-shadow: 0 0 0 12px transparent; }
+}
+@keyframes ck-mark {
+    0% { transform: scale(0) rotate(-40deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes ck-row {
+    0% { background: var(--tint-2); }
+    100% { background: transparent; }
+}
 .pane-prose .doc-check-item { font-size: 17px; line-height: 1.7; padding: 7px 0 7px 32px; }
 .pane-prose .doc-check-item::before,
 .pane-prose .doc-check-item[data-checked="true"]::after { top: .35em; }
@@ -1249,10 +1294,29 @@ body.rail-resizing * { pointer-events: none; }
     letter-spacing: .12em; text-transform: uppercase; color: var(--ink-64);
     display: inline-flex; align-items: center; gap: 7px;
 }
+/* A select in the theme's own colours. The native control is replaced
+   (appearance: none) because its look — and, on Windows, the colour of its
+   drop-down list — comes from the platform, not the theme: on a dark theme
+   it drew a light list with the theme's light ink on it. The ground is solid
+   so the list has something to take its colour from, and the chevron is two
+   gradients so it can follow the ink. */
 .mini-select {
+    -webkit-appearance: none; appearance: none;
     flex: 1; min-width: 120px; border: none; box-shadow: inset 0 0 0 1px var(--ink-16); border-radius: 0;
-    padding: 10px; font-size: 14px; background: var(--veil-3); color: var(--ink); font-family: var(--font-body);
+    padding: 10px 34px 10px 12px; font-size: 14px; color: var(--ink); font-family: var(--font-body);
+    background-color: var(--paper-2);
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--ink-64) 50%),
+        linear-gradient(135deg, var(--ink-64) 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    cursor: pointer; transition: box-shadow .14s ease;
 }
+.mini-select:hover { box-shadow: inset 0 0 0 1px var(--ink-40); }
+.mini-select:focus { outline: none; }
+.mini-select:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.mini-select option { background-color: var(--paper); color: var(--ink); }
 .chip-btn {
     border: 1px solid var(--ink-16); background: var(--veil-2); color: var(--ink);
     border-radius: 0; padding: 9px 13px; cursor: pointer;
@@ -1409,21 +1473,50 @@ body.rail-resizing * { pointer-events: none; }
 .fs-sent { margin-top: 10px; font-size: 12px; color: var(--success); box-shadow: inset 0 0 0 1px rgba(31, 122, 77, .35); padding: 10px 12px; }
 .fs-sent i { margin-right: 5px; }
 
-.inbox-badge {
-    background: var(--accent); color: var(--on-accent); min-width: 20px; height: 20px; border-radius: 0;
-    padding: 0 6px; display: inline-flex; align-items: center; justify-content: center;
-    font-family: var(--font-heading); font-weight: 800; font-size: 10px;
+/* ── Shared with me: one title row per share, opened in place ── */
+.inbox-list { padding-top: 12px; }
+.inbox-item { box-shadow: inset 0 0 0 1px var(--ink-16); background: var(--veil-1); margin-bottom: 2px; transition: background .14s ease, box-shadow .14s ease; }
+.inbox-item.open { background: var(--veil-2); box-shadow: inset 0 0 0 1px var(--ink-24); }
+.inbox-row {
+    width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    background: none; border: none; cursor: pointer; text-align: left; color: var(--ink);
+    font-family: var(--font-body);
 }
-.inbox-card { background: var(--veil-2); box-shadow: inset 0 0 0 1px var(--ink-16); padding: 16px; margin-bottom: 2px; }
-.inbox-from { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--ink-64); margin-bottom: 10px; }
+.inbox-row:hover { background: var(--veil-1); }
+.inbox-row-icon { width: 18px; flex: none; text-align: center; color: var(--accent); font-size: 13px; }
+.inbox-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.inbox-row-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-item.is-new .inbox-row-title { font-weight: 700; }
+.inbox-row-meta { font-size: 11.5px; color: var(--ink-64); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-row-chev { flex: none; font-size: 10px; color: var(--ink-40); transition: transform .18s ease; }
+.inbox-item.open .inbox-row-chev { transform: rotate(180deg); }
+.inbox-body { padding: 4px 16px 16px 44px; animation: fadeUp .16s ease; }
+.inbox-from { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--ink-64); margin: 2px 0 14px; }
 .inbox-from b { color: var(--ink); font-weight: 600; }
-.inbox-title { font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.inbox-title i { color: var(--accent); font-size: 12px; }
-.inbox-preview {
-    font-size: 13px; color: var(--ink-80); max-height: 110px; overflow: hidden;
-    -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent); mask-image: linear-gradient(180deg, #000 60%, transparent);
+.inbox-when { color: var(--ink-40); }
+/* The whole document, at a size that reads in a settings column. */
+.inbox-doc { font-size: 14px; color: var(--ink-80); line-height: 1.7; border-left: 2px solid var(--accent-300); padding: 2px 0 2px 14px; }
+.inbox-doc p { font-size: 14px; line-height: 1.7; margin: 0 0 10px; }
+.inbox-doc h1, .inbox-doc h2, .inbox-doc h3 { font-size: 16px; margin: 14px 0 8px; }
+.inbox-doc .doc-check-item { font-size: 14px; }
+.inbox-doc > :last-child { margin-bottom: 0; }
+.inbox-empty { font-size: 13px; color: var(--ink-64); font-style: italic; }
+.inbox-week { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 2px; }
+.inbox-day { background: var(--veil-1); box-shadow: inset 0 0 0 1px var(--ink-14); padding: 10px 12px; }
+.inbox-day-name {
+    display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px;
+    font-family: var(--font-heading); font-weight: 800; font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink);
 }
-.inbox-preview.muted, .inbox-preview .muted { color: var(--ink-64); }
+.inbox-day-name span { color: var(--ink-40); }
+.inbox-day ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.inbox-day li { display: flex; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--ink-80); word-break: break-word; }
+.inbox-day li i { margin-top: 3px; color: var(--accent); font-size: 12px; flex: none; }
+.inbox-day li.done span { color: var(--ink-40); text-decoration: line-through; }
+.inbox-snap { margin: 14px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--ink-64); }
+.inbox-snap i { margin-right: 5px; color: var(--ink-40); }
+@media (max-width: 520px) {
+    .inbox-body { padding-left: 16px; }
+}
 .inbox-plan-chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .inbox-chip {
     color: var(--accent-700); background: transparent; border: 1px solid var(--accent-300); border-radius: 0; padding: 4px 8px;
@@ -1649,7 +1742,8 @@ body.rail-resizing * { pointer-events: none; }
     .app.has-detail .pane { display: flex; flex: 1; min-height: 0; padding-top: var(--safe-t); }
     .detail-bar { display: flex; }
 
-    .pane-scroll { padding: 4px 22px calc(var(--bar-h) + var(--safe-b) + 40px); }
+    /* Extra room at the bottom so the last lines clear the floating cluster. */
+    .pane-scroll { padding: 4px 22px calc(var(--bar-h) + var(--safe-b) + 110px); }
     /* Schedule and Settings have no detail bar above them, so they need the
        breathing room the bar would otherwise have provided. */
     .pane-scroll.full { padding-top: 22px; }
@@ -1660,13 +1754,15 @@ body.rail-resizing * { pointer-events: none; }
     .pane-empty { padding: 40px 22px; }
     .pane-empty h2 { font-size: 24px; }
 
-    /* On a phone the cluster is a row under the content, not a hover object. */
+    /* On a phone the cluster floats at the lower right, just above the
+       bottom nav, where a thumb already rests — always reachable, however
+       long the note is. Fully opaque: there is no hover to reveal it. */
     .cluster {
-        position: static; opacity: 1; margin: 32px 0 0; padding: 0; gap: 2px;
-        background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;
-        border: none; box-shadow: none; flex-wrap: wrap;
+        position: fixed; right: 16px; bottom: calc(var(--bar-h) + var(--safe-b) + 16px);
+        opacity: 1; margin: 0; padding: 5px; gap: 2px; z-index: 46; flex-wrap: nowrap;
+        box-shadow: var(--shadow-lg);
     }
-    .cluster-btn { width: 44px; height: 44px; box-shadow: inset 0 0 0 1px var(--ink-16); }
+    .cluster-btn { width: 44px; height: 44px; }
 
     .week-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .week-day { min-height: 0; }
@@ -1701,7 +1797,6 @@ body.rail-resizing * { pointer-events: none; }
     .popup { border: 1px solid var(--ink-24); border-top-width: 1px; padding: 32px 34px; }
 
     .screens { padding: 40px 68px 60px; }
-    .settings-card { max-width: 460px; }
 }
 
 /* ── Desktop hotkey chips (Settings) ──────────────────

@@ -4,7 +4,7 @@
 //  a weekly notification + sound at their start time.
 // ============================================================
 import { useMemo, useState, useEffect } from 'react';
-import { deleteSchedule } from '../lib/scheduleStore';
+import { deleteSchedules } from '../lib/scheduleStore';
 import { notify } from '../lib/notify';
 import AlarmHelp from './AlarmHelp';
 import ScanSchedule from './ScanSchedule';
@@ -63,7 +63,7 @@ export default function ScheduleTab({ schedules, onEdit, onChanged }) {
     if (!confirm(`Delete ALL ${schedules.length} time block${schedules.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
     setBulkBusy(true);
     try {
-      for (const b of schedules) await deleteSchedule(b.id); // eslint-disable-line no-await-in-loop
+      await deleteSchedules(schedules.map((b) => b.id)); // one request, not one per block
       notify(`Deleted ${schedules.length} block${schedules.length > 1 ? 's' : ''}`, 'success');
       setActiveGroup('all');
     } catch (err) { notify(err.message || 'Could not delete all', 'error'); }
@@ -79,7 +79,7 @@ export default function ScheduleTab({ schedules, onEdit, onChanged }) {
     if (!confirm(`Delete the entire “${activeGroup}” group? This removes ${inGroup.length} time block${inGroup.length > 1 ? 's' : ''}. This cannot be undone.`)) return;
     setDeletingGroup(true);
     try {
-      for (const b of inGroup) await deleteSchedule(b.id); // eslint-disable-line no-await-in-loop
+      await deleteSchedules(inGroup.map((b) => b.id));
       notify(`Deleted “${activeGroup}” (${inGroup.length} block${inGroup.length > 1 ? 's' : ''})`, 'success');
       setActiveGroup('all');
       if (onChanged) onChanged();

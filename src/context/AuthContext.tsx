@@ -15,6 +15,7 @@ import { notify } from '../lib/notify';
 import { rateGate } from '../lib/rateLimit';
 import { clearCache } from '../lib/webCache';
 import { connectRealtime, disconnectRealtime, onRealtime } from '../lib/realtime';
+import { adoptAccountBundle } from '../lib/bundles';
 
 // Throttle sign-in attempts (login / register / Google) so a stuck button or
 // retry loop can't spam the auth endpoint. The server enforces a hard limit too.
@@ -41,6 +42,10 @@ export function AuthProvider({ children }) {
   // exchange instead of silently re-rendering the login form (which made users
   // click Google again and cancel the in-flight attempt).
   const [googlePending, setGooglePending] = useState(() => (isNative ? null : pendingGoogleRedirect()));
+
+  // The account carries its equipped bundle; wear it on sign-in, and follow
+  // it when it changes on another device (me:updated refreshes `user`).
+  useEffect(() => { adoptAccountBundle(user); }, [user?.id, user?.bundle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On first load, restore the cached user (instant, works offline) then
   // validate the token in the background.

@@ -1,9 +1,15 @@
 // ============================================================
-//  Viewer page — three modes:
-//    ?token=…  (live)      → public, read-only, polled every 4s
-//    ?token=…  (reference) → public blank scratch copy; ticks saved
-//                            only in this browser's localStorage
-//    ?type=&id=…  (owner)  → signed-in owner; taps save to the server
+//  Viewer page.
+//    ?token=…     a public share link. When the link carries a bundle (?b=)
+//                 it opens on the sender's card first; "Open the note" adds
+//                 noteIsOpen=true, so a refresh or a dropped connection goes
+//                 straight back to the note instead of the card.
+//    ?type=&id=…  the signed-in owner's own view; taps save to their note.
+//
+//  On a public link that has checklists, the reader picks how to use them:
+//    Follow live            — the sender's checks, refreshed as they change
+//    Check off my own copy  — the reader's own checks, kept in this browser
+//  Until they pick, they see the list as it was when the page loaded.
 // ============================================================
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
@@ -13,11 +19,12 @@ import { hasLocalStore } from '../lib/platform';
 import { repo } from '../lib/repo';
 import { localdb } from '../lib/localdb';
 import { contentToHtml, sanitizeHtml } from '../lib/richtext';
-import { APP_DOWNLOAD_URL, fetchLatestRelease } from '../lib/updates';
-import { isInAppBrowser } from '../lib/inAppBrowser';
-import { isMobileBrowser, isWindowsBrowser } from '../lib/deviceKind';
-import { previewTheme, restoreOwnTheme } from '../lib/palette';
+import { resolveTheme } from '../lib/palette';
 import { useTheme } from '../context/ThemeContext';
+import { getBundle } from '../lib/bundles';
+import ShareCard from './ShareCard';
+import DownloadAppModal from './DownloadAppModal';
+import { celebrateCheck, celebrateNewChecks } from '../lib/checkFx';
 import logoUrl from '../images/mn_logo.png';
 
 const KNOWN_TABS = ['docs', 'plans', 'view', 'schedule', 'settings'];
@@ -29,32 +36,35 @@ const DAY_SHORT = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: '
 const today = () => JS_DAY[new Date().getDay()];
 
 // Live refresh cadence for a shared link. Deliberately well under the public
-// endpoint's IP rate limit, which the old 4s interval exceeded on its own.
+// endpoint's IP rate limit.
 const POLL_MS = 15000;
 const POLL_MAX_MS = 60000;
 
+// The reader's own checks, per link, in this browser only.
 const refKey = (tok) => 'mahnotes_ref_' + tok;
 const refLoad = (tok) => { try { return JSON.parse(localStorage.getItem(refKey(tok)) || '{}'); } catch { return {}; } };
 const refSave = (tok, state) => { try { localStorage.setItem(refKey(tok), JSON.stringify(state)); } catch {} };
 
+// How the reader is using the checklist, per link, so a refresh keeps it.
+type VMode = 'view' | 'live' | 'mine';
+const modeKey = (tok) => 'mahnotes_vmode_' + tok;
+function modeLoad(tok): VMode | null {
+  try {
+    const v = localStorage.getItem(modeKey(tok));
+    return v === 'view' || v === 'live' || v === 'mine' ? v : null;
+  } catch { return null; }
+}
+const modeSave = (tok, m: VMode) => { try { localStorage.setItem(modeKey(tok), m); } catch {} };
 
-// Public acquisition CTA shown under a shared link on the web: get the app, and
-// sign in / sign up. Hidden inside the native app and for signed-in owners.
 // "Shared by …" — a face and a name make a shared page read as something a
 // person sent you rather than a document dump. The author picks either, both
-// or neither in Settings → Privacy, so all four shapes have to render:
-// picture + name, initial + name, picture alone, or nothing at all.
+// or neither in Settings → Privacy, so all four shapes have to render.
 function AuthorBadge({ author }) {
   const name = (author?.name || '').trim();
   const avatar = author?.avatar || '';
   const showAvatar = author?.showAvatar !== false;
   const initial = name.charAt(0).toUpperCase();
 
-  // The disc appears only when a picture is allowed — one drawn while the
-  // author has the profile switched off is indistinguishable from the profile
-  // they just hid. With it allowed but no picture stored, an initial stands in
-  // when the name is public, and a neutral figure when it is not, so the
-  // switch always does something visible without leaking the hidden name.
   let disc = null;
   if (avatar) disc = <img className="view-author-avatar" src={avatar} alt="" />;
   else if (showAvatar) {
@@ -77,34 +87,12 @@ function AuthorBadge({ author }) {
   );
 }
 
-function ViewerCta({ themed }) {
+// Public "get the app / sign in" block under a shared link (web only). One
+// Download button: the modal it opens offers Windows and mobile, and warns
+// about in-app browsers where downloads get stuck.
+function ViewerCta({ themed, bundleName = '' }) {
   const signedIn = !!getToken();
-  // Shared links land here from Messenger/Instagram/etc. often enough that
-  // this is the single most common place someone hits the broken-download
-  // path — their embedded WebView, not real Chrome, can't finish an APK
-  // download (it just sits at 100% forever). Warn before they try.
-  const inApp = isInAppBrowser();
-  // Resolve the direct .apk so "Download the app" actually downloads, instead
-  // of dropping the user on the GitHub releases page to hunt for the asset.
-  // Falls back to that page until this resolves (or if it fails).
-  const [apkUrl, setApkUrl] = useState(null);
-  const [installerUrl, setInstallerUrl] = useState(null);
-  // A phone gets the APK alone; it cannot run a Windows installer. A desktop
-  // gets both, since someone at a computer may be fetching the app for their
-  // phone, and Windows goes first when that is what they are running.
-  const onMobile = isMobileBrowser();
-  const onWindows = isWindowsBrowser();
-  const showWindows = !!installerUrl && !onMobile;
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const rel = await fetchLatestRelease();
-      if (cancelled) return;
-      if (rel?.apkUrl) setApkUrl(rel.apkUrl);
-      if (rel?.installerUrl) setInstallerUrl(rel.installerUrl);
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const [showDownload, setShowDownload] = useState(false);
 
   return (
     <div className="view-cta">
@@ -112,43 +100,22 @@ function ViewerCta({ themed }) {
         <span className="logo">Mah Notes</span>
         <p>Your notes, plans &amp; checklists — everywhere.</p>
       </div>
-      {themed && (
+      {bundleName ? (
+        <p className="view-themed">
+          <i className="fas fa-palette" /> You are reading this in the author&rsquo;s {bundleName}{' '}
+          bundle — its colours and its sky. Every bundle is free, and it travels with everything
+          you share.
+        </p>
+      ) : themed && (
         <p className="view-themed">
           <i className="fas fa-palette" /> You are reading this in the author&rsquo;s own colour
           theme. Every Mah Notes account picks its own, and it travels with everything you share.
         </p>
       )}
-      {inApp && (
-        <p className="vcta-warn">
-          <i className="fas fa-triangle-exclamation" /> Downloads can get stuck here — tap <b>⋮</b> / <b>···</b> and choose
-          <b> “Open in Chrome”</b> first.
-        </p>
-      )}
       <div className="view-cta-btns">
-        {/* Windows first for a Windows visitor. The installer is an ordinary
-            download, so a plain link is fine.
-
-            Android goes via /download, which paints a real page before starting
-            the transfer. A new tab aimed straight at the .apk holds no
-            document, and Android leaves that download at 100% forever. */}
-        {showWindows && onWindows && (
-          <a className="vcta-btn primary" href={installerUrl}>
-            <i className="fab fa-windows" /> Download for Windows
-          </a>
-        )}
-        <a
-          className={`vcta-btn ${showWindows && onWindows ? 'ghost' : 'primary'}`}
-          href={apkUrl ? '/download' : APP_DOWNLOAD_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <i className="fab fa-android" /> Download for Android
-        </a>
-        {showWindows && !onWindows && (
-          <a className="vcta-btn ghost" href={installerUrl}>
-            <i className="fab fa-windows" /> Download for Windows
-          </a>
-        )}
+        <button type="button" className="vcta-btn primary" onClick={() => setShowDownload(true)}>
+          <i className="fas fa-download" /> Download
+        </button>
         {signedIn ? (
           <Link className="vcta-btn ghost" to="/">
             <i className="fas fa-arrow-right" /> Open Mah Notes
@@ -164,6 +131,7 @@ function ViewerCta({ themed }) {
           </>
         )}
       </div>
+      {showDownload && <DownloadAppModal onClose={() => setShowDownload(false)} />}
     </div>
   );
 }
@@ -207,39 +175,114 @@ function WeekDetails({ days, markDone = true }) {
   );
 }
 
+// The two ways to use a shared checklist, in a panel of their own — above
+// the note, never between its title and its text — so they read as controls
+// for the page and not as part of what the sender wrote. Pressing the active
+// one again goes back to the list as it was when the page loaded.
+function ModeBar({ vmode, onLive, onMine }) {
+  const live = vmode === 'live';
+  const mine = vmode === 'mine';
+  return (
+    <section className="v-modes-panel" aria-labelledby="vModesHead">
+      <div className="v-modes-head" id="vModesHead">
+        <i className="fas fa-list-check" aria-hidden="true" />
+        <span><b>This has a checklist.</b> How do you want to use it?</span>
+      </div>
+      <div className="v-modes" role="group" aria-labelledby="vModesHead">
+        <button type="button" className={`v-mode${live ? ' on' : ''}`} aria-pressed={live} onClick={onLive}>
+          {live ? <span className="v-live-dot" aria-hidden="true" /> : <i className="fas fa-tower-broadcast" aria-hidden="true" />}
+          <span className="v-mode-t">
+            <b>{live ? 'Following live' : 'Follow live'}</b>
+            <small>{live ? 'The sender’s checks, as they change. Tap to stop.' : 'See the sender’s checks as they change'}</small>
+          </span>
+        </button>
+        <button type="button" className={`v-mode${mine ? ' on' : ''}`} aria-pressed={mine} onClick={onMine}>
+          <i className={`fas ${mine ? 'fa-square-check' : 'fa-pen-to-square'}`} aria-hidden="true" />
+          <span className="v-mode-t">
+            <b>{mine ? 'Checking off my own copy' : 'Check off my own copy'}</b>
+            <small>{mine ? 'Saved on this device only. Tap to stop.' : 'Check the boxes yourself — the sender’s list never changes'}</small>
+          </span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// Before the reader starts checking off their own copy: keep the boxes that
+// are checked, or uncheck them all.
+function StartCopyDialog({ onClear, onKeep, onCancel }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+  return (
+    <div className="modal-overlay confirm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div className="popup confirm-popup" role="dialog" aria-modal="true" aria-labelledby="startCopyTitle">
+        <div className="popup-head"><h3 id="startCopyTitle"><i className="fas fa-pen-to-square" /> Check off your own copy</h3></div>
+        <p className="confirm-text">
+          Your checks stay in this browser and never change the sender’s list. Start with every
+          box unchecked, or keep the boxes checked exactly as they are now?
+        </p>
+        <div className="confirm-actions">
+          <button className="btn btn-primary btn-block" onClick={onClear}>Uncheck every box</button>
+          <button className="btn btn-ghost btn-block" onClick={onKeep}>Keep the boxes checked</button>
+          <button className="btn btn-ghost btn-block" onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Viewer() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
-  const { effective } = useTheme() || {};
+  const { setPageTheme } = useTheme() || ({} as any);
   const token = params.get('token');
   const ownerType = params.get('type');
   const ownerId = params.get('id');
   const from = params.get('from');
-  // Back returns to the tab the user opened this from (Docs/Plans/View), not
-  // always the home default. Falls back to home when there's no/unknown source.
+  // The sender's bundle, carried by the link. Validated, not trusted: an
+  // unknown id falls back to Default. (Their @handle is NOT taken from the
+  // link — it comes from the server, which only sends it while the sender
+  // shows their name on shared links. See Settings → Privacy.)
+  const senderBundle = getBundle(params.get('b'));
+  // In the URL rather than in state, so it survives a refresh.
+  const noteIsOpen = params.get('noteIsOpen') === 'true';
   const backTo = KNOWN_TABS.includes(from) ? `/?tab=${from}` : '/';
 
   const [state, setState] = useState<any>({ status: 'loading' }); // loading | ok | message
-  const [data, setData] = useState<any>(null); // { kind, mode, title, contentHtml?, days?, id }
-  // The author's colour theme, sent with a shared link so the page renders in
-  // THEIR colours rather than the reader's. Null for an owner view.
+  // { kind, mode: 'live'|'reference'|'owner', title, contentHtml?, days?, id }
+  const [data, setData] = useState<any>(null);
+  // The author's colour theme, so the page renders in THEIR colours.
   const [authorTheme, setAuthorTheme] = useState<any>(null);
-  // { name, avatar } when the author lets their identity show (Settings →
-  // Privacy). Null otherwise, and always null for an owner view.
+  // { name, avatar, showAvatar } when the author lets their identity show.
   const [author, setAuthor] = useState<any>(null);
+  const [vmode, setVmode] = useState<VMode>(() => (token && modeLoad(token)) || 'view');
+  const [askCopy, setAskCopy] = useState(false);
   const docRef = useRef(null);
+  const firstLoad = useRef(true);
+  // Which boxes were checked at the last live refresh, so the ones the sender
+  // has just checked can pop as they arrive.
+  const liveChecks = useRef<Set<number> | null>(null);
 
-  // Paint the page in the author's colours while it is open. Nothing is
-  // persisted, so the reader's own theme is untouched and comes straight back
-  // when they navigate away (or the fetch turns out to have no theme).
-  // Re-runs on a light/dark flip, otherwise ThemeContext would repaint the
-  // page in the READER's colours the moment they toggled the mode.
+  // The page wears the sender's LOOK: their bundle's appearance when the
+  // bundle brings one (Galaxy is deep space), otherwise their own saved
+  // colours. Nothing is persisted, and whatever the reader has in force
+  // comes straight back on the way out.
+  // Handed to the theme provider, which paints it on the page's own ground
+  // (never the reader's, which would swap a light theme's ink and paper).
+  const pageTheme = senderBundle.theme || authorTheme;
   useEffect(() => {
-    if (!authorTheme) return undefined;
-    const mode = effective === 'dark' ? 'dark' : 'light';
-    previewTheme(authorTheme, mode);
-    return () => restoreOwnTheme(mode);
-  }, [authorTheme, effective]);
+    if (!pageTheme || !setPageTheme) return undefined;
+    setPageTheme(pageTheme);
+    return () => setPageTheme(null);
+  }, [pageTheme, setPageTheme]);
+
+  function changeMode(m: VMode) {
+    setVmode(m);
+    if (token) modeSave(token, m);
+  }
 
   // ── Load ──────────────────────────────────────────────
   const loadToken = useCallback(async () => {
@@ -252,16 +295,20 @@ export default function Viewer() {
     } else {
       setData({ kind: 'note', mode, title: res.title, contentHtml: res.contentHtml || '' });
     }
+    // An old "reference" link was always a blank copy of your own; keep
+    // opening it that way unless the reader has picked something since.
+    if (firstLoad.current) {
+      firstLoad.current = false;
+      if (mode === 'reference' && !modeLoad(token)) setVmode('mine');
+    }
     setState({ status: 'ok' });
   }, [token]);
 
   const loadOwner = useCallback(async () => {
-    // Native reads its own offline copy (read-only); web fetches from the API.
+    // Native reads its own offline copy; web fetches from the API.
     if (hasLocalStore) {
       const item = await localdb.get(ownerType === 'plan' ? 'plans' : 'notes', ownerId);
       if (!item) { const e: any = new Error('Not found'); e.status = 404; throw e; }
-      // Owner view on the device: text stays read-only, but checkbox taps are
-      // saved straight to the local store (repo routes to IndexedDB on native).
       if (ownerType === 'plan') {
         setData({ kind: 'plan', mode: 'owner', id: ownerId, title: item.title, days: item.days || {} });
       } else {
@@ -306,14 +353,12 @@ export default function Viewer() {
     return () => { cancelled = true; };
   }, [token, ownerType, ownerId, loadToken, loadOwner]);
 
-  // ── Live polling (read-only) ──────────────────────────
-  // The public share endpoint is IP-limited because it is the one route a
-  // stranger can hit, so polling has to stay under that ceiling. It also
-  // pauses on a hidden tab (a backgrounded browser was spending the whole
-  // budget on a page nobody was looking at) and backs off on a 429 rather
-  // than retrying straight into the wall.
+  // ── Follow live: poll the sender's copy ───────────────
+  // The public share endpoint is IP-limited, so polling stays well under that
+  // ceiling, pauses on a hidden tab, and backs off on a 429.
+  const following = !!token && !!data && vmode === 'live';
   useEffect(() => {
-    if (!token || !data || data.mode !== 'live') return undefined;
+    if (!following) return undefined;
     let delay = POLL_MS;
     let timer = null;
     let stopped = false;
@@ -324,16 +369,15 @@ export default function Viewer() {
       if (document.visibilityState !== 'visible') { schedule(); return; }
       try {
         await loadToken();
-        delay = POLL_MS;                      // healthy again
+        delay = POLL_MS;
       } catch (err: any) {
         if (err?.status === 429) delay = Math.min(delay * 2, POLL_MAX_MS);
       }
       schedule();
     }
 
-    schedule();
-    // Coming back to the tab refreshes immediately rather than waiting out
-    // the rest of the interval.
+    // Turning it on shows the sender's current checks straight away.
+    tick();
     const onVis = () => {
       if (document.visibilityState !== 'visible') return;
       clearTimeout(timer);
@@ -346,21 +390,22 @@ export default function Viewer() {
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [token, data, loadToken]);
+  }, [following, loadToken]);
 
-  // ── Note checkbox wiring (owner saves; reference = localStorage) ──
+  // ── Note checkboxes: owner saves; "my copy" saves locally; else read-only ──
   useEffect(() => {
-    if (!data || data.kind !== 'note' || !docRef.current) return;
-    if (data.mode === 'live' || data.readOnly) return; // read-only
+    if (!data || data.kind !== 'note' || !docRef.current) return undefined;
     const el = docRef.current;
     const items = [...el.querySelectorAll('.doc-check-item')];
+    const owner = data.mode === 'owner';
+    const interactive = owner ? !data.readOnly : vmode === 'mine';
 
-    if (data.mode === 'reference') {
+    if (!owner && vmode === 'mine') {
       const saved = refLoad(token);
-      items.forEach((it, idx) => { it.classList.add('tap'); it.setAttribute('data-checked', saved[idx] ? 'true' : 'false'); });
-    } else {
-      items.forEach((it) => it.classList.add('tap'));
+      items.forEach((it, idx) => it.setAttribute('data-checked', saved[idx] ? 'true' : 'false'));
     }
+    items.forEach((it) => it.classList.toggle('tap', interactive));
+    if (!interactive) return undefined;
 
     const onClick = async (e) => {
       const it = e.target.closest('.doc-check-item');
@@ -368,17 +413,58 @@ export default function Viewer() {
       const idx = items.indexOf(it);
       const now = it.getAttribute('data-checked') !== 'true';
       it.setAttribute('data-checked', now ? 'true' : 'false');
-      if (data.mode === 'reference') {
+      if (now) celebrateCheck(it);
+      if (!owner) {
         const s = refLoad(token); s[idx] = now; refSave(token, s);
       } else {
-        // repo → API on web, local IndexedDB on the device.
         try { await repo.updateNote(data.id, { content: sanitizeHtml(el.innerHTML) }); }
         catch { it.setAttribute('data-checked', now ? 'false' : 'true'); }
       }
     };
     el.addEventListener('click', onClick);
     return () => el.removeEventListener('click', onClick);
-  }, [data, token]);
+  }, [data, token, vmode]);
+
+  // Follow live: pop each box the sender has checked since the last refresh.
+  // The first refresh only records the starting point, so opening the page
+  // doesn't set off every box that was already checked.
+  useEffect(() => {
+    if (!data || data.kind !== 'note' || vmode !== 'live' || !docRef.current) { liveChecks.current = null; return; }
+    if (!liveChecks.current) {
+      const start = new Set<number>();
+      docRef.current.querySelectorAll('.doc-check-item').forEach((it, i) => {
+        if (it.getAttribute('data-checked') === 'true') start.add(i);
+      });
+      liveChecks.current = start;
+      return;
+    }
+    liveChecks.current = celebrateNewChecks(docRef.current, liveChecks.current);
+  }, [data, vmode]);
+
+  // Back from the open note to the card, where the download and sign-up are.
+  function backToCard() {
+    const next = new URLSearchParams(params);
+    next.delete('noteIsOpen');
+    setParams(next, { replace: true });
+    window.scrollTo(0, 0);
+  }
+
+  // Start checking off your own copy, from empty or from what is checked now.
+  function startCopy(keep: boolean) {
+    const s = {};
+    if (keep && data) {
+      if (data.kind === 'note' && docRef.current) {
+        [...docRef.current.querySelectorAll('.doc-check-item')].forEach((it: any, i) => {
+          if (it.getAttribute('data-checked') === 'true') s[i] = true;
+        });
+      } else if (data.kind === 'plan') {
+        ((data.days && data.days[today()]) || []).forEach((it, i) => { if (it.checked) s[i] = true; });
+      }
+    }
+    refSave(token, s);
+    setAskCopy(false);
+    changeMode('mine');
+  }
 
   if (state.status === 'loading') {
     return <Message busy title="Loading…" desc="Fetching the shared item." />;
@@ -387,76 +473,142 @@ export default function Viewer() {
     return <Message icon={state.icon} title={state.title} desc={state.desc} extra={state.extra} />;
   }
 
-  // ── Render ────────────────────────────────────────────
-  const badge = data.mode === 'live'
-    ? <div className="live-badge"><span className="live-dot" /> Live · updates in real-time</div>
-    : data.mode === 'reference'
-      ? <div className="ref-badge"><i className="fas fa-list-check" /> Reference · your own copy</div>
-      : <div className="own-badge"><i className="fas fa-circle-check" /> View mode · {data.readOnly ? 'read-only' : 'taps are saved'}</div>;
+  // ── The share card ────────────────────────────────────
+  // A public link that carries a bundle opens here first. Default links, the
+  // owner's own view, and a card already opened (noteIsOpen) skip it.
+  if (token && senderBundle.id !== 'default' && !noteIsOpen && data.mode !== 'owner') {
+    const openNote = () => {
+      const next = new URLSearchParams(params);
+      next.set('noteIsOpen', 'true');
+      setParams(next, { replace: true });
+    };
+    return (
+      <div className={`vcard-page${senderBundle.id === 'galaxy' ? ' galaxy-amb' : ''}`}>
+        <div className="vcard-wrap">
+          <ShareCard
+            bundleId={senderBundle.id}
+            author={author}
+            handle={author?.handle || ''}
+            kind={data.kind === 'plan' ? 'plan' : 'note'}
+            title={data.title}
+            onOpen={openNote}
+            ground={pageTheme ? resolveTheme(pageTheme) : null}
+          />
+          {!isNative && <ViewerCta themed={!!pageTheme} bundleName={senderBundle.theme ? senderBundle.name : ''} />}
+        </div>
+      </div>
+    );
+  }
 
-  const sub = data.mode === 'live' ? 'live · shared' : data.mode === 'reference' ? 'your copy' : 'view mode';
+  // ── The note ──────────────────────────────────────────
+  const isOwner = data.mode === 'owner';
+  const hasChecks = data.kind === 'plan'
+    ? Object.values(data.days || {}).some((a: any) => a && a.length)
+    : /doc-check-item/.test(data.contentHtml || '');
+  const showModes = !!token && !isOwner && hasChecks;
 
   return (
-    <div className="view-page">
+    <div className={`view-page${senderBundle.id === 'galaxy' ? ' galaxy-amb' : ''}`}>
       <div className="view-bar">
-        {data.mode === 'owner' && (
+        {isOwner && (
           <button className="icon-btn view-back" aria-label="Back" onClick={() => navigate(backTo)}>
             <i className="fas fa-arrow-left" />
           </button>
         )}
+        {/* Once the note is open, the card — and the download and sign-up
+            under it — is one step back. */}
+        {!isOwner && noteIsOpen && (
+          <button type="button" className="view-back-btn" onClick={backToCard}
+            title="Back to the card, where you can get the app or sign in">
+            <i className="fas fa-arrow-left" /> Back
+          </button>
+        )}
         <img className="view-logo" src={logoUrl} alt="" />
-        <span className="logo">Mah Notes</span><span className="sub">{sub}</span>
+        <span className="logo">Mah Notes</span>
+        <span className="sub">{isOwner ? 'view mode' : 'shared with you'}</span>
       </div>
+
+      {showModes && (
+        <ModeBar
+          vmode={vmode}
+          onLive={() => changeMode(vmode === 'live' ? 'view' : 'live')}
+          onMine={() => (vmode === 'mine' ? changeMode('view') : setAskCopy(true))}
+        />
+      )}
+
       <div className="v-card">
-        <AuthorBadge author={author} />
-        {badge}
+        {/* Once the reader has opened the note from the card they have
+            already met the sender — the byline would only repeat it. */}
+        {!isOwner && !noteIsOpen && <AuthorBadge author={author} />}
+        {isOwner && (
+          <div className="own-badge"><i className="fas fa-circle-check" /> View mode · {data.readOnly ? 'read-only' : 'taps are saved'}</div>
+        )}
         <h1 className="v-title">{data.title || (data.kind === 'plan' ? 'Plan' : 'Untitled')}</h1>
 
+        {/* Keyed by mode so switching always starts from the sender's own
+            HTML, rather than from checks drawn onto the old DOM. */}
         {data.kind === 'note' ? (
-          <div ref={docRef} className="doc-content" dangerouslySetInnerHTML={{ __html: data.contentHtml }} />
+          <div key={vmode} ref={docRef} className="doc-content" dangerouslySetInnerHTML={{ __html: data.contentHtml }} />
         ) : (
-          <PlanView data={data} token={token} />
+          <PlanView key={vmode} data={data} token={token} vmode={vmode} />
         )}
 
-        {data.mode === 'reference' && (
-          <div className="ref-note"><i className="fas fa-circle-info" /> This is your own copy — ticks are saved only on this device and don't change the owner's list.</div>
+        {showModes && vmode === 'mine' && (
+          <div className="ref-note"><i className="fas fa-circle-info" /> This is your own copy — your checks are saved only on this device and never change the sender's list.</div>
         )}
       </div>
 
-      {/* Public share on the web → offer the app + sign-in. */}
-      {!isNative && data.mode !== 'owner' && <ViewerCta themed={!!authorTheme} />}
+      {/* Public share on the web → offer the app + sign-in, until the note
+          has been opened from the card. */}
+      {!isNative && !isOwner && !noteIsOpen && <ViewerCta themed={!!pageTheme} bundleName={senderBundle.theme ? senderBundle.name : ''} />}
+
+      {askCopy && (
+        <StartCopyDialog onClear={() => startCopy(false)} onKeep={() => startCopy(true)} onCancel={() => setAskCopy(false)} />
+      )}
     </div>
   );
 }
 
-// Plan body: today's tickable list + full week.
-function PlanView({ data, token }) {
+// Plan body: today's checklist + full week.
+function PlanView({ data, token, vmode }) {
   const t = today();
   const baseItems = (data.days && data.days[t]) || [];
+  const owner = data.mode === 'owner';
+  const mine = !owner && vmode === 'mine';
   const [checks, setChecks] = useState(() => {
-    if (data.mode === 'reference') {
+    if (mine) {
       const saved = refLoad(token);
       return baseItems.map((_, i) => !!saved[i]);
     }
     return baseItems.map((it) => !!it.checked);
   });
 
-  // Keep live/owner state in sync when data refreshes.
+  const listRef = useRef(null);
+  const checksRef = useRef(checks);
+  checksRef.current = checks;
+
+  // Follow the sender's checks whenever the data refreshes. While following
+  // live, a box they have just checked pops as it arrives.
   useEffect(() => {
-    if (data.mode === 'reference') return;
-    setChecks(((data.days && data.days[t]) || []).map((it) => !!it.checked));
-  }, [data, t]);
+    if (mine) return;
+    const next = ((data.days && data.days[t]) || []).map((it) => !!it.checked);
+    const fresh = vmode === 'live' ? next.map((v, i) => v && !checksRef.current[i]) : [];
+    setChecks(next);
+    if (fresh.some(Boolean)) {
+      requestAnimationFrame(() => fresh.forEach((f, i) => { if (f) celebrateCheck(listRef.current?.children[i]); }));
+    }
+  }, [data, t, mine, vmode]);
 
-  const interactive = data.mode !== 'live' && !data.readOnly;
+  const interactive = owner ? !data.readOnly : mine;
 
-  async function toggle(i) {
+  async function toggle(i, el) {
     if (!interactive) return;
     const now = !checks[i];
+    if (now) celebrateCheck(el);
     setChecks((c) => c.map((v, idx) => (idx === i ? now : v)));
-    if (data.mode === 'reference') {
+    if (mine) {
       const s = refLoad(token); s[i] = now; refSave(token, s);
     } else {
-      // repo → API on web, local IndexedDB on the device.
       try { await repo.checkPlan(data.id, { day: t, index: i, checked: now }); }
       catch { setChecks((c) => c.map((v, idx) => (idx === i ? !now : v))); }
     }
@@ -465,17 +617,17 @@ function PlanView({ data, token }) {
   return (
     <>
       <div className="today-badge" style={{ marginBottom: 12 }}><i className="fas fa-calendar-day" /> {DAY_LABEL[t]}</div>
-      <div className="vlist">
+      <div className="vlist" ref={listRef}>
         {baseItems.length === 0 ? (
           <div className="empty-state" style={{ padding: 24 }}><i className="fas fa-mug-hot" /><p>Nothing scheduled for {DAY_LABEL[t]} — rest day!</p></div>
         ) : baseItems.map((it, i) => (
           <div key={i} className={`doc-check-item${interactive ? ' tap' : ''}`} data-checked={checks[i] ? 'true' : 'false'}
-            onClick={() => toggle(i)}>
+            onClick={(e) => toggle(i, e.currentTarget)}>
             {it.text}
           </div>
         ))}
       </div>
-      <WeekDetails days={data.days} markDone={data.mode !== 'reference'} />
+      <WeekDetails days={data.days} markDone={!mine} />
     </>
   );
 }

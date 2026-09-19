@@ -17,10 +17,16 @@
 //  share links sees the page in the author's colours (see Viewer).
 //  ThemeProvider wraps AuthProvider, so auth pushes the account's
 //  theme down here via adoptAccountTheme rather than the reverse.
+//
+//  A BUNDLE can bring its own appearance (Galaxy is deep space). While one
+//  is equipped — or being tried on in Settings → Bundles — the app wears the
+//  bundle's colours; `palette` stays YOUR theme, untouched on disk and on the
+//  account, and comes straight back when the bundle comes off.
 // ============================================================
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { loadPalette, savePalette, applyPalette, isDarkColor, DEFAULT_THEME } from '../lib/palette';
+import { loadPalette, savePalette, applyPalette, previewTheme, isDarkColor, DEFAULT_THEME } from '../lib/palette';
 import { api, getToken } from '../lib/api';
+import { useBundle, getBundle } from '../lib/bundles';
 
 const ThemeContext = createContext(null);
 export const useTheme = () => useContext(ThemeContext);
@@ -37,6 +43,19 @@ export function ThemeProvider({ children }) {
   const pushTimer = useRef(null);
   const adoptedFor = useRef(null);
 
+  // The bundle in force: the equipped one, or one being tried on.
+  const b = useBundle();
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const shownBundle = getBundle(previewId || b.id);
+  // A shared page open right now wears its SENDER's look (see Viewer). It is
+  // set here rather than painted by the page itself: this provider repaints
+  // whenever what it holds changes — and its effects run after the page's —
+  // so anything painted behind its back was painted straight over.
+  const [pageTheme, setPageTheme] = useState<any>(null);
+  // The colours actually on screen. `palette` is only ever YOURS.
+  const applied = pageTheme || shownBundle.theme || palette;
+  const effective = groundOf(applied);
+
   // The colour picker fires on every drag, so the account write is debounced.
   // Failures are ignored: the theme is already applied and saved locally, and
   // the next change will try again.
@@ -49,19 +68,12 @@ export function ThemeProvider({ children }) {
   }, []);
   useEffect(() => () => clearTimeout(pushTimer.current), []);
 
-  // Persist + apply the custom theme whenever it changes.
-  //
-  // The mode handed to applyPalette is derived from this very palette, so
-  // computeVars never swaps ink and paper: the colours are used exactly as the
-  // user built them.
-  const effective = groundOf(palette);
+  // Save YOUR theme. What is painted follows from `applied` below, so a
+  // bundle with its own appearance keeps its colours on screen meanwhile.
   const setPalette = useCallback((next, { push = true } = {}) => {
     const value = next && Object.keys(next).length ? next : null;
     setPaletteState(value);
     savePalette(value);
-    const ground = groundOf(value);
-    apply(ground);
-    applyPalette(value, ground);
     if (push) pushToAccount(value);
   }, [pushToAccount]);
 
@@ -89,14 +101,30 @@ export function ThemeProvider({ children }) {
     if (local && (local.ink || local.paper || local.accent)) pushToAccount(local);
   }, [setPalette, pushToAccount]);
 
-  // Apply on mount, which covers an old cached shell whose pre-paint script
-  // did not run.
-  useEffect(() => { apply(effective); applyPalette(palette, effective); }, [palette, effective]);
+  // Paint whatever is in force. The mode handed to applyPalette comes from
+  // the same colours, so ink and paper are never swapped: they are used
+  // exactly as the user (or the bundle) built them. applyPalette also caches
+  // the result for the pre-paint script, so the next launch opens in it —
+  // except a shared page's colours, which are someone else's and are painted
+  // without being cached.
+  useEffect(() => {
+    apply(effective);
+    if (pageTheme) previewTheme(pageTheme, effective);
+    else applyPalette(applied, effective);
+  }, [applied, effective, pageTheme]);
 
   return (
     <ThemeContext.Provider value={{
       effective,
       palette, setPalette, resetPalette, adoptAccountTheme,
+      // The colours on screen right now, whoever chose them.
+      applied: applied || null,
+      // True while a bundle, not you, is deciding the colours.
+      bundleTheme: !!shownBundle.theme,
+      // Settings → Bundles: wear a bundle's appearance while trying it on.
+      setBundlePreview: setPreviewId,
+      // A shared page: wear the sender's look while it is open, null after.
+      setPageTheme,
     }}>
       {children}
     </ThemeContext.Provider>

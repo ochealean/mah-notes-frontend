@@ -2,49 +2,68 @@
 //  Share sheet. Two ways to share an item:
 //    1. Send to a friend  → a frozen snapshot lands in their inbox;
 //       they can "Save to my notes". (needs an account on both sides)
-//    2. Share link        → public live/reference links, for people
-//       who don't use the app ("for non-users").
+//    2. Share link        → ONE public link for people who don't use the
+//       app. On a checklist the reader chooses, on the page itself, whether
+//       to follow your ticks live or tick their own copy (see Viewer), so
+//       the separate live and reference links are no longer needed.
 // ============================================================
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, getToken } from '../lib/api';
 import { copyText } from '../lib/copyText';
 import { notify } from '../lib/notify';
+import { bundleLinkParams } from '../lib/bundles';
 
 // Share links must point at the public website, not the in-app origin.
 // Inside the APK window.location.origin is "https://localhost", so links
 // built from it are useless to recipients. Use the configured public web
 // base when set (required for native); fall back to the current origin on web.
 const WEB_BASE = (import.meta.env.VITE_PUBLIC_WEB_BASE || window.location.origin).replace(/\/$/, '');
-const shareUrl = (token) => `${WEB_BASE}/view?token=${token}`;
+// A recipient renders the SENDER's bundle, and the public share endpoint
+// does not look it up, so the link carries it (see bundleLinkParams).
+const shareUrl = (token, extra = '') => `${WEB_BASE}/view?token=${token}${extra}`;
 
-function ShareCard({ card, onRevoke, onRegen }) {
+// The link card. A revoked link is not a dead end: the card offers a fresh
+// link in its place, because revoking deletes the old token outright and
+// there is nothing left to regenerate from.
+function LinkCard({ card, busy, onRevoke, onRegen, onCreate, linkExtra }) {
   const [copied, setCopied] = useState(false);
   if (card.revoked) {
-    return <div className="share-card"><div className="share-revoked"><i className="fas fa-ban" /> Link revoked</div></div>;
+    return (
+      <div className="share-card">
+        <div className="share-revoked"><i className="fas fa-ban" /> Link revoked</div>
+        <div className="share-card-desc">
+          Nobody can open the old link any more. You can make a new one — it will be a
+          different address, so people with the old one still won’t get in.
+        </div>
+        <div className="share-actions">
+          <button className="share-mini regen" disabled={busy} onClick={onCreate}>
+            <i className={`fas ${busy ? 'fa-circle-notch fa-spin' : 'fa-link'}`} /> Create a new link
+          </button>
+        </div>
+      </div>
+    );
   }
-  const isRef = card.viewMode === 'reference';
+  const url = shareUrl(card.token, linkExtra);
   return (
     <div className="share-card">
       <div className="share-card-title">
-        {isRef
-          ? <><i className="fas fa-list-check" style={{ color: '#2FD3B6' }} /> Reference link (blank copy)</>
-          : <><i className="fas fa-circle" style={{ color: '#2ecc71', fontSize: 9 }} /> Live link</>}
+        <i className="fas fa-link" /> Share link
       </div>
       <div className="share-card-desc">
-        {isRef
-          ? "Gives anyone their own blank checklist to tick off — a personal scratch copy. Their ticks save only on their device and never change your list. No account needed."
-          : "Anyone with this link sees this in real-time. Your edits and ticks appear on their screen (they can’t edit). No account needed."}
+        Anyone with this link can read it — no account needed. On a checklist they can follow
+        your checks live, or check off their own copy; their checks stay on their device and
+        never change yours.
       </div>
       <div className="share-copy-row">
-        <input type="text" className="share-link-input" value={shareUrl(card.token)} readOnly />
-        <button className="share-copy-btn" onClick={async () => {
-          await copyText(shareUrl(card.token));
+        <input type="text" className="share-link-input" value={url} readOnly aria-label="Share link" />
+        <button className="share-copy-btn" aria-label="Copy link" onClick={async () => {
+          await copyText(url);
           setCopied(true); setTimeout(() => setCopied(false), 1600);
         }}><i className={`fas ${copied ? 'fa-check' : 'fa-copy'}`} /></button>
       </div>
       <div className="share-actions">
-        <button className="share-mini revoke" onClick={() => onRevoke(card)}><i className="fas fa-ban" /> Revoke</button>
-        <button className="share-mini regen" onClick={() => onRegen(card)}><i className="fas fa-rotate" /> New link</button>
+        <button className="share-mini revoke" disabled={busy} onClick={onRevoke}><i className="fas fa-ban" /> Revoke</button>
+        <button className="share-mini regen" disabled={busy} onClick={onRegen}><i className="fas fa-rotate" /> New link</button>
       </div>
     </div>
   );
@@ -106,45 +125,60 @@ function FriendSend({ itemType, itemId }) {
 }
 
 export default function ShareModal({ itemType, itemId, onClose }) {
-  const [cards, setCards] = useState(null); // [{viewMode, token, revoked}]
+  const [card, setCard] = useState(null); // { token, revoked } | null while loading
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const signedIn = !!getToken();
+  const linkExtra = bundleLinkParams();
+
+  // Get this item's link, or create it. The server returns the existing token
+  // when there is one, so opening the sheet twice never makes a second link.
+  const fetchLink = useCallback(async () => {
+    const res = await api.post('/api/share', { itemId, itemType, viewMode: 'current-live' });
+    return { token: res.token, revoked: false };
+  }, [itemId, itemType]);
 
   useEffect(() => {
     if (!signedIn) return undefined;
     let cancelled = false;
     (async () => {
       try {
-        const [live, ref] = await Promise.all([
-          api.post('/api/share', { itemId, itemType, viewMode: 'current-live' }),
-          api.post('/api/share', { itemId, itemType, viewMode: 'reference' }),
-        ]);
-        if (!cancelled) setCards([
-          { viewMode: 'current-live', token: live.token },
-          { viewMode: 'reference', token: ref.token },
-        ]);
+        const c = await fetchLink();
+        if (!cancelled) setCard(c);
       } catch (err) {
-        if (!cancelled) setError(err.message || 'Failed to create links. Try again.');
+        if (!cancelled) setError(err.message || 'Could not create the link. Try again.');
       }
     })();
     return () => { cancelled = true; };
-  }, [itemId, itemType, signedIn]);
+  }, [fetchLink, signedIn]);
 
-  async function onRevoke(card) {
-    if (!confirm('Revoke this link? Anyone using it will lose access.')) return;
+  async function onRevoke() {
+    if (!card || !confirm('Revoke this link? Anyone using it will lose access.')) return;
+    setBusy(true);
     try {
       await api.del(`/api/share/${card.token}`);
-      setCards((cs) => cs.map((c) => (c.viewMode === card.viewMode ? { ...c, revoked: true } : c)));
+      setCard((c) => ({ ...c, revoked: true }));
       notify('Link revoked', 'success');
-    } catch (err) { notify(err.message, 'error'); }
+    } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
   }
 
-  async function onRegen(card) {
+  async function onRegen() {
+    if (!card) return;
+    setBusy(true);
     try {
       const { token } = await api.post(`/api/share/${card.token}/regen`);
-      setCards((cs) => cs.map((c) => (c.viewMode === card.viewMode ? { ...c, token, revoked: false } : c)));
-      notify('New link generated', 'success');
-    } catch (err) { notify(err.message, 'error'); }
+      setCard({ token, revoked: false });
+      notify('New link made — the old one no longer works', 'success');
+    } catch (err) { notify(err.message, 'error'); } finally { setBusy(false); }
+  }
+
+  // After a revoke the old token is gone, so "new link" means create, not rotate.
+  async function onCreate() {
+    setBusy(true);
+    try {
+      setCard(await fetchLink());
+      notify('New link ready', 'success');
+    } catch (err) { notify(err.message || 'Could not create the link', 'error'); } finally { setBusy(false); }
   }
 
   return (
@@ -166,14 +200,14 @@ export default function ShareModal({ itemType, itemId, onClose }) {
 
             <div className="view-section-label" style={{ marginTop: 18 }}><i className="fas fa-link" /> Share link · for people without the app</div>
             {error && <div className="share-revoked">{error}</div>}
-            {!cards && !error && (
+            {!card && !error && (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
-                <i className="fas fa-circle-notch fa-spin" /> Creating links…
+                <i className="fas fa-circle-notch fa-spin" /> Making your link…
               </div>
             )}
-            {cards && cards.map((card) => (
-              <ShareCard key={card.viewMode} card={card} onRevoke={onRevoke} onRegen={onRegen} />
-            ))}
+            {card && (
+              <LinkCard card={card} busy={busy} onRevoke={onRevoke} onRegen={onRegen} onCreate={onCreate} linkExtra={linkExtra} />
+            )}
           </>
         )}
       </div>
