@@ -103,8 +103,8 @@ function ViewerCta({ themed, bundleName = '' }) {
       {bundleName ? (
         <p className="view-themed">
           <i className="fas fa-palette" /> You are reading this in the author&rsquo;s {bundleName}{' '}
-          bundle — its colours and its sky. Every bundle is free, and it travels with everything
-          you share.
+          bundle — its colours and its sky. Bundles are free for a limited time, and yours
+          travels with everything you share.
         </p>
       ) : themed && (
         <p className="view-themed">

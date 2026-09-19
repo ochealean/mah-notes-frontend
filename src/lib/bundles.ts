@@ -13,7 +13,8 @@
 //    · the card a recipient sees when they open a shared link
 //    · the intro, the click effect, the caret, and the farewells
 //
-//  Everything here is free. No scarcity, no tiers, no locked previews.
+//  Everything here is free for a limited time — bundles are planned to cost
+//  Ads Amount Coins later, so nothing may promise "free forever".
 //
 //  The equipped id lives on the device AND on the account: the account copy
 //  follows you between devices and is what your friends see in their friends

@@ -14,7 +14,7 @@
 //  the deleted note, or the whole app on sign-out.
 // ============================================================
 import { bundleState } from './bundles';
-import { G, rgba, rnd } from './galaxy';
+import { G, rgba, rnd, logoMarkHtml } from './galaxy';
 
 const active = () => {
   const s = bundleState();
@@ -95,8 +95,8 @@ export function playSignOut(): Promise<void> {
   }
   const html = `<div class="bintro-stage">
     ${streaks}${stars}
-    <div class="bintro-mark" style="animation:bx-markOut 1s cubic-bezier(.5,0,.75,0) both;">M</div>
-    <div class="bintro-tag" style="top:calc(46% + 50px)"><span style="animation:bx-wordOut 1s ease both;">Signing you out</span></div>
+    ${logoMarkHtml('animation:bx-markOut 1s cubic-bezier(.5,0,.75,0) both;')}
+    <div class="bintro-tag" style="top:calc(46% + 58px)"><span style="animation:bx-wordOut 1s ease both;">Signing you out</span></div>
     ${I(`left:50%;top:46%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#fff;box-shadow:0 0 18px #fff, 0 0 46px ${rgba(G.ha, 0.85)}, 0 0 90px ${rgba(G.accent, 0.6)};opacity:0;animation:bx-flareCore .6s cubic-bezier(.16,1,.3,1) .9s both;`)}
   </div>`;
 

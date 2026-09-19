@@ -34,6 +34,7 @@ import ClipboardTab, { ClipPane } from './ClipboardTab';
 import ScheduleTab from './ScheduleTab';
 import { SettingsNav, SettingsPane, useSettingsSections, useInboxCount } from './SettingsTab';
 import BundleSky from './BundleSky';
+import BundleAvatar, { Face } from './BundleAvatar';
 import RailFoot from './RailFoot';
 import { ShareCardPreview } from './ShareCard';
 import { useBundle } from '../lib/bundles';
@@ -647,6 +648,16 @@ export default function MainApp() {
               )}
             </>
           )}
+          {/* You, top right, as in most apps. Its red dot is for things about
+              YOU — something new from a friend, a password to set — and it
+              opens straight onto whichever that is. */}
+          {user && (
+            <button className="appbar-me" aria-label="You: account and friends" title="Your account"
+              onClick={() => openSettings(inbox.unseen > 0 ? 'friends' : 'account')}>
+              <BundleAvatar size={28}><Face src={user.avatar} name={user.displayName || user.username} /></BundleAvatar>
+              {(inbox.unseen > 0 || needsPassword) && <span className="nav-dot" />}
+            </button>
+          )}
         </div>
       </header>
 
@@ -772,7 +783,9 @@ export default function MainApp() {
           )}
         </div>
 
-        <RailFoot user={user} onAccount={() => openSettings('account')} onShareCard={() => setShareCard(bundle.id)} />
+        {/* Desktop only. On a phone it stacked a second footer on top of the
+            bottom nav; there, your avatar is the nav's last tab instead. */}
+        {isDesktop && <RailFoot user={user} onAccount={() => openSettings('account')} />}
       </aside>
 
       <main className={`pane${paneSky ? ' has-sky' : ''}`}>
@@ -831,17 +844,30 @@ export default function MainApp() {
         </button>
       )}
 
-      <nav className="bottom-nav">
-        {TABS.map((t) => (
-          <button key={t.key} className={`nav-item${tab === t.key ? ' active' : ''}`}
-            onClick={() => goTab(t.key)}>
-            <span className="nav-icon-wrap">
-              <i className={`fas ${t.icon}`} />
-              {t.key === 'settings' && (updateAvailable || needsPassword || inbox.unseen > 0) && <span className="nav-dot" />}
-            </span>
-            <span>{t.label}</span>
-          </button>
-        ))}
+      {/* --i / --n place the Galaxy notch under the open tab, and the fill's
+          key remounts it on every tab change so the notch dips open where
+          you tapped instead of sliding over from the last tab (bundles.css). */}
+      <nav className="bottom-nav" aria-label="Sections"
+        style={{ '--i': Math.max(-9, TABS.findIndex((t) => t.key === tab)), '--n': TABS.length } as any}>
+        <span className="nav-bg" aria-hidden="true"><span className="nav-bg-fill" key={tab} /></span>
+        {TABS.map((t) => {
+          const on = tab === t.key;
+          // Signed in, what is about you wears its dot on your avatar in the
+          // top bar; Settings keeps the app's own — an update. Signed out,
+          // there is no avatar, so everything lands here.
+          const dot = t.key === 'settings' && (updateAvailable || (!user && needsPassword));
+          return (
+            <button key={t.key} className={`nav-item${on ? ' active' : ''}`}
+              aria-current={on ? 'page' : undefined}
+              onClick={() => goTab(t.key)}>
+              <span className="nav-icon-wrap">
+                <i className={`fas ${t.icon}`} aria-hidden="true" />
+                {dot && <span className="nav-dot" />}
+              </span>
+              <span className="nav-label">{t.label}</span>
+            </button>
+          );
+        })}
       </nav>
 
       {docEditor && (
