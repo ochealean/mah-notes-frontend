@@ -20,6 +20,7 @@
 //      frame and roughly halves the counts
 // ============================================================
 import type { BundleMotion } from './bundles';
+import logoUrl from '../images/mn_logo.png';
 
 // ── Palette (independent of the app theme) ──────────────
 export const G = {
@@ -90,13 +91,31 @@ const GRAIN = (() => {
 
 // Turbulence ∩ soft radial falloff. The falloff layer always spans the
 // element (100% at 0 0) so its soft edge is never cut off by the box.
-function nmask(seed: number, bf: string, oct: number, fx: number, fy: number, ms: string, mp: string) {
+export function nmask(seed: number, bf: string, oct: number, fx: number, fy: number, ms: string, mp: string) {
   const m = `${fractal(seed, bf, oct)}, radial-gradient(closest-side at ${f2(fx)}% ${f2(fy)}%, #000 0%, rgba(0,0,0,.92) 34%, rgba(0,0,0,.45) 62%, transparent 82%)`;
   return `-webkit-mask-image:${m};mask-image:${m};-webkit-mask-composite:source-in;mask-composite:intersect;`
     + `-webkit-mask-size:${ms},100% 100%;mask-size:${ms},100% 100%;-webkit-mask-position:${mp},0 0;mask-position:${mp},0 0;`
     + '-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;';
 }
 const maskCss = (m: string) => `-webkit-mask-image:${m};mask-image:${m};`;
+
+// ── The mark ────────────────────────────────────────────
+// The app's feather, for the intro and the sign-out warp. `anim` is the
+// mark's own entrance or exit. `glint` is the animation of a sheen that
+// crosses the feather — clipped to the feather's own shape by using the logo
+// as its mask, so the light lands on the quill and never on the dark around
+// it. Empty for no sheen.
+export function logoMarkHtml(anim: string, glint = '') {
+  const m = `url("${logoUrl}")`;
+  const mask = `-webkit-mask-image:${m};mask-image:${m};-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;`;
+  return `<div class="bintro-mark" style="${escAttr(anim)}">`
+    + I(`inset:-70%;border-radius:50%;background:radial-gradient(closest-side, ${rgba(G.soft, 0.3)} 0%, ${rgba(G.accent, 0.13)} 46%, transparent 76%);`)
+    + `<img class="bintro-logo" src="${escAttr(logoUrl)}" alt="" draggable="false">`
+    + (glint
+      ? I(`inset:0;${mask}`, I(`left:0;top:-15%;width:46%;height:130%;background:linear-gradient(90deg, transparent, rgba(255,255,255,.1) 30%, rgba(255,255,255,.82) 50%, rgba(255,255,255,.1) 70%, transparent);opacity:0;${glint}`))
+      : '')
+    + '</div>';
+}
 
 type BillowOpts = {
   x: number; y: number; w: number; h: number; rot: number; bg: string;

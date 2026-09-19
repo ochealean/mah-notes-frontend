@@ -2,9 +2,11 @@
 //  Settings → Bundles. The one screen in Mah Notes meant to be browsed
 //  for pleasure rather than used.
 //
-//  Free changes what this screen is for: it exists to make the app feel
-//  like the user's own, so everything is visible, everything is equippable,
-//  nothing is timed, and nothing hides behind a blurred preview.
+//  Every bundle is free FOR NOW — for a limited time, not forever: bundles
+//  are planned to cost Ads Amount Coins later (see the design note beside
+//  the repos, notes/bundles-coins-and-catalogue.md). So the copy never
+//  promises "free forever". While they are free, everything is visible,
+//  everything is equippable, and nothing hides behind a blurred preview.
 //
 //   · Tiles preview LIVE, on your OWN avatar, at full motion — the shop
 //     window, not the living room.
@@ -99,7 +101,7 @@ export default function BundleCollection({ user, onShareCard }: Props) {
   return (
     <div className="bcol">
       <p className="bcol-lead">
-        Every bundle is free and always will be. A bundle is a whole look — its own colours
+        Every bundle is free for a limited time. A bundle is a whole look — its own colours
         and its own decoration, made to go together. Pick one to try it on; nothing is saved
         until you equip it, and your own colours come back whenever you equip Default.
       </p>

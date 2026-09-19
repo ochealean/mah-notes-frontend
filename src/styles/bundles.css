@@ -76,12 +76,6 @@
 .bfoot-t { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .bfoot-n { font-weight: 600; font-size: 13px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bfoot-h { font-size: 11px; line-height: 1.3; color: var(--ink-64); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bfoot-share {
-    width: 32px; height: 32px; flex: none; display: flex; align-items: center; justify-content: center;
-    border: 1px solid var(--ink-16); background: transparent; color: var(--ink-64);
-    cursor: pointer; font-size: 12px; transition: border-color .14s ease, color .14s ease;
-}
-.bfoot-share:hover { border-color: var(--g-accent); color: var(--ink); }
 
 /* ── Avatar + decoration ──────────────────────────────── */
 /* The canvas is 1.25× the avatar, reserved whatever is equipped, so
@@ -328,19 +322,38 @@
 .bintro.still { animation: none; }
 .bintro.leaving { opacity: 0; }
 .bintro-stage { position: relative; width: min(560px, 86vw); height: 320px; }
-.bintro-mark {
-    position: absolute; left: 50%; top: 46%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
-    display: grid; place-items: center; border: 2px solid #7b5cff; background: rgba(11, 10, 22, .55);
-    font-family: var(--font-heading); font-weight: 800; font-size: 26px; line-height: 1; color: #fff;
-    box-shadow: 0 0 26px rgba(123, 92, 255, .55), inset 0 0 18px rgba(123, 92, 255, .25);
+/* The galactic band spans the screen, not the stage: its centre sits on the
+   mark (46% down the 320px stage, i.e. 13px above the middle). */
+.bintro-band { position: absolute; left: 50%; top: calc(50% - 13px); width: 0; height: 0; pointer-events: none; }
+/* The mark: the app's feather, glowing, with no box around it. */
+.bintro-mark { position: absolute; left: 50%; top: 46%; width: 72px; height: 72px; margin: -36px 0 0 -36px; }
+.bintro-logo {
+    position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: contain;
+    pointer-events: none; user-select: none; -webkit-user-drag: none;
+    filter: drop-shadow(0 0 10px rgba(123, 92, 255, .6)) drop-shadow(0 0 26px rgba(123, 92, 255, .3));
 }
-.bintro-word { position: absolute; left: 0; right: 0; top: calc(46% + 38px); text-align: center; }
+.bintro-word { position: absolute; left: 0; right: 0; top: calc(46% + 46px); text-align: center; }
 .bintro-w { position: relative; display: inline-block; overflow: hidden; padding: 8px 16px; }
-.bintro-l {
-    display: inline-block; font-family: var(--font-heading); font-weight: 800;
-    font-size: 38px; line-height: 1.05; letter-spacing: -.02em; color: #fff;
+/* Starlight rather than pure white, so the glint has something to be
+   brighter than. */
+.bintro-l, .bintro-glint {
+    font-family: var(--font-heading); font-weight: 800;
+    font-size: 38px; line-height: 1.05; letter-spacing: -.02em;
 }
-.bintro-tag { position: absolute; left: 0; right: 0; top: calc(46% + 104px); text-align: center; }
+.bintro-l { display: inline-block; color: #ebe8f7; }
+/* Laid exactly over the letters: same font, same spacing, and no kerning or
+   ligatures, because the letters are separate boxes and have neither. Only
+   the moving band of light is painted, clipped to the glyphs. */
+.bintro-glint {
+    position: absolute; inset: 0; padding: 8px 16px; white-space: nowrap; pointer-events: none;
+    font-kerning: none; font-variant-ligatures: none;
+    color: transparent; -webkit-text-fill-color: transparent;
+    background-image: linear-gradient(105deg, transparent 43%, rgba(185, 166, 255, .55) 47%, #fff 50%, rgba(159, 233, 255, .6) 53%, transparent 57%);
+    background-size: 300% 100%; background-repeat: no-repeat; background-position: 100% 0;
+    -webkit-background-clip: text; background-clip: text;
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, .55));
+}
+.bintro-tag { position: absolute; left: 0; right: 0; top: calc(46% + 112px); text-align: center; }
 .bintro-tag span { display: inline-block; font-family: var(--font-body); font-weight: 600; font-size: 14px; color: rgba(234, 242, 255, .8); }
 .bintro-skip { position: absolute; left: 0; right: 0; bottom: -22px; text-align: center; }
 .bintro-skip span {
@@ -512,13 +525,79 @@
 .pane.has-sky .pane-scroll { text-shadow: var(--bundle-halo); }
 .pane.has-sky input { text-shadow: none; }
 
+/* ── The bottom nav, in zero gravity ─────────────────────
+   Galaxy only. Nothing out there holds anything down, so the open tab's
+   icon rises out of the bar into a bubble of its own and drifts there, and
+   the bar parts beneath it: a curved notch, with space all round the
+   bubble.
+
+   The notch does NOT slide across from the last tab: travelling the width
+   of the bar made it arrive late, after the tap. It opens where you tapped
+   instead — the bar dips into the curve in a fifth of a second — while the
+   icon rises into its bubble at the same pace. MainApp remounts the fill
+   on every tab change (key), which is what replays the dip.
+
+   The notch is a mask — the bar minus one notch shape, placed at the open
+   tab's centre (--i of --n tabs, set by MainApp), opening by growing that
+   shape's depth. The hairline along the bar's edge is a drop-shadow on a
+   wrapper, because a mask would cut a border off at the notch; the
+   drop-shadow follows the curve.
+
+   Subtle drifts slower. Off and reduced motion keep the bubble raised and
+   still, and the notch simply there. */
+.nav-bg { display: none; }
+[data-bundle="galaxy"] .bottom-nav {
+    background: transparent; border-top: 0;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    --nx: calc(6px + (100vw - 12px) * (var(--i, 0) + .5) / var(--n, 4));
+}
+[data-bundle="galaxy"] .nav-bg {
+    display: block; position: absolute; inset: 0; pointer-events: none;
+    filter: drop-shadow(0 -1px 0 rgba(185, 166, 255, .22)) drop-shadow(0 -10px 22px rgba(0, 0, 0, .35));
+}
+[data-bundle="galaxy"] .nav-bg-fill {
+    position: absolute; inset: 0; background: rgba(19, 17, 31, .96);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40'%3E%3Cpath d='M0 0C14 0 20 2 24 10C30 26 42 34 60 34C78 34 90 26 96 10C100 2 106 0 120 0Z'/%3E%3C/svg%3E"), linear-gradient(#000, #000);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='40'%3E%3Cpath d='M0 0C14 0 20 2 24 10C30 26 42 34 60 34C78 34 90 26 96 10C100 2 106 0 120 0Z'/%3E%3C/svg%3E"), linear-gradient(#000, #000);
+    -webkit-mask-size: 120px 40px, 100% 100%; mask-size: 120px 40px, 100% 100%;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: calc(var(--nx) - 60px) 0, 0 0; mask-position: calc(var(--nx) - 60px) 0, 0 0;
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: bx-notchOpen .2s cubic-bezier(.2, .9, .3, 1.15) both;
+}
+/* The notch marks the open tab now, so the accent rule stands down. */
+[data-bundle="galaxy"] .nav-item::before { display: none; }
+[data-bundle="galaxy"] .nav-item .nav-icon-wrap { transition: transform .24s cubic-bezier(.2, .9, .3, 1.15), color .15s ease; }
+[data-bundle="galaxy"] .nav-item.active .nav-icon-wrap {
+    color: #fff; isolation: isolate; transform: translateY(-24px);
+    animation: bx-navFloat 3.4s ease-in-out .28s infinite;
+}
+[data-bundle="galaxy"] .nav-item.active .nav-icon-wrap::before {
+    content: ''; position: absolute; left: 50%; top: 50%; z-index: -1;
+    width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
+    background: linear-gradient(140deg, #46d8ff 0%, #8f7bff 52%, #7b5cff 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 0 1px rgba(185, 166, 255, .28), 0 8px 22px rgba(123, 92, 255, .5);
+    animation: bx-bubbleIn .22s cubic-bezier(.2, .9, .3, 1.2) both;
+}
+[data-bundle="galaxy"][data-bundle-motion="subtle"] .nav-item.active .nav-icon-wrap { animation-duration: 4.8s; }
+[data-bundle="galaxy"][data-bundle-motion="off"] .nav-item .nav-icon-wrap { transition: none; }
+[data-bundle="galaxy"][data-bundle-motion="off"] .nav-bg-fill,
+[data-bundle="galaxy"][data-bundle-motion="off"] .nav-item.active .nav-icon-wrap,
+[data-bundle="galaxy"][data-bundle-motion="off"] .nav-item.active .nav-icon-wrap::before { animation: none; }
+.bundle-paused .nav-item.active .nav-icon-wrap { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+    [data-bundle="galaxy"] .nav-item .nav-icon-wrap { transition: none; }
+    [data-bundle="galaxy"] .nav-bg-fill,
+    [data-bundle="galaxy"] .nav-item.active .nav-icon-wrap,
+    [data-bundle="galaxy"] .nav-item.active .nav-icon-wrap::before { animation: none; }
+}
+
 /* ── Phone ────────────────────────────────────────────── */
 @media (max-width: 899px) {
     /* Time's pane is the first screen of its tab, not a detail you drilled
        into — so it keeps the app bar, like every other tab does. */
     .app.has-detail.full-pane .appbar { display: flex; }
     .app.has-detail.full-pane .pane { padding-top: 0; }
-    .bfoot { padding: 10px 16px 12px 14px; }
     .acct-hero-c { padding: 20px 18px; }
     .acct-name { font-size: 24px; }
     .vcard-c { padding: 22px 20px 24px; }
@@ -550,6 +629,9 @@
 @keyframes bx-mote{0%,100%{opacity:.22}50%{opacity:.85}}
 @keyframes bx-sysdrift{0%{transform:translate3d(0,0,0)}50%{transform:translate3d(-22px,16px,0)}100%{transform:translate3d(0,0,0)}}
 @keyframes bx-rise{0%{opacity:0;transform:translateY(16px)}100%{opacity:1;transform:none}}
+@keyframes bx-navFloat{0%,100%{transform:translateY(-24px) rotate(-2deg)}50%{transform:translateY(-28px) rotate(2deg)}}
+@keyframes bx-bubbleIn{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes bx-notchOpen{0%{-webkit-mask-size:120px 0px,100% 100%;mask-size:120px 0px,100% 100%}100%{-webkit-mask-size:120px 40px,100% 100%;mask-size:120px 40px,100% 100%}}
 /* caret */
 @keyframes bx-caretBlink{0%,48%{opacity:1}62%,86%{opacity:.22}100%{opacity:1}}
 @keyframes bx-glyphCool{0%{opacity:1}60%{opacity:.45}100%{opacity:0}}
@@ -568,10 +650,16 @@
 @keyframes bx-igOut{to{opacity:0;visibility:hidden}}
 @keyframes bx-streakFly{0%{transform:translateX(var(--s0)) scaleX(.08);opacity:0}16%{opacity:1}64%{opacity:.85}100%{transform:translateX(var(--s1)) scaleX(1.7);opacity:0}}
 @keyframes bx-starLand{0%{opacity:0;transform:scale(2.6)}100%{opacity:var(--so);transform:scale(1)}}
-@keyframes bx-bandWipe{0%{transform:rotate(-46deg) scaleX(.16);opacity:0}58%{opacity:.95}100%{transform:rotate(-33deg) scaleX(1);opacity:.85}}
+@keyframes bx-bandWipe{0%{transform:rotate(-46deg) scaleX(.16);opacity:0}58%{opacity:1}100%{transform:rotate(-33deg) scaleX(1);opacity:1}}
+@keyframes bx-bandDrift{0%{transform:translate3d(-2.5%,0,0) scale(1.03)}100%{transform:translate3d(2%,0,0) scale(1)}}
+@keyframes bx-bandGlint{0%{transform:translate3d(-100%,0,0);opacity:0}18%{opacity:1}80%{opacity:.85}100%{transform:translate3d(var(--gx),0,0);opacity:0}}
+@keyframes bx-logoGlint{0%{transform:translateX(-120%) skewX(-18deg);opacity:0}25%{opacity:1}75%{opacity:1}100%{transform:translateX(240%) skewX(-18deg);opacity:0}}
 @keyframes bx-markPop{0%{opacity:0;transform:scale(.36) rotate(-22deg)}58%{opacity:1;transform:scale(1.1) rotate(3deg)}100%{opacity:1;transform:scale(1) rotate(0deg)}}
 @keyframes bx-letterUp{0%{opacity:0;transform:translateY(15px) scale(1.14);filter:blur(9px)}100%{opacity:1;transform:none;filter:none}}
-@keyframes bx-flareSweep{0%{transform:translateX(-150%) skewX(-20deg);opacity:0}28%{opacity:.95}100%{transform:translateX(260%) skewX(-20deg);opacity:0}}
+/* The one keyframe here that moves a background rather than a transform:
+   it is the only way to light glyphs and not the box around them, and the
+   box is one word, for under a second. */
+@keyframes bx-glint{0%{background-position:100% 0}100%{background-position:0% 0}}
 @keyframes bx-tagWipe{0%{opacity:0;clip-path:inset(0 100% 0 0)}100%{opacity:1;clip-path:inset(0 0 0 0)}}
 /* click */
 @keyframes bx-haloBloom{0%{transform:scale(.25);opacity:0}30%{opacity:.9}100%{transform:scale(1.9);opacity:0}}

@@ -110,7 +110,7 @@ iframe[id^="gsi_"],
     --font-body: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
     --rail-w: 344px;
-    --bar-h: 86px;          /* bottom nav height (mobile) */
+    --bar-h: 64px;          /* bottom nav height (mobile) */
     --safe-b: env(safe-area-inset-bottom, 0px);
     --safe-t: env(safe-area-inset-top, 0px);
 }
@@ -603,40 +603,71 @@ body.rail-resizing * { pointer-events: none; }
    class (`<i class="fab fa-google">`), which would drag those icons into this
    fixed bottom-right button styling (the infamous floating green "G"). */
 .add-fab {
-    position: fixed; right: 20px; bottom: calc(var(--bar-h) + var(--safe-b) + 18px);
-    width: 58px; height: 58px; border: none; border-radius: 0;
-    background: var(--accent); color: var(--on-accent); font-size: 21px;
+    position: fixed; right: 18px; bottom: calc(var(--bar-h) + var(--safe-b) + 16px);
+    width: 50px; height: 50px; border: none; border-radius: 0;
+    background: var(--accent); color: var(--on-accent); font-size: 18px;
     box-shadow: var(--shadow-lg); cursor: pointer; z-index: 45;
     display: flex; align-items: center; justify-content: center; transition: background .14s ease;
 }
 .add-fab:hover { background: var(--accent-600); }
+/* iPhone SE and the like: 58px was a fifth of the screen's width. */
+@media (max-width: 380px) {
+    .add-fab { width: 46px; height: 46px; right: 14px; bottom: calc(var(--bar-h) + var(--safe-b) + 14px); font-size: 17px; }
+}
 .add-fab.hidden-fab { display: none; }
 
 /* ═══════════ BOTTOM NAV (mobile only) ═══════════ */
+/* One quiet bar: a hairline on top, the tabs centred in its full height,
+   and the active one marked by an accent rule along that hairline as well
+   as its colour — colour alone is easy to miss. */
 .bottom-nav {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 48; display: none;
-    height: calc(var(--bar-h) + var(--safe-b)); padding: 8px 4px var(--safe-b);
+    height: calc(var(--bar-h) + var(--safe-b)); padding: 0 6px var(--safe-b);
     background: var(--panel-2);
-    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-    border-top: 2px solid var(--ink-34);
+    backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    border-top: 1px solid var(--ink-14);
     /* However many tabs this build shows (four or five), they share the
        width equally — a fixed five left a gap when there were four. */
-    grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: start;
+    grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: stretch;
 }
 .nav-item {
-    height: 56px; min-width: 0; border: none; background: none; cursor: pointer; color: var(--ink-64);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    position: relative; min-width: 0; padding: 0; border: none; background: none; cursor: pointer;
+    color: var(--ink-64); -webkit-tap-highlight-color: transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
     transition: color .14s ease;
 }
-.nav-item > span:not(.nav-icon-wrap) {
-    font-family: var(--font-heading); font-weight: 800; font-size: 8.5px;
-    letter-spacing: .1em; text-transform: uppercase;
+.nav-item::before {
+    content: ''; position: absolute; top: -1px; left: 50%; width: 28px; height: 2px; margin-left: -14px;
+    background: var(--accent); transform: scaleX(0); transition: transform .22s cubic-bezier(.2, .8, .2, 1);
+}
+.nav-item.active::before { transform: scaleX(1); }
+.nav-item.active { color: var(--accent); }
+.nav-label {
+    font-family: var(--font-heading); font-weight: 800; font-size: 9.5px;
+    letter-spacing: .08em; text-transform: uppercase;
     max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.nav-item i { font-size: 17px; }
-.nav-item.active { color: var(--accent); }
-.nav-icon-wrap { position: relative; display: inline-flex; }
-.nav-dot { position: absolute; bottom: -2px; right: -5px; width: 7px; height: 7px; background: var(--alert-dot); }
+/* A fixed-height slot, so a tab with an avatar lines its label up with the
+   tabs that have icons. */
+.nav-icon-wrap {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    height: 30px; min-width: 30px; transition: transform .12s ease;
+}
+.nav-item i { font-size: 19px; }
+.nav-item:active .nav-icon-wrap { transform: scale(.9); }
+.nav-dot {
+    position: absolute; bottom: -2px; right: -5px; width: 7px; height: 7px; background: var(--alert-dot);
+    box-shadow: 0 0 0 2px var(--paper);
+}
+/* You, in the phone's top bar. */
+.appbar-me {
+    position: relative; width: 44px; height: 44px; margin-left: 2px; padding: 0; flex: none;
+    display: grid; place-items: center; border: none; background: none; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.appbar-me .bav { transition: transform .12s ease; }
+.appbar-me:active .bav { transform: scale(.92); }
+.appbar-me .nav-dot { bottom: 7px; right: 6px; }
 /* "Something new" is red whatever the theme or bundle — a violet or green
    dot doesn't read as news. */
 :root { --alert-dot: #ff3b3b; }
@@ -1772,7 +1803,7 @@ body.rail-resizing * { pointer-events: none; }
 
 /* Very narrow phones: the five nav labels still must not wrap. */
 @media (max-width: 359px) {
-    .nav-item > span:not(.nav-icon-wrap) { font-size: 7.5px; letter-spacing: .06em; }
+    .nav-label { font-size: 8.5px; letter-spacing: .05em; }
 }
 
 /* ═══════════ DESKTOP EXTRAS (≥ 900px) ═══════════ */
