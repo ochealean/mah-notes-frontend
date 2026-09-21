@@ -15,7 +15,7 @@
         // A bundle's partner theme decides the ground while it is equipped.
         // Mirrors each bundle's theme.paper in src/lib/bundles.ts; keep the
         // two in step when a bundle is added.
-        var bundlePaper = { galaxy: '#161421', cyberpunk: '#0b0c1a' }[localStorage.getItem('mahnotes_bundle')];
+        var bundlePaper = { galaxy: '#161421', cyberpunk: '#0b0c1a', sakura: '#fdf4ef' }[localStorage.getItem('mahnotes_bundle')];
         if (bundlePaper) paper = bundlePaper;
         var m = /^#?([0-9a-f]{6})$/i.exec(String(paper).trim());
         if (m) {

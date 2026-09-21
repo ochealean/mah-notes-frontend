@@ -76,7 +76,7 @@
     animation: fadeUp .3s ease;
 }
 .v-modes-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 13px; line-height: 1.5; color: var(--ink-80); }
-.v-modes-head i { color: var(--accent); flex: none; }
+.v-modes-head i { color: var(--accent-ink); flex: none; }
 .v-modes-head b { color: var(--ink); font-weight: 600; }
 .v-modes {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
@@ -99,7 +99,7 @@
     transition: border-color .14s ease, background .14s ease;
 }
 .v-mode:hover { border-color: var(--ink-40); }
-.v-mode > i { width: 16px; flex: none; margin-top: 2px; text-align: center; color: var(--accent); font-size: 14px; }
+.v-mode > i { width: 16px; flex: none; margin-top: 2px; text-align: center; color: var(--accent-ink); font-size: 14px; }
 .v-mode-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .v-mode-t b {
     font-family: var(--font-heading); font-weight: 800; font-size: 10.5px;
@@ -132,7 +132,7 @@
     background: var(--veil-1); border: none;
     box-shadow: inset 0 0 0 1px var(--ink-16); border-radius: 0; padding: 14px 16px;
 }
-.ref-note i { color: var(--accent); margin-right: 6px; }
+.ref-note i { color: var(--accent-ink); margin-right: 6px; }
 
 /* Public "get the app / sign in" CTA under a shared link (web only) */
 .view-cta {

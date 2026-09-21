@@ -7,6 +7,14 @@
 //    · each typed character arrives lit, then cools to ordinary ink
 //    · each deleted character dissolves into dust that drifts away
 //
+//  Sakura wears a petal variant of the same mechanics (caretStyleFor):
+//    · a rose stem with a small blossom swaying at its head, breathing
+//      rather than blinking, with no glow and no wake
+//    · each typed character blooms in rose and settles to ink, with a
+//      ripple spreading under it like a touch on the lake
+//    · finishing a word lets one petal go from its last letter
+//    · each deleted character is blown off by the wind, shedding petals
+//
 //  THE RULE THIS MODULE IS BUILT AROUND: it never touches the editor's DOM.
 //  The editor saves its innerHTML, so a wrapper span per character would be
 //  saved into the note and synced everywhere. Every measurement comes from
@@ -17,16 +25,23 @@
 //  wanted; otherwise it does nothing and the normal caret stays.
 // ============================================================
 import { bundleState } from './bundles';
+import { caretStyleFor } from './bundleArt';
 
 type Geom = { x: number; y: number; h: number };
 
 /** Past this many live effect nodes, new ones are skipped rather than queued.
-    Ordinary typing never reaches it; a held key or a pasted block would. */
+    Ordinary typing never reaches it; a held key or a pasted block would.
+    Petals spend more, smaller nodes (a ripple per letter, three per delete). */
 const MAX_LIVE = 18;
+const MAX_LIVE_PETAL = 32;
 const TRAIL_MAX = 30;   // px — a short wake, not a laser
 const GLYPH_LIFE = 440;
 const DUST_LIFE = 760;
 const TYPING_HOLD = 520; // the caret stops blinking while you type
+const RIPPLE_LIFE = 560;
+const PETAL_LIFE = 1100;
+// Petal fills: pinks with enough body to show on a cream page (no white).
+const PETAL_FILLS = ['#ffc2d8', '#ff8fb8', '#ff6fa5', '#f7a8c4'];
 
 let layer: HTMLDivElement | null = null;
 let refs = 0;
@@ -131,6 +146,9 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
 
   refs += 1;
   const host = ensureLayer();
+  const style = caretStyleFor(s.bundle.id);
+  const petal = style === 'petal';
+  host.dataset.style = style;
 
   const caret = document.createElement('div');
   caret.className = 'gcaret';
@@ -149,7 +167,7 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
 
   const live = () => host.childElementCount - 1;
   function spawn(node: HTMLElement, life: number) {
-    if (live() >= MAX_LIVE) return;
+    if (live() >= (petal ? MAX_LIVE_PETAL : MAX_LIVE)) return;
     host.appendChild(node);
     window.setTimeout(() => node.remove(), life);
   }
@@ -170,7 +188,7 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
 
     // A wake only for travel along a line. Jumping lines, or a click across
     // the page, is not a comet.
-    const trail = sameLine ? Math.min(travelled * 1.4, TRAIL_MAX) : 0;
+    const trail = sameLine && !petal ? Math.min(travelled * 1.4, TRAIL_MAX) : 0;
     caret.style.setProperty('--gc-trail', `${trail}px`);
     window.clearTimeout(trailTimer);
     if (trail > 0) trailTimer = window.setTimeout(() => caret.style.setProperty('--gc-trail', '0px'), 90);
@@ -196,7 +214,7 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
     const b = rects[rects.length - 1];
     const parent = (sel.getRangeAt(0).startContainer.parentElement || el) as HTMLElement;
     const g = document.createElement('span');
-    g.className = 'gcaret-glyph';
+    g.className = petal ? 'gcaret-bloom' : 'gcaret-glyph';
     g.textContent = text;
     g.style.font = getComputedStyle(parent).font;
     g.style.left = `${b.left}px`;
@@ -204,6 +222,55 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
     g.style.height = `${b.height}px`;
     g.style.lineHeight = `${b.height}px`;
     spawn(g, GLYPH_LIFE);
+    if (petal) {
+      // a touch on the water, just under the letter's baseline
+      const w = document.createElement('i');
+      w.className = 'gcaret-ripple';
+      w.style.left = `${b.left + b.width / 2}px`;
+      w.style.top = `${b.bottom - b.height * 0.14}px`;
+      spawn(w, RIPPLE_LIFE);
+    }
+  }
+
+  // Petals: a little deterministic wobble so no two take the same path, and
+  // the same keystrokes always look the same.
+  let seq = 7;
+  const wob = (lo: number, hi: number) => {
+    seq = (seq * 1103515245 + 12345) & 0x7fffffff;
+    return lo + (seq / 0x7fffffff) * (hi - lo);
+  };
+  // One petal: lifts, then drifts downwind (to the right) as it falls.
+  function petalAt(x: number, y: number, lift: number, dx: number, dy: number, big = 1) {
+    const d = document.createElement('i');
+    d.className = 'gcaret-petal';
+    const sz = wob(5, 7.5) * big;
+    d.style.left = `${x}px`;
+    d.style.top = `${y}px`;
+    d.style.width = `${sz}px`;
+    d.style.height = `${sz * 0.82}px`;
+    d.style.background = PETAL_FILLS[Math.floor(wob(0, PETAL_FILLS.length)) % PETAL_FILLS.length];
+    d.style.setProperty('--cp-x1', `${dx * 0.4}px`);
+    d.style.setProperty('--cp-y1', `${-lift}px`);
+    d.style.setProperty('--cp-x2', `${dx}px`);
+    d.style.setProperty('--cp-y2', `${dy}px`);
+    d.style.setProperty('--cp-r', `${wob(180, 420)}deg`);
+    spawn(d, PETAL_LIFE);
+  }
+
+  // Finishing a word (the space after it) lets one petal go from its end.
+  function wordPetal() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const r = sel.getRangeAt(0);
+    const node = r.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE || r.startOffset < 2) return;
+    // a run of spaces is not a word ending (trim() also strips the NBSP
+    // contentEditable types for a trailing space)
+    if (!(node.textContent || '').charAt(r.startOffset - 2).trim()) return;
+    const rects = prevCharRange(r)?.getClientRects();
+    if (!rects || !rects.length) return;
+    const b = rects[rects.length - 1];
+    petalAt(b.left, b.top + b.height * 0.3, wob(10, 16), wob(26, 40), wob(6, 16));
   }
 
   // Deleted characters: the glyph blurs and shrinks while a few specks
@@ -217,7 +284,7 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
   ];
   function dissolve(info: NonNullable<ReturnType<typeof charBeforeCaret>>) {
     const ghost = document.createElement('span');
-    ghost.className = 'gcaret-ghost';
+    ghost.className = petal ? 'gcaret-blown' : 'gcaret-ghost';
     ghost.textContent = info.char;
     ghost.style.font = info.font;
     ghost.style.left = `${info.left}px`;
@@ -225,6 +292,13 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
     ghost.style.height = `${info.h}px`;
     ghost.style.lineHeight = `${info.h}px`;
     spawn(ghost, DUST_LIFE);
+    if (petal) {
+      // the wind takes it: three petals leave from the letter, downwind
+      for (let i = 0; i < 3; i++) {
+        petalAt(info.left + info.h * 0.15 * i, info.top + info.h * (0.3 + 0.15 * i), wob(4, 12), wob(18, 36), wob(8, 22), 1.2);
+      }
+      return;
+    }
     SPECKS.forEach((sp, i) => {
       const d = document.createElement('i');
       d.className = `gcaret-speck ${sp.c}`;
@@ -252,7 +326,8 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
       dissolve(info);
     } else if (ie.inputType === 'insertText' && ie.data && ie.data.length <= 2) {
       // Only real typing. A paste or an IME commit arrives as a block.
-      litChar(ie.data);
+      if (petal && !ie.data.trim()) wordPetal();
+      else litChar(ie.data);
     }
     typing();
     place();

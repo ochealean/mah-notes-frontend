@@ -41,7 +41,11 @@ export type Bundle = {
       bundle, and a `motion` of their own — and while it is equipped the
       Appearance editor is locked. null (Default only) means "your own
       colours". */
-  theme: { ink: string; paper: string; accent: string; ambient: boolean; motion: ThemeMotion } | null;
+  theme: {
+    ink: string; paper: string; accent: string; ambient: boolean; motion: ThemeMotion;
+    /** A light theme over a moving scene keeps its muted text OPAQUE (see palette.computeVars). */
+    opaqueInk?: boolean;
+  } | null;
   /** Which cosmetic layers the bundle actually has. */
   sky: boolean;
   decoration: boolean;
@@ -136,7 +140,34 @@ const CYBERPUNK: Bundle = {
   decorationHint: 'It degrades by size on its own: a plain cyan ring on small chips, the equalizer and lock-on brackets in lists, and the full HUD — pings, arcs and a scan across your face — on your profile and your share card. Nothing on it rotates, and the middle of your face always stays clear.',
 };
 
-export const BUNDLES: Bundle[] = [DEFAULT_BUNDLE, GALAXY, CYBERPUNK];
+// Sakura Lake. Catch it before the wind does: petals fall the whole time,
+// and a note is the one you caught. The first LIGHT bundle — its light is
+// reflected, never emitted, so it has no glow anywhere.
+const SAKURA: Bundle = {
+  id: 'sakura',
+  name: 'Sakura Lake',
+  tagline: 'Catch it before the wind does.',
+  concept: 'Petals always falling; a note is the one you caught.',
+  // Sugar: plum ink on blossom-white paper with a deep petal accent. Its
+  // motion: blossom pink, butter and lake blue drifting over the ground,
+  // slow — a lake afternoon is unhurried. Muted text stays opaque, because
+  // alpha ink over a moving background drifts in contrast frame to frame.
+  theme: {
+    ink: '#5a4150', paper: '#fdf4ef', accent: '#ff6fa5', ambient: true, opaqueInk: true,
+    motion: { kind: 'drift', colors: ['#ff8fb8', '#ffe08a', '#bfe4ff'], period: 46 },
+  },
+  sky: true,
+  decoration: true,
+  intro: true,
+  clickEffect: true,
+  typing: true,
+  farewells: true,
+  platforms: { web: 'full', android: 'reduced', desktop: 'full' },
+  caveat: 'Full on web and Windows · reduced on Android',
+  decorationHint: 'It degrades by size on its own: a plain pink ring on small chips, a branch grown round the ring with blossoms in lists, and petals drifting across your face on your profile and your share card. The middle of your face always stays clear.',
+};
+
+export const BUNDLES: Bundle[] = [DEFAULT_BUNDLE, GALAXY, CYBERPUNK, SAKURA];
 export const DEFAULT_BUNDLE_ID = DEFAULT_BUNDLE.id;
 
 // The house rule, checked where a new bundle is added: every bundle but

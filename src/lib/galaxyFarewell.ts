@@ -41,7 +41,9 @@ export async function dissolveAway(targets: Array<Element | null | undefined>): 
   // Galaxy breaks into round stardust; a bundle may bring its own (Cyberpunk: square pixels).
   const own = dustFor(bundleState().id);
   const colours = own ? own.colours : [G.dust, G.soft, G.spark, G.core, G.ha];
-  const shape = own?.square ? '' : 'border-radius:50%;';
+  const petal = own?.shape === 'petal';
+  const shape = own?.shape === 'square' ? '' : petal ? 'border-radius:62% 38% 58% 42% / 48% 62% 38% 52%;' : 'border-radius:50%;';
+  const grow = petal ? 2.6 : 1;
   els.forEach((el, n) => {
     const b = el.getBoundingClientRect();
     const left = Math.max(0, b.left); const top = Math.max(0, b.top);
@@ -54,12 +56,12 @@ export async function dissolveAway(targets: Array<Element | null | undefined>): 
     const r = rnd(Math.round(left * 7 + top * 13 + n * 101));
     let html = '';
     for (let i = 0; i < count; i++) {
-      const x = r() * w; const y = r() * h; const s = 1 + r() * 2.4;
+      const x = r() * w; const y = r() * h; const s = (1 + r() * 2.4) * grow;
       const col = colours[(r() * colours.length) | 0];
       // Released in the same left-to-right sweep that erases the element.
       const delay = (x / w) * (SWEEP_MS * 0.7) + r() * 90;
       const dur = 520 + r() * 460;
-      html += I(`left:${f2(x)}px;top:${f2(y)}px;width:${f2(s)}px;height:${f2(s)}px;${shape}background:${col};box-shadow:0 0 ${f2(s * 3)}px ${rgba(col, 0.8)};--dx:${f2(18 + r() * 70)}px;--dy:${f2(-(8 + r() * 64))}px;animation:bx-dustOut ${Math.round(dur)}ms cubic-bezier(.3,.6,.4,1) ${Math.round(delay)}ms both;`);
+      html += I(`left:${f2(x)}px;top:${f2(y)}px;width:${f2(s)}px;height:${f2(s * (petal ? 0.82 : 1))}px;${shape}background:${col};box-shadow:${petal ? '0 1px 2px rgba(156,67,97,.25)' : `0 0 ${f2(s * 3)}px ${rgba(col, 0.8)}`};--dx:${f2(18 + r() * 70)}px;--dy:${f2(-(8 + r() * 64))}px;animation:bx-dustOut ${Math.round(dur)}ms cubic-bezier(.3,.6,.4,1) ${Math.round(delay)}ms both;`);
     }
     const layer = document.createElement('div');
     layer.className = 'bdust';
