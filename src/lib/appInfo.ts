@@ -6,11 +6,25 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.1.5';
+export const APP_VERSION = '2.2.0';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.2.0',
+    date: '2026-09-21',
+    title: 'Bundles: Galaxy, Cyberpunk and Sakura Lake',
+    changes: [
+      'Bundles are here. Open Settings → Bundles and pick Galaxy, Cyberpunk or Sakura Lake to dress the whole app: a moving scene behind your notes, a border around your profile picture, an opening animation, and effects when you tap, tick, type, delete and sign out. All three are free for a limited time.',
+      'Each bundle brings its own colour theme, gently moving in the background. While a bundle is on, it decides the colours; switch back to Default to use your own theme again.',
+      'Friends see your bundle on your profile card and on the notes you share with them.',
+      'Notes a friend sends you arrive in Shared with me. A red dot on Settings and on Friends tells you something new came in; each note opens with all its details, and the list folds down to titles so several at once stay tidy.',
+      'On a phone, your profile picture moves to the top bar and the create button is smaller, so it fits small screens. With a bundle on, the tab you are on floats up out of the bar in a round bubble.',
+      'Easier to read: words drawn in a pale accent colour are deepened just enough to stand out, and text on coloured buttons now picks whichever of dark or light reads better — Midnight’s blue buttons use dark text now.',
+      'When a Windows update cannot install, the message now says why instead of only that it failed.',
+    ],
+  },
   {
     version: '2.1.5',
     date: '2026-09-13',

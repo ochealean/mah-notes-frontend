@@ -1,6 +1,6 @@
 [package]
 name = "mah-notes"
-version = "2.1.5"
+version = "2.2.0"
 description = "Mah Notes — notes, plans, schedule and clipboard"
 authors = ["ochealean"]
 edition = "2021"
