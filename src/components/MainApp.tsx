@@ -14,7 +14,7 @@
 //  the per-card action row is gone (verbs live in the pane cluster).
 //  Import and scan moved into the rail's overflow menu.
 // ============================================================
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { repo } from '../lib/repo';
@@ -481,6 +481,37 @@ export default function MainApp() {
     return () => root.classList.remove('sky-covers');
   }, [skyShown]);
 
+  // On a phone the bottom nav is pinned over the end of every list, and the
+  // lists leave room for it. That room is MEASURED, not worked out from the
+  // nav's height: the sum assumed the page is exactly as tall as the screen
+  // the nav is pinned to, and in the Android app it is not — Settings' last
+  // rows (Log out) sat under the nav with the list already scrolled to its
+  // end. The room is everything from the nav's top edge down to the bottom
+  // of the app, however tall the WebView decides the page is.
+  const appRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (isDesktop) return undefined;
+    const root = document.documentElement;
+    const measure = () => {
+      const app = appRef.current;
+      const nav = app?.querySelector('.bottom-nav');
+      if (!app || !nav) return;
+      const n = nav.getBoundingClientRect();
+      if (!n.height) return;
+      const room = Math.max(n.height, app.getBoundingClientRect().bottom - n.top);
+      root.style.setProperty('--nav-room', `${Math.ceil(room)}px`);
+    };
+    measure();
+    const vv = window.visualViewport;
+    window.addEventListener('resize', measure);
+    vv?.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      vv?.removeEventListener('resize', measure);
+    };
+  }, [isDesktop, tab, hasDetail]);
+  useEffect(() => () => { document.documentElement.style.removeProperty('--nav-room'); }, []);
+
   // The rows currently on screen — what "Select all" actually means.
   const visibleForTab = tab === 'plans' ? visiblePlans : tab === 'clipboard' ? visibleClips : visibleNotes;
   const allSelected = visibleForTab.length > 0 && visibleForTab.every((i) => selected.has(i.id));
@@ -638,7 +669,7 @@ export default function MainApp() {
   const listCount = tab === 'docs' ? visibleNotes.length : tab === 'plans' ? visiblePlans.length : visibleClips.length;
 
   return (
-    <div className={`app${hasDetail ? ' has-detail' : ''}${fullPane ? ' full-pane' : ''}${phoneSky && !skyShown ? ' sky-rest' : ''}`}
+    <div ref={appRef} className={`app${hasDetail ? ' has-detail' : ''}${fullPane ? ' full-pane' : ''}${phoneSky && !skyShown ? ' sky-rest' : ''}`}
       style={railW ? ({ '--rail-w': `${railW}px` } as any) : undefined}>
       {phoneSky && <BundleSky preset="rail" className="app-sky" />}
       {/* Phone-only bar. The rail head covers this on a desktop. */}

@@ -6,11 +6,19 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.2.2';
+export const APP_VERSION = '2.2.3';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.2.3',
+    date: '2026-09-22',
+    title: 'Log out is back within reach',
+    changes: [
+      'On some Android phones the last rows of a list stayed hidden under the bottom bar, even scrolled all the way down — in Settings, that was Log out. The app now measures how much room the bar really takes instead of assuming it, so every list scrolls its last row into view.',
+    ],
+  },
   {
     version: '2.2.2',
     date: '2026-09-22',
