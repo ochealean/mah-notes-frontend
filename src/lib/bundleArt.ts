@@ -18,10 +18,11 @@ export const decorationFor = (id: string, size: number, motion: BundleMotion, lo
   (id === 'cyberpunk' ? hudDecorationHtml(size, motion, lowPerf)
     : id === 'sakura' ? branchDecorationHtml(size, motion, lowPerf) : galaxyDecoration(size, motion, lowPerf));
 
-/** The preview behind a tile in Settings → Bundles. */
-export const tileFor = (id: string, dark: boolean, paper: string, motion: BundleMotion): string =>
-  (id === 'cyberpunk' ? cityTileHtml(paper, motion)
-    : id === 'sakura' ? lakeTileHtml(dark, paper, motion) : galaxyTile(dark, paper, paper, motion));
+/** The preview behind a tile in Settings → Bundles. `low` (a phone) gets the
+    lighter scene, like the phone's own sky. */
+export const tileFor = (id: string, dark: boolean, paper: string, motion: BundleMotion, low = false): string =>
+  (id === 'cyberpunk' ? cityTileHtml(paper, motion, low)
+    : id === 'sakura' ? lakeTileHtml(dark, paper, motion, low) : galaxyTile(dark, paper, paper, motion));
 
 /** A bundle's own intro, or null to use Galaxy's (IntroAnimation builds that one). */
 export const introFor = (id: string, still: boolean, tagline: string, low: boolean): string | null =>

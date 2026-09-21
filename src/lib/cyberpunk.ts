@@ -271,8 +271,8 @@ export function citySkyHtml(input: SkyInput): string {
 }
 
 /** The Settings → Bundles tile: the city at full intensity. */
-export function cityTileHtml(paper: string, motion: BundleMotion): string {
-  return city(CITY.tile, paper, motion, false);
+export function cityTileHtml(paper: string, motion: BundleMotion, low = false): string {
+  return city(CITY.tile, paper, motion, low);
 }
 
 // ============================================================

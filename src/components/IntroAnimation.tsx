@@ -15,7 +15,7 @@
 //  A bundle without an intro (Default) plays nothing at all. A shared link
 //  plays the SENDER's bundle, from the link's ?b=.
 // ============================================================
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { armIntroForSignIn, introFinished, onIntroReplay, shouldPlayIntro } from '../lib/introGate';
@@ -78,7 +78,7 @@ function bandHtml(still: boolean, low: boolean) {
     const sz = 0.5 + r() * 1.4 * near;
     const q = r(); const c = q < 0.1 ? G.ha : q < 0.22 ? G.spark : G.core;
     const glow = r() < 0.12;
-    b += I(`left:${f2(x)}%;top:${f2(y)}%;width:${f2(sz)}px;height:${f2(sz)}px;border-radius:50%;background:${rgba(c, R(0.5, 1))};${glow ? `box-shadow:0 0 ${f2(sz * 3)}px ${rgba(c, 0.75)};` : ''}${r() < 0.7 ? loop('twinkle', R(1.6, 4), -R(0, 3)) : ''}`);
+    b += I(`left:${f2(x)}%;top:${f2(y)}%;width:${f2(sz)}px;height:${f2(sz)}px;border-radius:50%;background:${rgba(c, R(0.5, 1))};${glow ? `box-shadow:0 0 ${f2(sz * 3)}px ${rgba(c, 0.75)};` : ''}${r() < (low ? 0.35 : 0.7) ? loop('twinkle', R(1.6, 4), -R(0, 3)) : ''}`);
   }
 
   // 6 · a few bright stars. Diffraction spikes belong to the camera, not
@@ -111,8 +111,9 @@ function introHtml(still: boolean, tagline: string, low: boolean) {
   const an = (n: string, dur: number, dl: number, ease = E) => (still ? '' : `animation:bx-${n} ${dur}s ${ease} ${f2(dl)}s both;`);
   const cols = [G.core, G.spark, G.ha];
   let streaks = ''; let stars = '';
-  for (let i = 0; i < 46; i++) {
-    const ang = i * 7.83 + R(-6, 6); const len = R(26, 70); const th = R(0.7, 1.8);
+  // A phone gets half the streaks, spread round the same full circle.
+  for (let i = 0; i < (low ? 24 : 46); i++) {
+    const ang = i * (low ? 15 : 7.83) + R(-6, 6); const len = R(26, 70); const th = R(0.7, 1.8);
     const c = cols[(r() * 3) | 0]; const s0 = R(14, 30); const s1 = R(118, 244);
     const dur = R(0.9, 1.4); const dl = R(0, 0.34);
     if (!still) {
@@ -167,12 +168,33 @@ export default function IntroAnimation() {
     window.setTimeout(() => { setPlaying(false); setLeaving(false); introFinished(pathname); }, SKIP_MS);
   }, [pathname]);
 
-  // Auto-dismiss, timed to the overlay's own fade-out.
+  // Auto-dismiss, timed to the overlay's own fade-out — counted from the
+  // intro's first painted frame, not from the moment it mounted. The app is
+  // built behind it in the same instant, and on a slow phone that can hold
+  // the first frame back by a second or more; the CSS animations only start
+  // once it is drawn, so a clock started at mount cut the ending off.
   useEffect(() => {
     if (!playing) return undefined;
-    const t = window.setTimeout(() => { setPlaying(false); introFinished(pathname); }, still ? POSTER_MS : RUN_MS);
-    return () => window.clearTimeout(t);
+    let t = 0;
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        t = window.setTimeout(() => { setPlaying(false); introFinished(pathname); }, still ? POSTER_MS : RUN_MS);
+      });
+    });
+    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
   }, [playing, run, still, pathname]);
+
+  // While the intro covers the screen, the app's own bundle layers under it
+  // (its scene, avatar decorations, the theme's glow) hold still and out of
+  // sight: nobody can see them through the overlay, and drawing them every
+  // frame is what starved the intro of frames on a phone. A layout effect:
+  // it has to be in place before the first frame, the most expensive one.
+  useLayoutEffect(() => {
+    if (!playing) return undefined;
+    const root = document.documentElement;
+    root.classList.add('intro-on');
+    return () => root.classList.remove('intro-on');
+  }, [playing]);
 
   // Skippable on anything. Attached a tick later so the tap that started a
   // replay cannot also end it.

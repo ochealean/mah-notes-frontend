@@ -16,8 +16,7 @@
 //   · Equipping plays the bundle's intro, which is a better confirmation
 //     than any toast.
 // ============================================================
-import { useEffect, useMemo, useState } from 'react';
-import { useTheme } from '../context/ThemeContext';
+import { useMemo, useState } from 'react';
 import { resolveTheme } from '../lib/palette';
 import BundleAvatar, { Face } from './BundleAvatar';
 import { useGround } from './BundleSky';
@@ -41,7 +40,7 @@ function Tile({ bundle, equipped, active, user, onPick }: { bundle: Bundle; equi
   // is deep space even while you are wearing Default in a light theme.
   const g = useGround(bundle.theme ? resolveTheme(bundle.theme) : null);
   const m: BundleMotion = b.reduced ? 'off' : 'full';
-  const scape = useMemo(() => (bundle.sky ? tileFor(bundle.id, g.dark, g.paper, m) : ''), [bundle.id, bundle.sky, g.dark, g.paper, m]);
+  const scape = useMemo(() => (bundle.sky ? tileFor(bundle.id, g.dark, g.paper, m, isLowPerf()) : ''), [bundle.id, bundle.sky, g.dark, g.paper, m]);
   const name = user?.displayName || user?.username || 'You';
 
   return (
@@ -57,7 +56,7 @@ function Tile({ bundle, equipped, active, user, onPick }: { bundle: Bundle; equi
         <span className="bcol-name">
           {bundle.name}
           {equipped && <span className="bcol-chip">Equipped</span>}
-          {!equipped && active && <span className="bcol-chip ghost">Trying on</span>}
+          {!equipped && active && <span className="bcol-chip ghost">Selected</span>}
         </span>
         <span className="bcol-tag">{bundle.tagline}</span>
         <span className="bcol-cv">{bundle.caveat}</span>
@@ -70,19 +69,16 @@ type Props = { user: any; onShareCard: (bundleId: string) => void };
 
 export default function BundleCollection({ user, onShareCard }: Props) {
   const b = useBundle();
-  // What the screen is wearing. Null means "what is equipped"; anything else
-  // is a try-on that has not been committed.
+  // The bundle this screen is showing. Null means "what is equipped";
+  // anything else is picked here but not equipped yet.
   const [preview, setPreview] = useState<string | null>(null);
   const shown = getBundle(preview || b.id);
   const dirty = preview !== null && preview !== b.id;
   const name = user?.displayName || user?.username || 'You';
 
-  // Trying a bundle on wears its whole look — its colours as well as its
-  // decoration — across the app until you equip it or cancel. Leaving this
-  // screen always takes the try-on off.
-  const { setBundlePreview } = useTheme();
-  useEffect(() => { setBundlePreview(dirty ? preview : null); }, [dirty, preview, setBundlePreview]);
-  useEffect(() => () => setBundlePreview(null), [setBundlePreview]);
+  // Picking a bundle previews it in this screen only — the tile, the
+  // decoration sizes, this screen's colours. The app itself changes on
+  // Equip: re-skinning everything on every tap made browsing crawl on a phone.
 
   function pick(id: string) {
     if (id === b.id) {
@@ -101,11 +97,11 @@ export default function BundleCollection({ user, onShareCard }: Props) {
   }
 
   return (
-    <div className="bcol" data-bscope={shown.id}>
+    <div className="bcol">
       <p className="bcol-lead">
         Every bundle is free for a limited time. A bundle is a whole look — its own colours
-        and its own decoration, made to go together. Pick one to try it on; nothing is saved
-        until you equip it, and your own colours come back whenever you equip Default.
+        and its own decoration, made to go together. Pick one to see it up close, then Equip
+        to wear it. Your own colours come back whenever you equip Default.
       </p>
 
       <div className="bcol-grid">
@@ -114,9 +110,13 @@ export default function BundleCollection({ user, onShareCard }: Props) {
         ))}
       </div>
 
+      {/* The selected bundle's colours reach only what follows the tiles.
+          On the whole screen, changing them restyled every node of every
+          tile's scene on each tap; the tiles carry their own. */}
+      <div className="bcol-shown" data-bscope={shown.id}>
       {dirty && (
         <div className="bcol-tryon" role="status">
-          <span>Trying on <b>{shown.name}</b></span>
+          <span>Selected: <b>{shown.name}</b></span>
           <button type="button" className="btn btn-ghost" onClick={() => setPreview(null)}>Cancel</button>
           <button type="button" className="btn btn-primary" onClick={equip}>Equip</button>
         </div>
@@ -178,6 +178,7 @@ export default function BundleCollection({ user, onShareCard }: Props) {
           </button>
         </div>
       </section>
+      </div>
     </div>
   );
 }
