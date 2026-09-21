@@ -46,23 +46,82 @@ const petalFill = (q: number) => (q < 0.28 ? `linear-gradient(140deg, #fff, ${SK
 
 // ── A blossom: five petals round a butter centre ─────────
 // (cx, cy) in `unit`; s = the cluster's diameter in px. `bob` false keeps it still.
+// Drawn as ONE element wearing a small bitmap. It used to be seven — five
+// petals, each with its own gradient and soft shadow, a centre and a wrapper —
+// and a canopy holds a few hundred blossoms: painting those shadows is what
+// held a phone's first frames back. (An SVG image per blossom was tried too;
+// the browser redraws the vector art for every size it is shown at, and an
+// intro shows a hundred sizes.) So each look is painted ONCE, on a canvas at
+// 128px, and every blossom just scales that picture. The random draws are the
+// same, in the same order, so every scene is laid out exactly as before.
+const PETAL_D = 'M0 26C-20 26-27 8-25-8C-23-22-10-29-4-27L0-21L4-27C10-29 23-22 25-8C27 8 20 26 0 26Z';
+// Which petals take the deeper fill, in the order they turn: never two
+// neighbours before it has to.
+const DEEP_ORDER = [0, 2, 4, 1, 3];
+function blossomBitmap(deep: number): string {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  if (!g || typeof Path2D === 'undefined') return '';
+  const petal = new Path2D(PETAL_D);
+  g.translate(64, 64); // the art is drawn round the centre, ±64
+  const at = (i: number, dy: number, fill: string | CanvasGradient | ((q: CanvasRenderingContext2D) => CanvasGradient)) => {
+    const ang = i * 72; const a = (ang * Math.PI) / 180;
+    g.save();
+    g.translate(Math.cos(a) * 34, Math.sin(a) * 34 + dy);
+    g.rotate(((ang + 90) * Math.PI) / 180);
+    g.fillStyle = typeof fill === 'function' ? fill(g) : fill;
+    g.fill(petal);
+    g.restore();
+  };
+  // the soft shade under each petal, then the petals, lit from the upper left
+  for (let i = 0; i < 5; i++) at(i, 3, 'rgba(156,67,97,.2)');
+  for (let i = 0; i < 5; i++) {
+    const deeper = DEEP_ORDER.indexOf(i) < deep;
+    at(i, 0, (q) => {
+      const gr = q.createRadialGradient(-6, -10, 0, -6, -10, 47);
+      gr.addColorStop(0, deeper ? '#ffe4ee' : '#fff4f8');
+      gr.addColorStop(deeper ? 0.54 : 0.48, deeper ? SK.accent : SK.soft);
+      gr.addColorStop(1, deeper ? SK.berry : SK.accent);
+      return gr;
+    });
+  }
+  g.beginPath(); g.arc(0, 0, 10, 0, Math.PI * 2);
+  g.fillStyle = 'rgba(255,217,138,.95)'; g.fill();
+  return c.toDataURL('image/png');
+}
+const blossomMade = new Set<number>();
+let blossomSheet: HTMLStyleElement | null = null;
+/** The class wearing the picture with `deep` (0–5) deeper petals. */
+function blossomClass(deep: number) {
+  if (!blossomMade.has(deep) && typeof document !== 'undefined') {
+    blossomMade.add(deep);
+    const url = blossomBitmap(deep);
+    if (url) {
+      if (!blossomSheet) {
+        blossomSheet = document.createElement('style');
+        blossomSheet.id = 'sk-blossoms';
+        document.head.appendChild(blossomSheet);
+      }
+      blossomSheet.appendChild(document.createTextNode(`.skb${deep}{background:url("${url}") center / contain no-repeat;}`));
+    }
+  }
+  return `skb${deep}`;
+}
+
 function blossom(cx: string | number, cy: string | number, s: number, r: () => number, p: Paint, bob: boolean, unit = '%') {
   const R = (a: number, b: number) => a + r() * (b - a);
-  const pr = s * 0.34; const pw = s * 0.52; const ph = s * 0.56; const rot0 = R(0, 72);
-  let petals = '';
-  for (let i = 0; i < 5; i++) {
-    const ang = rot0 + i * 72; const a = (ang * Math.PI) / 180;
-    const fill = r() < 0.6
-      ? `radial-gradient(circle at 38% 34%, #fff4f8, ${SK.soft} 48%, ${SK.accent} 100%)`
-      : `radial-gradient(circle at 38% 34%, #ffe4ee, ${SK.accent} 54%, ${SK.berry} 100%)`;
-    petals += I(`left:${f2(s / 2 + Math.cos(a) * pr - pw / 2)}px;top:${f2(s / 2 + Math.sin(a) * pr - ph / 2)}px;width:${f2(pw)}px;height:${f2(ph)}px;${PETAL}transform:rotate(${f2(ang + 90)}deg);background:${fill};box-shadow:0 1px 2px rgba(156,67,97,.22);`);
-  }
-  petals += I(`left:${f2(s * 0.4)}px;top:${f2(s * 0.4)}px;width:${f2(s * 0.2)}px;height:${f2(s * 0.2)}px;border-radius:50%;background:rgba(255,217,138,.95);`);
+  const rot0 = R(0, 72);
+  // how many petals take the deeper fill (the same draw per petal as ever)
+  let deep = 0;
+  for (let i = 0; i < 5; i++) if (!(r() < 0.6)) deep += 1;
   const rr = R(-5, 5);
+  // The image is 1.28× the blossom: petals reach past the cluster's edge.
+  const k = s * 1.28;
   const move = bob && p.motion !== 'off'
-    ? `--dy:${f2(-R(2, 5))}px;--r:${f2(rr)}deg;--r2:${f2(-rr)}deg;${p.an('bob', R(3.4, 6.8), -R(0, 6.8), 'ease-in-out')}`
-    : `transform:rotate(${f2(rr)}deg);`;
-  return I(`left:${cx}${unit};top:${cy}${unit};width:${f2(s)}px;height:${f2(s)}px;margin:${f2(-s / 2)}px 0 0 ${f2(-s / 2)}px;${move}`, petals);
+    ? `--dy:${f2(-R(2, 5))}px;--r:${f2(rot0 + rr)}deg;--r2:${f2(rot0 - rr)}deg;${p.an('bob', R(3.4, 6.8), -R(0, 6.8), 'ease-in-out')}`
+    : `transform:rotate(${f2(rot0 + rr)}deg);`;
+  return `<i class="${blossomClass(deep)}" style="${escAttr(`left:${cx}${unit};top:${cy}${unit};width:${f2(k)}px;height:${f2(k)}px;margin:${f2(-k / 2)}px 0 0 ${f2(-k / 2)}px;${move}`)}"></i>`;
 }
 
 // ── The tree ─────────────────────────────────────────────
@@ -162,12 +221,12 @@ function waterHtml(r: () => number, p: Paint, dark: boolean, low: boolean, D: nu
   }
   if (on) {
     // sun glitter: points of light winking on and off along the path
-    for (let i = 0; i < (rich ? 40 : low ? 12 : 24); i++) {
+    for (let i = 0; i < (rich ? (low ? 16 : 40) : low ? 12 : 24); i++) {
       const t = r(); const spread = 4 + t * 26; const s = R(1.4, 3.2) * (0.6 + t * 0.6);
       h += I(`left:${f2(sunX + (r() + r() - 1) * spread)}%;top:${f2(2 + t * 94)}%;width:${f2(s)}px;height:${f2(s)}px;${STAR4}background:rgba(255,250,236,.95);opacity:0;${p.an('glitter', R(1.2, 3.2), -R(0, 3.2), 'ease-in-out')}`);
     }
     // rings spreading where a petal landed, flattened by perspective
-    for (let i = 0; i < (rich ? 6 : low ? 2 : 4); i++) {
+    for (let i = 0; i < (rich ? (low ? 3 : 6) : low ? 2 : 4); i++) {
       const t = R(0.2, 1); const s = 18 + t * 46;
       h += I(`left:${f2(R(6, 90))}%;top:${f2(6 + t * 86)}%;width:0;height:0;transform:scaleY(.32);`,
         I(`left:${f2(-s / 2)}px;top:${f2(-s / 2)}px;width:${f2(s)}px;height:${f2(s)}px;border-radius:50%;border:1.2px solid rgba(255,255,255,.75);opacity:0;${p.an('lakeRing', R(3.8, 6.4), -R(0, 6.4), 'ease-out')}`));
@@ -281,8 +340,8 @@ export function lakeSkyHtml(input: SkyInput): string {
 }
 
 /** The Settings → Bundles tile: the lake at full intensity. */
-export function lakeTileHtml(dark: boolean, paper: string, motion: BundleMotion): string {
-  return lake(LAKE.tile, dark, paper, motion, false);
+export function lakeTileHtml(dark: boolean, paper: string, motion: BundleMotion, low = false): string {
+  return lake(LAKE.tile, dark, paper, motion, low);
 }
 
 // ============================================================
@@ -407,9 +466,9 @@ export function sakuraIntroHtml(still: boolean, tagline: string, low: boolean): 
     + '-webkit-mask-image:linear-gradient(90deg, transparent 0%, #000 28%), linear-gradient(180deg, #000 50%, transparent 96%);-webkit-mask-composite:source-in;'
     + 'mask-image:linear-gradient(90deg, transparent 0%, #000 28%), linear-gradient(180deg, #000 50%, transparent 96%);mask-composite:intersect;',
     I(`inset:0;border-radius:inherit;background:radial-gradient(60% 26% at 58% 6%, ${rgba(SK.soft, 0.6)}, transparent 72%);`) + fallen);
-  // 0.2s → — petals showering
+  // 0.2s → — petals showering (fewer on a phone)
   if (!still) {
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < (low ? 14 : 30); i++) {
       const s = R(5, 11); const W = R(20, 90) * (r() < 0.5 ? -1 : 1);
       h += I(`left:${f2(R(0, 100))}%;top:${f2(R(-12, 40))}%;width:${f2(s)}px;height:${f2(s * 0.82)}px;${PETAL}background:${petalFill(r())};box-shadow:0 1px 2px rgba(156,67,97,.2);--s1x:${f2(W * 0.35)}px;--s2x:${f2(-W * 0.1)}px;--s3x:${f2(W * 0.6)}px;--s4x:${f2(W * 0.3)}px;opacity:0;${A1('petalSwirl', R(2.6, 4.8), 0.2 + i * 0.05, 'linear')}`);
     }
