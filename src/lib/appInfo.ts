@@ -6,11 +6,22 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.2.1';
+export const APP_VERSION = '2.2.2';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.2.2',
+    date: '2026-09-22',
+    title: 'Smoother intros and a quicker Bundles screen',
+    changes: [
+      'The opening animation now plays all the way through on slower phones. It used to be cut short: its clock started before the phone had drawn the first frame. It now waits for that frame, and the bundle’s background holds still under it instead of being drawn at the same time.',
+      'Intros are much smoother, Sakura Lake’s most of all: each blossom is now drawn from one small picture instead of seven separate pieces with their own shadows. Intros on shared links benefit too.',
+      'Settings → Bundles is quicker. Picking a bundle shows it on that screen, and the app itself changes when you tap Equip. On a phone, only the bundle you picked moves.',
+      'Better handling of Android’s navigation bar at the bottom of the screen.',
+    ],
+  },
   {
     version: '2.2.1',
     date: '2026-09-21',
