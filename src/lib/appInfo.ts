@@ -6,11 +6,21 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.2.0';
+export const APP_VERSION = '2.2.1';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.2.1',
+    date: '2026-09-21',
+    title: 'Smoother bundles on phones, and a new Cyberpunk',
+    changes: [
+      'Switching to Time or Settings on a phone no longer stutters. The moving background is now built once and shared by every tab, instead of being built again each time you switched.',
+      'Bundles are much lighter on phones. The background rests after 15 seconds without a touch and moves again the moment you touch the screen, so a phone left open on a note stops redrawing it — that constant redrawing is what made phones warm and slow. Galaxy, Sakura Lake and Cyberpunk also move fewer small pieces at once on a phone.',
+      'Cyberpunk has new effects. A tap locks on like a targeting reticle, the cursor is a neon terminal cursor, typed letters lock in from a cyan and magenta split, and deleted letters tear apart into pixels.',
+    ],
+  },
   {
     version: '2.2.0',
     date: '2026-09-21',
