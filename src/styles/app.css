@@ -1751,7 +1751,8 @@ body.rail-resizing * { pointer-events: none; }
     .rail {
         width: 100%; flex: 1; min-height: 0; border-right: none;
         background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;
-        padding-bottom: calc(var(--bar-h) + var(--safe-b));
+        /* Room for the bottom nav, as measured by MainApp (--nav-room). */
+        padding-bottom: var(--nav-room, calc(var(--bar-h) + var(--safe-b)));
     }
     .rail-head { display: none; }        /* the app bar covers this on a phone */
     .rail-resize { display: none; }      /* nothing to resize: the rail is the screen */
@@ -1781,7 +1782,7 @@ body.rail-resizing * { pointer-events: none; }
     .detail-bar { display: flex; }
 
     /* Extra room at the bottom so the last lines clear the floating cluster. */
-    .pane-scroll { padding: 4px 22px calc(var(--bar-h) + var(--safe-b) + 110px); }
+    .pane-scroll { padding: 4px 22px calc(var(--nav-room, calc(var(--bar-h) + var(--safe-b))) + 110px); }
     /* Schedule and Settings have no detail bar above them, so they need the
        breathing room the bar would otherwise have provided. */
     .pane-scroll.full { padding-top: 22px; }
