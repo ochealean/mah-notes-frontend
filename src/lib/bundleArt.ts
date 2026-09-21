@@ -8,7 +8,7 @@
 // ============================================================
 import type { BundleMotion } from './bundles';
 import { skyHtml as galaxySky, decorationHtml as galaxyDecoration, tileScapeHtml as galaxyTile, type Decoration, type SkyInput } from './galaxy';
-import { citySkyHtml, hudDecorationHtml, cityTileHtml, bootIntroHtml, dataShatterHtml, shutdownHtml, PIXEL_COLOURS } from './cyberpunk';
+import { citySkyHtml, hudDecorationHtml, cityTileHtml, bootIntroHtml, targetLockHtml, shutdownHtml, PIXEL_COLOURS } from './cyberpunk';
 import { lakeSkyHtml, branchDecorationHtml, lakeTileHtml, sakuraIntroHtml, petalScatterHtml, petalGustHtml, PETAL_COLOURS } from './sakura';
 
 export const skyFor = (id: string, input: SkyInput): string =>
@@ -29,18 +29,18 @@ export const introFor = (id: string, still: boolean, tagline: string, low: boole
 
 /** A bundle's own click burst, or null to use Galaxy's star collapse. */
 export const burstFor = (id: string, seed: number): string | null =>
-  (id === 'cyberpunk' ? dataShatterHtml(seed) : id === 'sakura' ? petalScatterHtml(seed) : null);
+  (id === 'cyberpunk' ? targetLockHtml(seed) : id === 'sakura' ? petalScatterHtml(seed) : null);
 
 /** A bundle's own sign-out overlay, or null to use Galaxy's warp. */
 export const signOutFor = (id: string): string | null =>
   (id === 'cyberpunk' ? shutdownHtml() : id === 'sakura' ? petalGustHtml() : null);
 
 /** Colours and shape of the dust a deleted item breaks into. */
-/** The editor caret and typing effects. Galaxy's starlight (Cyberpunk wears
-    it too, in its own colours), or Sakura's petals — drawn for a light page,
-    so nothing arrives white or glowing. */
-export type CaretStyle = 'star' | 'petal';
-export const caretStyleFor = (id: string): CaretStyle => (id === 'sakura' ? 'petal' : 'star');
+/** The editor caret and typing effects: Galaxy's starlight, Sakura's petals
+    (drawn for a light page, so nothing arrives white or glowing), or
+    Cyberpunk's neon terminal. */
+export type CaretStyle = 'star' | 'petal' | 'neon';
+export const caretStyleFor = (id: string): CaretStyle => (id === 'sakura' ? 'petal' : id === 'cyberpunk' ? 'neon' : 'star');
 
 export type Dust = { colours: string[]; shape: 'square' | 'petal' };
 export const dustFor = (id: string): Dust | null =>

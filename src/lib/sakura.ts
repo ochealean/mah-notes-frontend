@@ -149,7 +149,7 @@ function waterHtml(r: () => number, p: Paint, dark: boolean, low: boolean, D: nu
   // place and never travel: thin strokes sliding sideways read as lines
   // scrolling across the screen.
   let rp = '';
-  for (let i = 0; i < Math.round((rich ? 26 : 18) * D); i++) {
+  for (let i = 0; i < Math.round((rich ? 26 : 18) * D * (low ? 0.6 : 1)); i++) {
     const t = r(); const w = 12 + t * 56;
     const c = t < 0.5 ? '255,255,255' : '255,214,168';
     rp += I(`left:${f2(R(-10, 100 - w * 0.6))}%;top:${f2(4 + t * 92)}%;width:${f2(w)}%;height:${f2(1 + t * 2.2)}px;border-radius:50%;background:rgba(${c},${f2((0.35 + R(0, 0.3)) * A)});${p.an('swell', R(3.4, 8), -R(0, 8), 'ease-in-out')}`);
@@ -234,7 +234,7 @@ function lake(o: Lake, dark: boolean, paper: string, motion: BundleMotion, low: 
     // 16 · PETAL STORM — independent timelines, every one with a NEGATIVE
     //      delay, so the storm is already underway instead of one clump
     //      launching together.
-    for (let i = 0; i < Math.round(64 * D); i++) {
+    for (let i = 0; i < Math.round(64 * D * (low ? 0.5 : 1)); i++) {
       const depth = r();
       const s = 3.5 + depth * 10 + r() * 3.5;
       const blur = depth < 0.28 ? 1.3 : depth < 0.58 ? 0.5 : 0;
@@ -250,7 +250,7 @@ function lake(o: Lake, dark: boolean, paper: string, motion: BundleMotion, low: 
     }
   }
   // 18 · sparkles
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < (low ? 6 : 14); i++) {
     const s = R(4, 8);
     h += I(`left:${f2(R(4, 96))}%;top:${f2(R(wl * 0.3, 96))}%;width:${f2(s)}px;height:${f2(s)}px;${STAR4}background:rgba(255,246,228,.95);${p.an('twinkle', R(2.6, 6.2), -R(0, 6), 'ease-in-out')}`);
   }

@@ -306,6 +306,8 @@ export function isLowPerf(): boolean {
 // someone uninstalls. Only bundle layers are paused; the app's own spinners
 // keep running.
 let installed = false;
+/** How long a phone's scene keeps moving after the last touch. */
+const REST_AFTER_MS = 15000;
 export function installBundleRuntime() {
   if (installed || typeof document === 'undefined') return;
   installed = true;
@@ -315,7 +317,23 @@ export function installBundleRuntime() {
   window.addEventListener('blur', () => setPaused(true));
   window.addEventListener('focus', () => setPaused(false));
   if (document.hidden) setPaused(true);
-  if (isLowPerf()) root.dataset.bundlePerf = 'low';
+  if (isLowPerf()) {
+    root.dataset.bundlePerf = 'low';
+    // A phone rests the scene after a while with nobody touching it. Every
+    // animated layer is redrawn on every frame, and a phone left open on a
+    // note does that for minutes on end — that is what warms it, and a warm
+    // phone slows itself down. The scene holds still exactly where it is
+    // and moves again on the next touch, key or scroll.
+    let rest = 0;
+    const wake = () => {
+      if (root.classList.contains('bundle-resting')) root.classList.remove('bundle-resting');
+      window.clearTimeout(rest);
+      rest = window.setTimeout(() => root.classList.add('bundle-resting'), REST_AFTER_MS);
+    };
+    // Capture on window also hears scrolls inside the app's own scroll panes.
+    ['pointerdown', 'keydown', 'wheel', 'scroll'].forEach((t) => window.addEventListener(t, wake, { capture: true, passive: true }));
+    wake();
+  }
 
   try {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
