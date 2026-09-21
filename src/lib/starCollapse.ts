@@ -15,6 +15,7 @@
 // ============================================================
 import { bundleState } from './bundles';
 import { G, rgba, rnd } from './galaxy';
+import { burstFor } from './bundleArt';
 
 // Primary actions only — not every button in the product. A flourish on
 // every control is how a charming effect turns into a browser toolbar.
@@ -45,6 +46,10 @@ export function starBurst(x: number, y: number, scale = 1) {
   h += I(`left:-30px;top:-.55px;width:60px;height:1.1px;background:linear-gradient(90deg, ${spk});animation:bx-flareSpikeX .6s ${E} .2s both;`);
   h += I(`left:-.55px;top:-30px;width:1.1px;height:60px;background:linear-gradient(180deg, ${spk});animation:bx-flareSpikeY .6s ${E} .2s both;`);
   h += I(`left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 14px #fff, 0 0 34px ${rgba(G.ha, 0.85)};animation:bx-flareCore .66s ${E} .18s both;`);
+  mount(h, x, y, scale);
+}
+
+function mount(h: string, x: number, y: number, scale: number) {
   const g = document.createElement('div');
   g.className = 'bfx';
   g.setAttribute('aria-hidden', 'true');
@@ -54,6 +59,14 @@ export function starBurst(x: number, y: number, scale = 1) {
   g.innerHTML = h;
   document.body.appendChild(g);
   window.setTimeout(() => g.remove(), LIFETIME);
+}
+
+/** The click burst of bundle `id`: Galaxy's star collapse, Cyberpunk's data
+    shatter, … — whichever that bundle brings. */
+export function bundleBurst(id: string, x: number, y: number, scale = 1) {
+  const own = burstFor(id, (Math.round(x) * 31 + Math.round(y) * 17) | 0);
+  if (own) mount(own, x, y, scale);
+  else starBurst(x, y, scale);
 }
 
 let installed = false;
@@ -69,10 +82,11 @@ export function installStarCollapse() {
     if (s.reduced) return;
     // Your own bundle drives the effect across the app. A shared card wears
     // its sender's bundle, so its buttons follow the card, not the reader.
-    const onCard = t.closest('[data-bundle-surface="galaxy"]');
+    const surface = t.closest('[data-bundle-surface]')?.getAttribute('data-bundle-surface');
+    const onCard = surface && surface !== 'default' ? surface : null;
     const mine = s.bundle.clickEffect && s.effectiveMotion !== 'off';
     if (!mine && !onCard) return;
     const rc = t.getBoundingClientRect();
-    starBurst(rc.left + rc.width / 2, rc.top + rc.height / 2);
+    bundleBurst(onCard || s.id, rc.left + rc.width / 2, rc.top + rc.height / 2);
   }, true);
 }

@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { armIntroForSignIn, introFinished, onIntroReplay, shouldPlayIntro } from '../lib/introGate';
 import { getBundle, useBundle, isLowPerf } from '../lib/bundles';
 import { G, rgba, rnd, nmask, logoMarkHtml } from '../lib/galaxy';
+import { introFor } from '../lib/bundleArt';
 
 const RUN_MS = 3600;
 const POSTER_MS = 1400;
@@ -155,7 +156,11 @@ export default function IntroAnimation() {
 
   // The share page always performs; the app honours "Off" with a still frame.
   const still = b.reduced || (pathname !== '/view' && b.effectiveMotion === 'off');
-  const html = useMemo(() => introHtml(still, bundle.tagline, isLowPerf()), [still, bundle.tagline]);
+  // A bundle's own intro (Cyberpunk boots up), else Galaxy's warp arrival.
+  const html = useMemo(
+    () => introFor(bundle.id, still, bundle.tagline, isLowPerf()) ?? introHtml(still, bundle.tagline, isLowPerf()),
+    [bundle.id, still, bundle.tagline],
+  );
 
   const finish = useCallback(() => {
     setLeaving(true);
@@ -218,6 +223,7 @@ export default function IntroAnimation() {
     <div
       key={run}
       className={`bintro${leaving ? ' leaving' : ''}${still ? ' still' : ''}`}
+      data-bscope={bundle.id}
       role="presentation"
       onClick={finish}
       dangerouslySetInnerHTML={{ __html: html }}

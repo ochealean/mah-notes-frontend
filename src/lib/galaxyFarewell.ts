@@ -15,6 +15,7 @@
 // ============================================================
 import { bundleState } from './bundles';
 import { G, rgba, rnd, logoMarkHtml } from './galaxy';
+import { dustFor, signOutFor } from './bundleArt';
 
 const active = () => {
   const s = bundleState();
@@ -37,7 +38,12 @@ export async function dissolveAway(targets: Array<Element | null | undefined>): 
   if (!active() || !els.length) return restore;
 
   const vw = window.innerWidth; const vh = window.innerHeight;
-  const colours = [G.dust, G.soft, G.spark, G.core, G.ha];
+  // Galaxy breaks into round stardust; a bundle may bring its own (Cyberpunk: square pixels).
+  const own = dustFor(bundleState().id);
+  const colours = own ? own.colours : [G.dust, G.soft, G.spark, G.core, G.ha];
+  const petal = own?.shape === 'petal';
+  const shape = own?.shape === 'square' ? '' : petal ? 'border-radius:62% 38% 58% 42% / 48% 62% 38% 52%;' : 'border-radius:50%;';
+  const grow = petal ? 2.6 : 1;
   els.forEach((el, n) => {
     const b = el.getBoundingClientRect();
     const left = Math.max(0, b.left); const top = Math.max(0, b.top);
@@ -50,12 +56,12 @@ export async function dissolveAway(targets: Array<Element | null | undefined>): 
     const r = rnd(Math.round(left * 7 + top * 13 + n * 101));
     let html = '';
     for (let i = 0; i < count; i++) {
-      const x = r() * w; const y = r() * h; const s = 1 + r() * 2.4;
+      const x = r() * w; const y = r() * h; const s = (1 + r() * 2.4) * grow;
       const col = colours[(r() * colours.length) | 0];
       // Released in the same left-to-right sweep that erases the element.
       const delay = (x / w) * (SWEEP_MS * 0.7) + r() * 90;
       const dur = 520 + r() * 460;
-      html += I(`left:${f2(x)}px;top:${f2(y)}px;width:${f2(s)}px;height:${f2(s)}px;border-radius:50%;background:${col};box-shadow:0 0 ${f2(s * 3)}px ${rgba(col, 0.8)};--dx:${f2(18 + r() * 70)}px;--dy:${f2(-(8 + r() * 64))}px;animation:bx-dustOut ${Math.round(dur)}ms cubic-bezier(.3,.6,.4,1) ${Math.round(delay)}ms both;`);
+      html += I(`left:${f2(x)}px;top:${f2(y)}px;width:${f2(s)}px;height:${f2(s * (petal ? 0.82 : 1))}px;${shape}background:${col};box-shadow:${petal ? '0 1px 2px rgba(156,67,97,.25)' : `0 0 ${f2(s * 3)}px ${rgba(col, 0.8)}`};--dx:${f2(18 + r() * 70)}px;--dy:${f2(-(8 + r() * 64))}px;animation:bx-dustOut ${Math.round(dur)}ms cubic-bezier(.3,.6,.4,1) ${Math.round(delay)}ms both;`);
     }
     const layer = document.createElement('div');
     layer.className = 'bdust';
@@ -74,13 +80,8 @@ export async function dissolveAway(targets: Array<Element | null | undefined>): 
   return restore;
 }
 
-/**
- * Warp out. Resolves at the moment of collapse — that is when the caller
- * signs out, so the sign-in screen is already underneath as the dark lifts.
- */
-export function playSignOut(): Promise<void> {
-  if (!active()) return Promise.resolve();
-
+// Galaxy's goodbye: streaks rush inward and everything collapses to a point.
+function warpHtml(): string {
   const r = rnd(97); const R = (a: number, b: number) => a + r() * (b - a);
   const E = 'cubic-bezier(.55,0,.75,.35)'; // accelerating inward
   const cols = [G.core, G.spark, G.ha];
@@ -93,12 +94,24 @@ export function playSignOut(): Promise<void> {
     const a = (ang * Math.PI) / 180; const rad = R(90, 220); const s = R(1, 2.4);
     stars += I(`left:50%;top:46%;width:${f2(s)}px;height:${f2(s)}px;margin:${f2(-s / 2)}px 0 0 ${f2(-s / 2)}px;border-radius:50%;background:${c === G.ha ? G.ha : G.core};box-shadow:0 0 ${f2(s * 2)}px ${rgba(c, 0.8)};--ix:${f2(Math.cos(a) * rad)}px;--iy:${f2(Math.sin(a) * rad * 0.52)}px;animation:bx-implode ${f2(R(0.6, 0.9))}s ${E} ${f2(R(0, 0.25))}s both;`);
   }
-  const html = `<div class="bintro-stage">
+  return `<div class="bintro-stage">
     ${streaks}${stars}
     ${logoMarkHtml('animation:bx-markOut 1s cubic-bezier(.5,0,.75,0) both;')}
     <div class="bintro-tag" style="top:calc(46% + 58px)"><span style="animation:bx-wordOut 1s ease both;">Signing you out</span></div>
     ${I(`left:50%;top:46%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#fff;box-shadow:0 0 18px #fff, 0 0 46px ${rgba(G.ha, 0.85)}, 0 0 90px ${rgba(G.accent, 0.6)};opacity:0;animation:bx-flareCore .6s cubic-bezier(.16,1,.3,1) .9s both;`)}
   </div>`;
+}
+
+/**
+ * Warp out. Resolves at the moment of collapse — that is when the caller
+ * signs out, so the sign-in screen is already underneath as the dark lifts.
+ */
+export function playSignOut(): Promise<void> {
+  if (!active()) return Promise.resolve();
+
+  // Each bundle says goodbye its own way: Galaxy warps out, Cyberpunk
+  // switches off like an old CRT.
+  const html = signOutFor(bundleState().id) || warpHtml();
 
   const el = document.createElement('div');
   el.className = 'boutro';

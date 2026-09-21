@@ -483,7 +483,7 @@ export default function Viewer() {
       setParams(next, { replace: true });
     };
     return (
-      <div className={`vcard-page${senderBundle.id === 'galaxy' ? ' galaxy-amb' : ''}`}>
+      <div className={`vcard-page${senderBundle.sky ? ' bundle-amb' : ''}`} data-bscope={senderBundle.id}>
         <div className="vcard-wrap">
           <ShareCard
             bundleId={senderBundle.id}
@@ -508,7 +508,7 @@ export default function Viewer() {
   const showModes = !!token && !isOwner && hasChecks;
 
   return (
-    <div className={`view-page${senderBundle.id === 'galaxy' ? ' galaxy-amb' : ''}`}>
+    <div className={`view-page${senderBundle.sky ? ' bundle-amb' : ''}`} data-bscope={senderBundle.id}>
       <div className="view-bar">
         {isOwner && (
           <button className="icon-btn view-back" aria-label="Back" onClick={() => navigate(backTo)}>

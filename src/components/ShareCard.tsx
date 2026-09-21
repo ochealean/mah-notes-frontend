@@ -47,7 +47,7 @@ export default function ShareCard({ bundleId, author, handle, kind, title, onOpe
   const anonymous = !face && !name;
 
   return (
-    <div className="vcard" data-bundle-surface={bundle.id}>
+    <div className="vcard" data-bundle-surface={bundle.id} data-bscope={bundle.id}>
       {/* The share page is where the polish is worth spending, so the sky
           runs at full here. It still pauses on a hidden tab and still holds
           its still composition under reduced motion. */}

@@ -73,7 +73,7 @@ function FriendHero({ entry, busy, onRemove }) {
   const look = themeScope(p.theme, bundle);
   return (
     <section className="acct-hero friend-hero theme-scope" style={look.style}
-      data-ground={look.dark ? 'dark' : 'light'} data-bundle-surface={bundle.id} aria-label={p.displayName}>
+      data-ground={look.dark ? 'dark' : 'light'} data-bundle-surface={bundle.id} data-bscope={bundle.id} aria-label={p.displayName}>
       {/* Only drawn while on screen — a long list must not run twenty skies.
           Painted against THEIR paper, so the scrim matches their ground. */}
       <BundleSky preset="friend" bundleId={bundle.id} seed={seedOf(String(p.id))} lazy

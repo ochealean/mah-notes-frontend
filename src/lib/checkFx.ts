@@ -11,7 +11,7 @@
 //  would read as a reward for it.
 // ============================================================
 import { bundleState } from './bundles';
-import { starBurst } from './starCollapse';
+import { bundleBurst } from './starCollapse';
 
 const POP_MS = 720;
 
@@ -27,15 +27,18 @@ export function celebrateCheck(item: Element | null | undefined) {
   el.classList.add('ck-pop');
   window.setTimeout(() => el.classList.remove('ck-pop'), POP_MS);
 
-  const galaxy = (s.bundle.clickEffect && s.effectiveMotion !== 'off')
-    || !!el.closest('[data-bundle-surface="galaxy"], .galaxy-amb');
-  if (!galaxy) return;
+  // A shared page or card wears its sender's bundle; anywhere else it is yours.
+  const scope = el.closest('[data-bundle-surface], .bundle-amb');
+  const scoped = scope ? (scope.getAttribute('data-bundle-surface') || scope.getAttribute('data-bscope')) : null;
+  const mine = s.bundle.clickEffect && s.effectiveMotion !== 'off' ? s.id : null;
+  const id = scoped && scoped !== 'default' ? scoped : mine;
+  if (!id) return;
 
   // The box is the item's ::before: 20px square at its left edge.
   const r = el.getBoundingClientRect();
   let top = 4;
   try { top = parseFloat(getComputedStyle(el, '::before').top) || 4; } catch { /* old engine */ }
-  starBurst(r.left + 10, r.top + top + 10, 0.55);
+  bundleBurst(id, r.left + 10, r.top + top + 10, 0.55);
 }
 
 /** Pop every item in `root` that is checked now but was not before. Used when

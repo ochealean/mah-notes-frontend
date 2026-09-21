@@ -107,6 +107,29 @@ export const isDarkColor = (hex: string) => {
 // Readable text to draw ON a solid colour.
 export const onColor = (hex: string) => (isDarkColor(hex) ? '#f8f4f4' : '#171615');
 
+// Text on an ACCENT fill. The pick by lightness is right for most accents, but
+// a mid-tone one (a sugar pink, a sky blue) sits near the line where white
+// barely separates from it. When the usual pick falls under 3:1, the other
+// side wins — dark type tinted with the theme's own ink rather than black.
+function onAccentColor(accent: string, ink: string) {
+  const pick = onColor(accent);
+  if (contrast(pick, accent) >= 3) return pick;
+  const other = pick === '#f8f4f4'
+    ? (isDarkColor(ink) ? mixHex(ink, '#000000', 0.55) : '#171615')
+    : '#f8f4f4';
+  return contrast(other, accent) > contrast(pick, accent) ? other : pick;
+}
+
+// A colour used as TEXT on light grounds, deepened toward the ink only as far
+// as it takes to read (4.5:1) on every ground it is drawn on. A colour that
+// already reads is returned untouched.
+function readableOn(c: string, grounds: string[], toward: string, min = 4.5) {
+  const worst = (x: string) => Math.min(...grounds.map((g) => contrast(x, g)));
+  let out = c;
+  for (let amt = 0.04; worst(out) < min && amt <= 1; amt += 0.04) out = mixHex(c, toward, amt);
+  return out;
+}
+
 // ── theme → CSS variables ───────────────────────────────
 // `mode` is the effective light/dark setting. A theme whose ground already
 // matches the mode is used as-is; a LIGHT theme viewed in dark mode swaps ink
@@ -132,6 +155,7 @@ export function computeVars(theme: Theme, mode: 'light' | 'dark' = 'light'): Rec
   const paperRGB = parseHex(paper) || parseHex(DEFAULT_THEME.paper)!;
   const accentRGB = parseHex(accent) || parseHex(DEFAULT_THEME.accent)!;
   const darkGround = isDarkColor(paper);
+  const opaque = !!(theme as any).opaqueInk && !darkGround;
 
   const white = { r: 255, g: 255, b: 255 } as RGB;
   // Panels and sheets are the ground, nudged toward the ink's opposite so they
@@ -139,18 +163,32 @@ export function computeVars(theme: Theme, mode: 'light' | 'dark' = 'light'): Rec
   const lift = (amt: number) => mix(paperRGB, white, amt);
   const panelRGB = lift(darkGround ? 0.05 : 0.55);
   const sheetRGB = lift(darkGround ? 0.06 : 0.75);
+  // Accent words sit on the paper and on accent tints (chips, active rows).
+  const accent100 = darkGround ? darken(accent, 0.78) : lighten(accent, 0.92);
+  const textGrounds = [paper, accent100];
 
   const vars: Record<string, string> = {
     '--ink-rgb': rgbList(inkRGB),
+    // Muted TEXT steps. Usually alpha ink (as app.css defines them); a light
+    // bundle theme drawn over a moving scene asks for opaque mixes toward the
+    // paper instead, because alpha text over motion changes contrast frame to
+    // frame. Always emitted, so switching themes never leaves one behind.
+    '--ink-80': opaque ? mixHex(ink, paper, 0.06) : 'rgb(var(--ink-rgb) / .80)',
+    '--ink-64': opaque ? mixHex(ink, paper, 0.14) : 'rgb(var(--ink-rgb) / .64)',
+    '--ink-40': opaque ? mixHex(ink, paper, 0.22) : 'rgb(var(--ink-rgb) / .40)',
     '--paper': paper,
     '--paper-2': darkGround ? lighten(paper, 0.05) : lighten(paper, 0.45),
 
     '--accent': accent,
-    '--accent-100': darkGround ? darken(accent, 0.78) : lighten(accent, 0.92),
+    // The accent as WORDS. Fills (buttons, bubbles, dots) keep the accent
+    // itself; text and icons drawn in it use this. On a dark ground the accent
+    // was already lifted to read, so the two are the same colour there.
+    '--accent-ink': darkGround ? accent : readableOn(accent, textGrounds, ink),
+    '--accent-100': accent100,
     '--accent-300': darkGround ? darken(accent, 0.5) : lighten(accent, 0.62),
     '--accent-600': darkGround ? lighten(accent, 0.12) : darken(accent, 0.1),
-    '--accent-700': darkGround ? lighten(accent, 0.3) : darken(accent, 0.26),
-    '--on-accent': onColor(accent),
+    '--accent-700': darkGround ? lighten(accent, 0.3) : readableOn(darken(accent, 0.26), textGrounds, ink),
+    '--on-accent': onAccentColor(accent, ink),
 
     // A light ground takes strong white veils; a dark one takes faint ones,
     // otherwise every card turns into a grey slab.
@@ -221,6 +259,24 @@ export function previewTheme(theme: Theme, mode: 'light' | 'dark' = 'light') {
   Object.entries(vars).forEach(([k, v]) => el.style.setProperty(k, v));
   if (theme.ambient === false) el.dataset.motion = 'off';
   else delete el.dataset.motion;
+}
+
+// A bundle theme's own motion. Every bundle but Default brings a partner
+// theme, and every partner theme moves: its three colours drift slowly across
+// the ground behind the app (bundles.css, "A bundle theme's motion"). Your own
+// theme has none, and the ordinary ambient drift is all there is.
+export type ThemeMotion = { kind: 'drift'; colors: [string, string, string]; period: number };
+
+export function applyThemeMotion(m: ThemeMotion | null | undefined) {
+  const el = document.documentElement;
+  if (!m) {
+    delete el.dataset.themeMotion;
+    ['--tm-1', '--tm-2', '--tm-3', '--tm-period'].forEach((v) => el.style.removeProperty(v));
+    return;
+  }
+  el.dataset.themeMotion = m.kind;
+  m.colors.forEach((c, i) => el.style.setProperty(`--tm-${i + 1}`, c));
+  el.style.setProperty('--tm-period', `${m.period}s`);
 }
 
 // Put the reader's own theme back after a preview.

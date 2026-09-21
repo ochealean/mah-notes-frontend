@@ -23,6 +23,7 @@
 // ============================================================
 import { useSyncExternalStore } from 'react';
 import { api, getToken } from './api';
+import type { ThemeMotion } from './palette';
 
 export type BundleMotion = 'full' | 'subtle' | 'off';
 type Support = 'full' | 'reduced' | 'static';
@@ -35,9 +36,16 @@ export type Bundle = {
   tagline: string;
   /** Internal note on where the idea comes from. */
   concept: string;
-  /** The bundle's own appearance, worn by the whole app while it is
-      equipped. null means "your own colours". */
-  theme: { ink: string; paper: string; accent: string; ambient: boolean } | null;
+  /** The bundle's partner theme, worn by the whole app while it is
+      equipped. Every bundle but Default has one — colours made for the
+      bundle, and a `motion` of their own — and while it is equipped the
+      Appearance editor is locked. null (Default only) means "your own
+      colours". */
+  theme: {
+    ink: string; paper: string; accent: string; ambient: boolean; motion: ThemeMotion;
+    /** A light theme over a moving scene keeps its muted text OPAQUE (see palette.computeVars). */
+    opaqueInk?: boolean;
+  } | null;
   /** Which cosmetic layers the bundle actually has. */
   sky: boolean;
   decoration: boolean;
@@ -51,6 +59,8 @@ export type Bundle = {
   platforms: { web: Support; android: Support; desktop: Support };
   /** The platform line under the tile, in plain words. */
   caveat: string;
+  /** How the avatar decoration degrades with size, for Settings → Bundles. */
+  decorationHint: string;
 };
 
 // The app with no cosmetic layer on it, named so it can be chosen on purpose.
@@ -70,6 +80,7 @@ const DEFAULT_BUNDLE: Bundle = {
   farewells: false,
   platforms: { web: 'static', android: 'static', desktop: 'static' },
   caveat: 'No motion anywhere',
+  decorationHint: '',
 };
 
 // Galaxy. Mah Notes exists to catch fragments before they are lost, so the
@@ -85,7 +96,12 @@ const GALAXY: Bundle = {
   // Deep space, starlight ink and the galaxy's violet. A dark paper is not a
   // preference here, it is the premise: the sky is drawn in light, and light
   // only reads against the dark. The violet clears 4.5:1 on this paper.
-  theme: { ink: '#e9e6f4', paper: '#161421', accent: '#9a82ff', ambient: true },
+  // Its motion: the galaxy's violet, its cyan and its H-alpha red drifting
+  // across the ground behind the app, one slow orbit every ~40 seconds.
+  theme: {
+    ink: '#e9e6f4', paper: '#161421', accent: '#9a82ff', ambient: true,
+    motion: { kind: 'drift', colors: ['#7b5cff', '#46d8ff', '#ff2748'], period: 38 },
+  },
   sky: true,
   decoration: true,
   intro: true,
@@ -96,10 +112,74 @@ const GALAXY: Bundle = {
   // layers badly, so the big nebula layers freeze to their poster frame there.
   platforms: { web: 'full', android: 'reduced', desktop: 'full' },
   caveat: 'Full on web and Windows · reduced on Android',
+  decorationHint: 'It degrades by size on its own: a plain ring on small chips, one orbiting body in lists, the whole system on your profile and your share card. The middle of your face always stays clear.',
 };
 
-export const BUNDLES: Bundle[] = [DEFAULT_BUNDLE, GALAXY];
+// Cyberpunk. Nothing you catch ever goes dark: a city that never sleeps is
+// a clipboard that never loses anything — every lit window is something kept.
+const CYBERPUNK: Bundle = {
+  id: 'cyberpunk',
+  name: 'Cyberpunk',
+  tagline: 'Nothing you catch ever goes dark.',
+  concept: 'A city that never sleeps; every lit window is something you kept.',
+  // Night City: pale cyan ink on night-city navy, with the neon cyan as the
+  // accent. Its motion: cyan, magenta and violet drifting across the ground,
+  // a little quicker than Galaxy's — a city breathes faster than a galaxy.
+  theme: {
+    ink: '#e6f4ff', paper: '#0b0c1a', accent: '#00e5ff', ambient: true,
+    motion: { kind: 'drift', colors: ['#00e5ff', '#ff2d95', '#7b2fff'], period: 34 },
+  },
+  sky: true,
+  decoration: true,
+  intro: true,
+  clickEffect: true,
+  typing: true,
+  farewells: true,
+  platforms: { web: 'full', android: 'reduced', desktop: 'full' },
+  caveat: 'Full on web and Windows · reduced on Android',
+  decorationHint: 'It degrades by size on its own: a plain cyan ring on small chips, the equalizer and lock-on brackets in lists, and the full HUD — pings, arcs and a scan across your face — on your profile and your share card. Nothing on it rotates, and the middle of your face always stays clear.',
+};
+
+// Sakura Lake. Catch it before the wind does: petals fall the whole time,
+// and a note is the one you caught. The first LIGHT bundle — its light is
+// reflected, never emitted, so it has no glow anywhere.
+const SAKURA: Bundle = {
+  id: 'sakura',
+  name: 'Sakura Lake',
+  tagline: 'Catch it before the wind does.',
+  concept: 'Petals always falling; a note is the one you caught.',
+  // Sugar: plum ink on blossom-white paper with a deep petal accent. Its
+  // motion: blossom pink, butter and lake blue drifting over the ground,
+  // slow — a lake afternoon is unhurried. Muted text stays opaque, because
+  // alpha ink over a moving background drifts in contrast frame to frame.
+  theme: {
+    ink: '#5a4150', paper: '#fdf4ef', accent: '#ff6fa5', ambient: true, opaqueInk: true,
+    motion: { kind: 'drift', colors: ['#ff8fb8', '#ffe08a', '#bfe4ff'], period: 46 },
+  },
+  sky: true,
+  decoration: true,
+  intro: true,
+  clickEffect: true,
+  typing: true,
+  farewells: true,
+  platforms: { web: 'full', android: 'reduced', desktop: 'full' },
+  caveat: 'Full on web and Windows · reduced on Android',
+  decorationHint: 'It degrades by size on its own: a plain pink ring on small chips, a branch grown round the ring with blossoms in lists, and petals drifting across your face on your profile and your share card. The middle of your face always stays clear.',
+};
+
+export const BUNDLES: Bundle[] = [DEFAULT_BUNDLE, GALAXY, CYBERPUNK, SAKURA];
 export const DEFAULT_BUNDLE_ID = DEFAULT_BUNDLE.id;
+
+// The house rule, checked where a new bundle is added: every bundle but
+// Default brings a partner theme, and that theme moves. A bundle without
+// one would leave the user's own colours under its decoration (Galaxy's
+// stars vanish on a light paper) and the Appearance lock with nothing to
+// lock to, so it fails loudly here rather than quietly in the app.
+BUNDLES.forEach((b) => {
+  if (b.id !== DEFAULT_BUNDLE.id && !b.theme?.motion) {
+    console.error(`Bundle "${b.id}" has no partner theme with motion — every bundle but Default needs one.`);
+  }
+});
 
 /** Unknown or missing ids fall back to the default. */
 export function getBundle(id: string | null | undefined): Bundle {

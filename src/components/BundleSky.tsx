@@ -14,7 +14,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { resolveTheme, isDarkColor } from '../lib/palette';
 import { useBundle, getBundle, isLowPerf, type BundleMotion } from '../lib/bundles';
-import { skyHtml, type SkyPreset } from '../lib/galaxy';
+import { type SkyPreset } from '../lib/galaxy';
+import { skyFor } from '../lib/bundleArt';
 
 export type Ground = { ink: string; paper: string; paper2?: string };
 
@@ -59,8 +60,8 @@ export default function BundleSky({ preset, bundleId, motion, ground, className 
   }, [lazy]);
 
   const html = useMemo(() => (bundle.sky && inView
-    ? skyHtml({ preset, dark: g.dark, paper: g.paper, ink: g.ink, motion: m, lowPerf: isLowPerf(), seed })
-    : ''), [bundle.sky, inView, preset, g.dark, g.paper, g.ink, m, seed]);
+    ? skyFor(bundle.id, { preset, dark: g.dark, paper: g.paper, ink: g.ink, motion: m, lowPerf: isLowPerf(), seed })
+    : ''), [bundle.id, bundle.sky, inView, preset, g.dark, g.paper, g.ink, m, seed]);
   if (!bundle.sky) return null;
   if (!html && !lazy) return null;
   return <div ref={hostRef} className={`bsky ${className}`} aria-hidden="true" dangerouslySetInnerHTML={{ __html: html }} />;

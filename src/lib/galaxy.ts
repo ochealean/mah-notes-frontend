@@ -105,11 +105,11 @@ const maskCss = (m: string) => `-webkit-mask-image:${m};mask-image:${m};`;
 // crosses the feather — clipped to the feather's own shape by using the logo
 // as its mask, so the light lands on the quill and never on the dark around
 // it. Empty for no sheen.
-export function logoMarkHtml(anim: string, glint = '') {
+export function logoMarkHtml(anim: string, glint = '', halo: [string, string] = [G.soft, G.accent]) {
   const m = `url("${logoUrl}")`;
   const mask = `-webkit-mask-image:${m};mask-image:${m};-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;`;
   return `<div class="bintro-mark" style="${escAttr(anim)}">`
-    + I(`inset:-70%;border-radius:50%;background:radial-gradient(closest-side, ${rgba(G.soft, 0.3)} 0%, ${rgba(G.accent, 0.13)} 46%, transparent 76%);`)
+    + I(`inset:-70%;border-radius:50%;background:radial-gradient(closest-side, ${rgba(halo[0], 0.3)} 0%, ${rgba(halo[1], 0.13)} 46%, transparent 76%);`)
     + `<img class="bintro-logo" src="${escAttr(logoUrl)}" alt="" draggable="false">`
     + (glint
       ? I(`inset:0;${mask}`, I(`left:0;top:-15%;width:46%;height:130%;background:linear-gradient(90deg, transparent, rgba(255,255,255,.1) 30%, rgba(255,255,255,.82) 50%, rgba(255,255,255,.1) 70%, transparent);opacity:0;${glint}`))
