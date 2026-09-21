@@ -94,6 +94,16 @@
 .bundle-paused .bsky i,
 .bundle-paused .bav i,
 .bundle-paused .bcol-scape i,
+/* …and while the intro covers the screen, or an overlay window is open
+   over the app: a backdrop blur over a moving scene is redone every frame,
+   over a still one only once. */
+.intro-on .bsky i,
+.intro-on .bav i,
+:root:has(.modal-overlay) .app > .app-sky i,
+:root:has(.modal-overlay) .rail > .bsky i,
+/* On a phone only the selected tile in Settings → Bundles moves. */
+[data-bundle-perf="low"] .bcol-tile:not(.active) .bcol-scape i,
+[data-bundle-perf="low"] .bcol-tile:not(.active) .bav i,
 /* A phone's scene also rests after a while untouched (bundles.ts). */
 .bundle-resting .bsky i,
 .bundle-resting .bav i,
@@ -268,6 +278,8 @@
 .bsq { width: 8px; height: 8px; flex: none; background: var(--g-accent); box-shadow: 0 0 8px var(--g-glow); }
 
 /* ── Settings → Bundles ───────────────────────────────── */
+/* Only a scope for the selected bundle's colours; no box of its own. */
+.bcol-shown { display: contents; }
 .bcol-lead { font-size: 13.5px; line-height: 1.65; color: var(--ink-80); max-width: 60ch; margin: 0 0 18px; }
 .bcol-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(236px, 100%), 1fr)); gap: 12px; }
 .bcol-tile {
@@ -414,6 +426,9 @@
     animation: bx-igOut .6s ease 3s forwards;
 }
 .bintro.still { animation: none; }
+/* Out of sight under the intro, not just paused: nothing to composite. */
+/* (The app's, and a shared link's card: the intro plays over both.) */
+.intro-on .bsky, .intro-on .bav, .intro-on .bundle-amb::before { visibility: hidden; }
 .bintro.leaving { opacity: 0; }
 .bintro-stage { position: relative; width: min(560px, 86vw); height: 320px; }
 /* Sakura Lake arrives in daylight: a warm, light overlay with plum type.
@@ -748,6 +763,7 @@
 [data-bundle]:not([data-bundle="default"])[data-bundle-motion="off"] .nav-item.active .nav-icon-wrap,
 [data-bundle]:not([data-bundle="default"])[data-bundle-motion="off"] .nav-item.active .nav-icon-wrap::before { animation: none; }
 .bundle-paused .nav-item.active .nav-icon-wrap,
+.intro-on .nav-item.active .nav-icon-wrap,
 .bundle-resting .nav-item.active .nav-icon-wrap { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
     [data-bundle]:not([data-bundle="default"]) .nav-item .nav-icon-wrap { transition: none; }
@@ -792,6 +808,8 @@
 :root:not([data-chrome="floating"])[data-theme-motion="drift"][data-bundle-motion="off"] body::after,
 :root:not([data-chrome="floating"])[data-theme-motion="drift"][data-bundle-motion="off"] #root::before { animation: none; }
 .bundle-paused body::before, .bundle-paused body::after, .bundle-paused #root::before,
+.intro-on body::before, .intro-on body::after, .intro-on #root::before,
+:root:has(.modal-overlay) body::before, :root:has(.modal-overlay) body::after, :root:has(.modal-overlay) #root::before,
 .bundle-resting body::before, .bundle-resting body::after, .bundle-resting #root::before { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
     :root:not([data-chrome="floating"])[data-theme-motion="drift"] body::before, :root:not([data-chrome="floating"])[data-theme-motion="drift"] body::after, :root:not([data-chrome="floating"])[data-theme-motion="drift"] #root::before { animation: none; }

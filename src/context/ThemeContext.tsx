@@ -43,10 +43,10 @@ export function ThemeProvider({ children }) {
   const pushTimer = useRef(null);
   const adoptedFor = useRef(null);
 
-  // The bundle in force: the equipped one, or one being tried on.
+  // The bundle in force: the equipped one. (Picking a bundle in Settings →
+  // Bundles previews it inside that screen only; the app changes on Equip.)
   const b = useBundle();
-  const [previewId, setPreviewId] = useState<string | null>(null);
-  const shownBundle = getBundle(previewId || b.id);
+  const shownBundle = getBundle(b.id);
   // A shared page open right now wears its SENDER's look (see Viewer). It is
   // set here rather than painted by the page itself: this provider repaints
   // whenever what it holds changes — and its effects run after the page's —
@@ -124,8 +124,6 @@ export function ThemeProvider({ children }) {
       applied: applied || null,
       // True while a bundle, not you, is deciding the colours.
       bundleTheme: !!shownBundle.theme,
-      // Settings → Bundles: wear a bundle's appearance while trying it on.
-      setBundlePreview: setPreviewId,
       // A shared page: wear the sender's look while it is open, null after.
       setPageTheme,
     }}>

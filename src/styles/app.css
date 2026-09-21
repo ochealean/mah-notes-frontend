@@ -114,8 +114,12 @@ iframe[id^="gsi_"],
 
     --rail-w: 344px;
     --bar-h: 64px;          /* bottom nav height (mobile) */
-    --safe-b: env(safe-area-inset-bottom, 0px);
-    --safe-t: env(safe-area-inset-top, 0px);
+    /* The system bars' insets. On Android, Capacitor also measures them
+       itself and injects --safe-area-inset-*: whichever is larger wins, so
+       a WebView that under-reports env() can't leave the bottom of a list
+       (Settings' Log out) under the navigation bar. */
+    --safe-b: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+    --safe-t: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
