@@ -466,6 +466,20 @@ export default function MainApp() {
   // every other tab's first screen — not a bare page that looks like a detail.
   const fullPane = !railList;
   const paneSky = fullPane && !isDesktop && bundle.sky;
+  // On a phone, every tab's first screen shares ONE sky behind the whole app.
+  // A sky per surface meant tapping Time built a second scene from scratch
+  // (hundreds of nodes, every animation starting at once) and tapping back
+  // restarted the hidden one — the stutter on Time and Settings. This one is
+  // built once; an open note (which has no sky) only hides and pauses it.
+  const phoneSky = !isDesktop && bundle.sky;
+  const skyShown = phoneSky && (!hasDetail || fullPane);
+  // While an opaque scene fills the screen, the theme's drifting glow under
+  // it can't be seen, so it isn't drawn.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('sky-covers', !!skyShown);
+    return () => root.classList.remove('sky-covers');
+  }, [skyShown]);
 
   // The rows currently on screen — what "Select all" actually means.
   const visibleForTab = tab === 'plans' ? visiblePlans : tab === 'clipboard' ? visibleClips : visibleNotes;
@@ -624,8 +638,9 @@ export default function MainApp() {
   const listCount = tab === 'docs' ? visibleNotes.length : tab === 'plans' ? visiblePlans.length : visibleClips.length;
 
   return (
-    <div className={`app${hasDetail ? ' has-detail' : ''}${fullPane ? ' full-pane' : ''}`}
+    <div className={`app${hasDetail ? ' has-detail' : ''}${fullPane ? ' full-pane' : ''}${phoneSky && !skyShown ? ' sky-rest' : ''}`}
       style={railW ? ({ '--rail-w': `${railW}px` } as any) : undefined}>
+      {phoneSky && <BundleSky preset="rail" className="app-sky" />}
       {/* Phone-only bar. The rail head covers this on a desktop. */}
       <header className="appbar">
         <div className="appbar-left">
@@ -664,8 +679,9 @@ export default function MainApp() {
       <aside className={`rail${bundle.sky ? ' has-sky' : ''}`} ref={railRef}>
         {/* The bundle's sky. Renders nothing for Default. The rail's own
             content sits above it, and the sky's scrim plus a halo under
-            every line of text keep the list readable at every frame. */}
-        <BundleSky preset="rail" />
+            every line of text keep the list readable at every frame. On a
+            phone the app-wide sky above stands in for it. */}
+        {isDesktop && <BundleSky preset="rail" />}
         <button
           className={`rail-resize${dragging ? ' dragging' : ''}`}
           aria-label="Resize the list. Double-click to reset."
@@ -789,7 +805,6 @@ export default function MainApp() {
       </aside>
 
       <main className={`pane${paneSky ? ' has-sky' : ''}`}>
-        {paneSky && <BundleSky preset="rail" />}
         {tab === 'docs' && (
           <DocPane note={curDoc} onBack={closeDetail}
             onEdit={(note) => setDocEditor({ note })}

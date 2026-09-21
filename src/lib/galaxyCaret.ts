@@ -15,6 +15,12 @@
 //    · finishing a word lets one petal go from its last letter
 //    · each deleted character is blown off by the wind, shedding petals
 //
+//  Cyberpunk wears a neon terminal variant:
+//    · a hard neon bar with a magenta edge and a terminal underscore at its
+//      foot, blinking on and off like a terminal
+//    · each typed character locks in from an RGB split, a scanline under it
+//    · each deleted character tears in half and drops square pixels
+//
 //  THE RULE THIS MODULE IS BUILT AROUND: it never touches the editor's DOM.
 //  The editor saves its innerHTML, so a wrapper span per character would be
 //  saved into the note and synced everywhere. Every measurement comes from
@@ -42,6 +48,9 @@ const RIPPLE_LIFE = 560;
 const PETAL_LIFE = 1100;
 // Petal fills: pinks with enough body to show on a cream page (no white).
 const PETAL_FILLS = ['#ffc2d8', '#ff8fb8', '#ff6fa5', '#f7a8c4'];
+const NEON_LIFE = 320;
+const NEON_TEAR_LIFE = 520;
+const PIXEL_FILLS = ['#00e5ff', '#ff2d95', '#7de9ff', '#eaf9ff'];
 
 let layer: HTMLDivElement | null = null;
 let refs = 0;
@@ -148,6 +157,7 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
   const host = ensureLayer();
   const style = caretStyleFor(s.bundle.id);
   const petal = style === 'petal';
+  const neon = style === 'neon';
   host.dataset.style = style;
 
   const caret = document.createElement('div');
@@ -167,7 +177,7 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
 
   const live = () => host.childElementCount - 1;
   function spawn(node: HTMLElement, life: number) {
-    if (live() >= (petal ? MAX_LIVE_PETAL : MAX_LIVE)) return;
+    if (live() >= (style === 'star' ? MAX_LIVE : MAX_LIVE_PETAL)) return;
     host.appendChild(node);
     window.setTimeout(() => node.remove(), life);
   }
@@ -188,7 +198,7 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
 
     // A wake only for travel along a line. Jumping lines, or a click across
     // the page, is not a comet.
-    const trail = sameLine && !petal ? Math.min(travelled * 1.4, TRAIL_MAX) : 0;
+    const trail = sameLine && style === 'star' ? Math.min(travelled * 1.4, TRAIL_MAX) : 0;
     caret.style.setProperty('--gc-trail', `${trail}px`);
     window.clearTimeout(trailTimer);
     if (trail > 0) trailTimer = window.setTimeout(() => caret.style.setProperty('--gc-trail', '0px'), 90);
@@ -202,6 +212,19 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
     typingTimer = window.setTimeout(() => caret.classList.remove('typing'), TYPING_HOLD);
   }
 
+  // A copy of one character laid exactly over where it is (or was).
+  function ghostAt(cls: string, text: string, font: string, left: number, top: number, h: number) {
+    const g = document.createElement('span');
+    g.className = cls;
+    g.textContent = text;
+    g.style.font = font;
+    g.style.left = `${left}px`;
+    g.style.top = `${top}px`;
+    g.style.height = `${h}px`;
+    g.style.lineHeight = `${h}px`;
+    return g;
+  }
+
   // Arriving characters: a lit ghost laid exactly over the real one, cooling
   // away. The ink underneath is already normal; this is the heat leaving it.
   function litChar(text: string) {
@@ -213,15 +236,22 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
     if (!rects.length) return;
     const b = rects[rects.length - 1];
     const parent = (sel.getRangeAt(0).startContainer.parentElement || el) as HTMLElement;
-    const g = document.createElement('span');
-    g.className = petal ? 'gcaret-bloom' : 'gcaret-glyph';
-    g.textContent = text;
-    g.style.font = getComputedStyle(parent).font;
-    g.style.left = `${b.left}px`;
-    g.style.top = `${b.top}px`;
-    g.style.height = `${b.height}px`;
-    g.style.lineHeight = `${b.height}px`;
-    spawn(g, GLYPH_LIFE);
+    const font = getComputedStyle(parent).font;
+    if (neon) {
+      if (!text.trim()) return;
+      // locks in from an RGB split: a cyan and a magenta copy converge on
+      // the letter, and a scanline under it runs out
+      spawn(ghostAt('gcaret-rgb c', text, font, b.left, b.top, b.height), NEON_LIFE);
+      spawn(ghostAt('gcaret-rgb m', text, font, b.left, b.top, b.height), NEON_LIFE);
+      const sc = document.createElement('i');
+      sc.className = 'gcaret-scan';
+      sc.style.left = `${b.left}px`;
+      sc.style.top = `${b.bottom - 1}px`;
+      sc.style.width = `${Math.max(4, b.width)}px`;
+      spawn(sc, NEON_LIFE);
+      return;
+    }
+    spawn(ghostAt(petal ? 'gcaret-bloom' : 'gcaret-glyph', text, font, b.left, b.top, b.height), GLYPH_LIFE);
     if (petal) {
       // a touch on the water, just under the letter's baseline
       const w = document.createElement('i');
@@ -283,15 +313,24 @@ export function attachGalaxyCaret(el: HTMLElement): () => void {
     { x: 2, y: -26, sz: 2, dur: 740, c: 'spark' },
   ];
   function dissolve(info: NonNullable<ReturnType<typeof charBeforeCaret>>) {
-    const ghost = document.createElement('span');
-    ghost.className = petal ? 'gcaret-blown' : 'gcaret-ghost';
-    ghost.textContent = info.char;
-    ghost.style.font = info.font;
-    ghost.style.left = `${info.left}px`;
-    ghost.style.top = `${info.top}px`;
-    ghost.style.height = `${info.h}px`;
-    ghost.style.lineHeight = `${info.h}px`;
-    spawn(ghost, DUST_LIFE);
+    if (neon) {
+      // it tears in two — the top half slides off one way in cyan, the
+      // bottom the other in magenta — and drops a few square pixels
+      spawn(ghostAt('gcaret-tear top', info.char, info.font, info.left, info.top, info.h), NEON_TEAR_LIFE);
+      spawn(ghostAt('gcaret-tear bot', info.char, info.font, info.left, info.top, info.h), NEON_TEAR_LIFE);
+      for (let i = 0; i < 4; i++) {
+        const d = document.createElement('i');
+        d.className = 'gcaret-pixel';
+        d.style.left = `${info.left + info.h * 0.18 * i}px`;
+        d.style.top = `${info.top + info.h * 0.5}px`;
+        d.style.background = PIXEL_FILLS[i];
+        d.style.setProperty('--px', `${wob(-12, 16)}px`);
+        d.style.setProperty('--py', `${wob(8, 22)}px`);
+        spawn(d, NEON_TEAR_LIFE);
+      }
+      return;
+    }
+    spawn(ghostAt(petal ? 'gcaret-blown' : 'gcaret-ghost', info.char, info.font, info.left, info.top, info.h), DUST_LIFE);
     if (petal) {
       // the wind takes it: three petals leave from the letter, downwind
       for (let i = 0; i < 3; i++) {

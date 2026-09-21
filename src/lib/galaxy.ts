@@ -198,6 +198,9 @@ export function skyHtml(input: SkyInput): string {
   const { dark: d, paper: P } = input;
   const A = p.A;
   const r = rnd(o.seed);
+  // Every twinkling star is its own animated layer, redrawn every frame; a
+  // phone gets about a third of them.
+  const TW = low ? 0.3 : 0.88;
   const R = (a: number, b: number) => a + r() * (b - a);
   const SC = starCols(d);
   const blend = d ? 'screen' : 'multiply';
@@ -259,7 +262,7 @@ export function skyHtml(input: SkyInput): string {
   // 4 · star field A
   let sa = '';
   for (let i = 0; i < o.stars; i++) {
-    const s = R(0.8, 1.9); const tw = r() < 0.88;
+    const s = R(0.8, 1.9); const tw = r() < TW;
     sa += I(`left:${f2(R(0, 100))}%;top:${f2(R(0, 100))}%;width:${f2(s)}px;height:${f2(s)}px;border-radius:50%;background:${rgba(SC.core, R(0.25, 0.95) * A)};${tw ? p.an('twinkle', R(2.6, 7.6), R(0, 5), 'ease-in-out') : ''}`);
   }
   h += I(`inset:0;${p.an('fieldA', 54, 0, 'ease-in-out')}`, sa);
@@ -267,7 +270,7 @@ export function skyHtml(input: SkyInput): string {
   // 5 · star field B — bigger, glowing
   let sb2 = '';
   for (let i = 0; i < o.big; i++) {
-    const s = R(1.6, 3.1); const tw = r() < 0.88;
+    const s = R(1.6, 3.1); const tw = r() < TW;
     sb2 += I(`left:${f2(R(0, 100))}%;top:${f2(R(0, 100))}%;width:${f2(s)}px;height:${f2(s)}px;border-radius:50%;background:${rgba(SC.core, R(0.25, 0.95) * A)};box-shadow:0 0 ${f2(3 * s)}px ${rgba(SC.core, 0.8)};${tw ? p.an('twinkle', R(2.6, 7.6), R(0, 5), 'ease-in-out') : ''}`);
   }
   h += I(`inset:0;${p.an('fieldB', 78, 0, 'ease-in-out')}`, sb2);
@@ -331,7 +334,7 @@ export function skyHtml(input: SkyInput): string {
       const near = 1 - Math.min(1, Math.abs(x - 50) / 54) * 0.45;
       const s = 0.5 + r() * 1.5 * near;
       const q = r(); const c = q < 0.1 ? G.ha : q < 0.2 ? SC.spark : SC.core;
-      const glow = r() < 0.14; const tw = r() < 0.84;
+      const glow = r() < 0.14; const tw = r() < (low ? 0.28 : 0.84);
       bs += I(`left:${f2(x)}%;top:${f2(50 + spread)}%;width:${f2(s)}px;height:${f2(s)}px;border-radius:50%;background:${rgba(c, R(0.45, 1) * A)};${glow ? `box-shadow:0 0 ${f2(s * 3)}px ${rgba(c, 0.7)};` : ''}${tw ? p.an('twinkle', R(2.2, 7.2), R(0, 5), 'ease-in-out') : ''}`);
     }
     b += I(`inset:0;${p.an('fieldB', 72, 0, 'ease-in-out')}`, bs);

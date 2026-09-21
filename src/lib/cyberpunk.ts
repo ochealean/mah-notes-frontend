@@ -123,6 +123,9 @@ function skyline(key: keyof typeof LAYERS, seed: number, D: number, p: Paint, lo
 
 function city(o: City, paper: string, motion: BundleMotion, low: boolean) {
   const p = painter(motion); const A = p.A; const on = motion !== 'off';
+  // On a phone only every `keep`-th one of a repeated light animates. Its
+  // animation is still built, so the random draws (and the layout) match.
+  const some = (i: number, keep: number, anim: string) => (low && i % keep ? '' : anim);
   const heavy = (name: string, dur: number, delay = 0, ease = 'linear') => (low ? '' : p.an(name, dur, delay, ease));
   const D = o.dens;
   const beams = low ? Math.ceil(o.beams / 2) : o.beams;
@@ -178,7 +181,7 @@ function city(o: City, paper: string, motion: BundleMotion, low: boolean) {
   // 13 · flickering windows
   for (let i = 0; i < Math.round(16 * D); i++) {
     const s = R(1.6, 3.8); const col = r() < 0.22 ? CY.amber : r() < 0.5 ? CY.cyan : CY.dust;
-    h += I(`left:${f2(R(3, 97))}%;bottom:${f2(R(14, 62))}%;width:${f2(s)}px;height:${f2(s)}px;background:${col};box-shadow:0 0 ${f2(2 * s)}px ${rgba(col, 0.7)};opacity:.55;${p.an('flicker', R(5, 16), -R(0, 12))}`);
+    h += I(`left:${f2(R(3, 97))}%;bottom:${f2(R(14, 62))}%;width:${f2(s)}px;height:${f2(s)}px;background:${col};box-shadow:0 0 ${f2(2 * s)}px ${rgba(col, 0.7)};opacity:.55;${some(i, 3, p.an('flicker', R(5, 16), -R(0, 12)))}`);
   }
   if (on) {
     // 14 · elevators climbing their shafts
@@ -225,7 +228,7 @@ function city(o: City, paper: string, motion: BundleMotion, low: boolean) {
       + I(`right:-.4px;top:.6px;width:.8px;height:8px;background:linear-gradient(180deg, ${rgba(CY.cyan, 0.9)}, transparent);`));
     if (on) {
       for (let i = 0; i < 10; i++) {
-        rf += I(`left:${f2(R(4, 96))}%;bottom:${f2(R(4, 14.4))}%;width:1.6px;height:1px;background:${CY.cyan};opacity:0;${p.an('navBlink', R(0.9, 2.3), -R(0, 2))}`);
+        rf += I(`left:${f2(R(4, 96))}%;bottom:${f2(R(4, 14.4))}%;width:1.6px;height:1px;background:${CY.cyan};opacity:0;${some(i, 2, p.an('navBlink', R(0.9, 2.3), -R(0, 2)))}`);
       }
     }
     h += I('inset:0;', rf);
@@ -388,26 +391,40 @@ export function bootIntroHtml(still: boolean, tagline: string, low: boolean): st
 }
 
 // ============================================================
-//  Click effect — "data shatter"
+//  Click effect — "target lock"
 // ============================================================
-/** The markup of one data shatter at the origin of its container. */
-export function dataShatterHtml(seed: number): string {
+/** The markup of one target lock at the origin of its container: four
+    corner brackets snap in around the point like a HUD reticle acquiring
+    it, a scanline passes through, the core flashes, a short readout glitches
+    in beside it, and a few square pixels step outward. Zero radius
+    throughout, and it all moves in steps, not glides: a machine, not a star. */
+export function targetLockHtml(seed: number): string {
   const r = rnd(seed); const R = (a: number, b: number) => a + r() * (b - a);
-  const E = 'cubic-bezier(.16,1,.3,1)';
-  let h = I(`left:-30px;top:-30px;width:60px;height:60px;border-radius:50%;background:radial-gradient(circle, ${rgba(CY.cyan, 0.45)} 0%, ${rgba(CY.magenta, 0.24)} 38%, transparent 70%);animation:bx-haloBloom .7s ${E} both;`);
-  // Nine shards, each pointed along its own line of flight.
-  for (let i = 0; i < 9; i++) {
-    const col = i % 3 === 2 ? CY.magenta : i % 2 ? CY.soft : CY.cyan;
-    const deg = i * 40 + R(-26, 26); const len = R(6, 20);
-    h += I(`left:0;top:0;width:0;height:0;transform:rotate(${f2(deg)}deg);`,
-      I(`left:0;top:-.7px;width:${f2(len)}px;height:1.4px;transform-origin:0 50%;background:linear-gradient(90deg, ${col}, transparent);box-shadow:0 0 6px ${rgba(col, 0.8)};--sx:${f2(R(26, 74))}px;--sy:0px;animation:bx-shardOut ${f2(R(0.42, 0.62))}s cubic-bezier(.12,.8,.24,1) both;`));
+  const SNAP = 'cubic-bezier(.2,.9,.3,1.25)';
+  let h = '';
+  // the reticle: brackets closing from 36px out to 19px — just outside a
+  // small button, so they frame it rather than land on its icon. Near-white
+  // and magenta with a dark edge, so they read on a cyan fill as well.
+  ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as const).forEach(([sx, sy], i) => {
+    const col = i % 2 ? CY.magenta : CY.core;
+    const glow = i % 2 ? CY.magenta : CY.cyan;
+    h += I(`left:0;top:0;width:0;height:0;--lx:${sx * 36}px;--ly:${sy * 36}px;--lx2:${sx * 19}px;--ly2:${sy * 19}px;animation:bx-lockIn .62s ${SNAP} both;`,
+      I(`left:${sx < 0 ? 0 : -9}px;top:${sy < 0 ? 0 : -9}px;width:9px;height:9px;border-${sy < 0 ? 'top' : 'bottom'}:2px solid ${col};border-${sx < 0 ? 'left' : 'right'}:2px solid ${col};filter:drop-shadow(0 0 .6px rgba(1,2,7,.95)) drop-shadow(0 0 3px ${rgba(glow, 0.9)});`));
+  });
+  // a scanline sweeping down through it, a magenta echo a beat behind
+  h += I(`left:-22px;top:0;width:44px;height:1px;background:linear-gradient(90deg, transparent, ${CY.cyan} 25%, ${CY.cyan} 75%, transparent);box-shadow:0 0 6px ${CY.cyan};--sy0:-14px;--sy1:14px;animation:bx-scanPass .36s linear .06s both;`);
+  h += I(`left:-22px;top:0;width:44px;height:1px;background:linear-gradient(90deg, transparent, ${rgba(CY.magenta, 0.8)} 25%, ${rgba(CY.magenta, 0.8)} 75%, transparent);--sy0:-14px;--sy1:14px;animation:bx-scanPass .36s linear .12s both;`);
+  // the core: a square flash, locked
+  h += I(`left:-3px;top:-3px;width:6px;height:6px;background:#fff;box-shadow:0 0 10px #fff, 0 0 22px ${CY.cyan};animation:bx-flareCore .5s ${SNAP} .16s both;`);
+  // the readout, typed in beside the reticle
+  const code = ((seed * 2654435761) >>> 0).toString(16).toUpperCase().padStart(4, '0').slice(-4);
+  h += I(`left:21px;top:-31px;white-space:nowrap;font:700 7.5px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;letter-spacing:.14em;color:${CY.cyan};text-shadow:0 0 4px ${rgba(CY.cyan, 0.9)}, 1px 0 0 ${rgba(CY.magenta, 0.7)};animation:bx-readout .7s steps(7, end) .1s both;`, `LOCK·${code}`);
+  // pixels stepping out along the diagonals
+  for (let i = 0; i < 4; i++) {
+    const a = (i * 90 + 45 + R(-14, 14)) * Math.PI / 180; const d = R(20, 30);
+    const col = [CY.cyan, CY.magenta, CY.soft, CY.core][i];
+    h += I(`left:-1.25px;top:-1.25px;width:2.5px;height:2.5px;background:${col};box-shadow:0 0 4px ${rgba(col, 0.8)};--px:${f2(Math.cos(a) * d)}px;--py:${f2(Math.sin(a) * d)}px;animation:bx-pixelOut .5s steps(5, end) .14s both;`);
   }
-  h += I(`left:-17px;top:-17px;width:34px;height:34px;clip-path:polygon(50% 0,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);background:linear-gradient(140deg, ${rgba(CY.cyan, 0.85)}, ${rgba(CY.magenta, 0.7)});animation:bx-hexPop .62s ${E} both;`);
-  h += I(`left:-22px;top:-22px;width:44px;height:44px;border-radius:50%;border:1.5px solid ${rgba(CY.cyan, 0.9)};animation:bx-shockRing .58s ${E} .12s both;`);
-  h += I(`left:-28px;top:-.55px;width:56px;height:1.1px;background:linear-gradient(90deg, transparent, ${CY.cyan} 50%, transparent);animation:bx-flareSpikeX .56s ${E} .16s both;`);
-  h += I(`left:-.55px;top:-28px;width:1.1px;height:56px;background:linear-gradient(180deg, transparent, ${CY.magenta} 50%, transparent);animation:bx-flareSpikeY .56s ${E} .16s both;`);
-  // A square core flash — the system's zero-radius rule holds even here.
-  h += I(`left:-4px;top:-4px;width:8px;height:8px;background:#fff;box-shadow:0 0 12px #fff, 0 0 30px ${CY.cyan};animation:bx-flareCore .6s ${E} .14s both;`);
   return h;
 }
 
