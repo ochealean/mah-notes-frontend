@@ -6,11 +6,21 @@
 //  versionName/versionCode in android/app/build.gradle to match,
 //  and add a new entry to the TOP of CHANGELOG.
 // ============================================================
-export const APP_VERSION = '2.2.3';
+export const APP_VERSION = '2.2.4';
 
 // Newest first. `version` must match the GitHub release tag (minus any
 // leading "v") so the updater can compare "installed vs latest".
 export const CHANGELOG = [
+  {
+    version: '2.2.4',
+    date: '2026-09-22',
+    title: 'One Log out, everywhere',
+    changes: [
+      'Log out now lives in one place on every device: at the bottom of Settings. The Android app never had it there — the only way out was hidden in Account — and the website and the Windows app had it twice. The extra Log out and Sign out in Account are gone.',
+      'On Android and Windows, Log out still asks whether to keep this account’s synced notes on the device or clear them.',
+      'On a phone, the bottom bar now sits below your lists instead of floating over their last rows, so the end of every list can be scrolled into view.',
+    ],
+  },
   {
     version: '2.2.3',
     date: '2026-09-22',

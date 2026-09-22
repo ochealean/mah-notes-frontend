@@ -1746,13 +1746,18 @@ body.rail-resizing * { pointer-events: none; }
    pane takes over when an item is open.
    ═══════════════════════════════════════════════════════ */
 @media (max-width: 899px) {
-    .app { flex-direction: column; }
+    /* The list and the bottom nav are STACKED: the nav is the last thing in
+       the column and the list ends where it begins. The nav used to float
+       over the list's end, which then had to leave room for it — room worked
+       out from sums about the screen that the Android app did not share, so
+       Settings' last row (Log out) stayed under the nav. The shell is pinned
+       to the viewport (absolute, so it makes no stacking context of its
+       own), the same box the fixed nav was pinned to. */
+    .app { flex-direction: column; position: absolute; inset: 0; height: auto; min-height: 0; }
 
     .rail {
         width: 100%; flex: 1; min-height: 0; border-right: none;
         background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;
-        /* Room for the bottom nav, as measured by MainApp (--nav-room). */
-        padding-bottom: var(--nav-room, calc(var(--bar-h) + var(--safe-b)));
     }
     .rail-head { display: none; }        /* the app bar covers this on a phone */
     .rail-resize { display: none; }      /* nothing to resize: the rail is the screen */
@@ -1772,7 +1777,7 @@ body.rail-resizing * { pointer-events: none; }
     .row-time { font-size: 10.5px; }
 
     .appbar { display: flex; padding-top: calc(var(--safe-t) + 10px); padding-bottom: 14px; }
-    .bottom-nav { display: grid; }
+    .bottom-nav { display: grid; position: relative; left: auto; right: auto; bottom: auto; flex: none; }
 
     /* The pane only exists once something is open, and then it is the screen. */
     .pane { display: none; }
@@ -1781,8 +1786,9 @@ body.rail-resizing * { pointer-events: none; }
     .app.has-detail .pane { display: flex; flex: 1; min-height: 0; padding-top: var(--safe-t); }
     .detail-bar { display: flex; }
 
-    /* Extra room at the bottom so the last lines clear the floating cluster. */
-    .pane-scroll { padding: 4px 22px calc(var(--nav-room, calc(var(--bar-h) + var(--safe-b))) + 110px); }
+    /* Extra room at the bottom so the last lines clear the floating cluster
+       (the nav itself is below the pane now, not over it). */
+    .pane-scroll { padding: 4px 22px 110px; }
     /* Schedule and Settings have no detail bar above them, so they need the
        breathing room the bar would otherwise have provided. */
     .pane-scroll.full { padding-top: 22px; }

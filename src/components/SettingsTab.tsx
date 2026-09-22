@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { isNative, nativeGoogleSignIn } from '../lib/nativeAuth';
@@ -43,7 +44,7 @@ import { PRESETS, activePresetId } from '../lib/palette';
 //  HERE rather than on a gate screen. That is also why it has to render on
 //  desktop: without it there is no way to sign in at all.
 function AccountSync({ reloadLists }) {
-  const { user, login, register, loginWithGoogle, forgotPassword, logout } = useAuth();
+  const { user, login, register, loginWithGoogle, forgotPassword } = useAuth();
   const sync = useSync();
   const [mode, setMode] = useState('signin');
   const [name, setName] = useState('');
@@ -53,8 +54,6 @@ function AccountSync({ reloadLists }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [signOut, setSignOut] = useState(null);   // { notes, plans } counts | null
-  const [signingOut, setSigningOut] = useState(false);
   // One-time "are you sure this address is right" gate before creating an
   // account — see EmailCautionModal. Re-armed whenever the email is edited.
   const [emailAcked, setEmailAcked] = useState(false);
@@ -110,26 +109,6 @@ function AccountSync({ reloadLists }) {
         : 'Signed in. Turn on “Sync this device” to back up & merge.',
       'success',
     );
-  }
-
-  // Sign-out: first find which on-device items came from this account, then ask.
-  async function openSignOut() {
-    try {
-      const acc = await getAccountOnlyItems();
-      setSignOut({ notes: acc.notes.length, plans: acc.plans.length });
-    } catch { setSignOut({ notes: 0, plans: 0 }); }
-  }
-
-  async function doSignOut(removeData) {
-    setSigningOut(true);
-    try {
-      if (removeData) await removeAccountData(); // keeps the device's own notes
-      await resetSyncForLogout();
-      setSignOut(null);
-      await playSignOut(); // Galaxy warps out; resolves at once otherwise
-      logout();
-      if (reloadLists) reloadLists();
-    } finally { setSigningOut(false); setSignOut(null); }
   }
 
   async function doSubmit() {
@@ -331,42 +310,7 @@ function AccountSync({ reloadLists }) {
         <span className="settings-sub">{!sync.online ? 'Offline' : !sync.enabled ? 'Sync off' : `Last: ${last}`}</span>
       </button>
       {sync.error && <p className="settings-hint-text" style={{ color: 'var(--danger)' }}>{sync.error}</p>}
-      <button className="settings-row danger" onClick={openSignOut}>
-        <span><i className="fas fa-sign-out-alt" /> Sign out</span>
-        <i className="fas fa-chevron-right" />
-      </button>
-
-      {signOut && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setSignOut(null); }}>
-          <div className="popup">
-            <div className="popup-head">
-              <h3><i className="fas fa-sign-out-alt" /> Sign out</h3>
-              <button className="icon-btn" aria-label="Close" onClick={() => setSignOut(null)}><i className="fas fa-times" /></button>
-            </div>
-            {(signOut.notes + signOut.plans) > 0 ? (
-              <>
-                <p className="reconcile-intro">
-                  Sync will be turned off and your own offline notes are <b>always kept</b>.
-                  You can also clear the <b>{signOut.notes + signOut.plans}</b> copy{(signOut.notes + signOut.plans) > 1 ? 'ies' : ''} of <b>{user.email || user.displayName}</b>’s synced notes from this device — they stay safe in your account and come back when you sign in &amp; sync again. (Signing into a different account clears them for you automatically.)
-                </p>
-                <div className="signout-actions">
-                  <button className="btn btn-primary btn-block" disabled={signingOut} onClick={() => doSignOut(false)}>
-                    <i className="fas fa-box-archive" /> Sign out &amp; keep them
-                  </button>
-                  <button className="btn btn-block signout-remove" disabled={signingOut} onClick={() => doSignOut(true)}>
-                    <i className="fas fa-trash" /> Sign out &amp; clear this device
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="reconcile-intro">Your notes stay on this device. Sync will be turned off.</p>
-                <button className="btn btn-primary btn-block" disabled={signingOut} onClick={() => doSignOut(false)}>Sign out</button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Signing out lives in one place: Settings → Log out. */}
     </div>
   );
 }
@@ -808,8 +752,65 @@ export function useSettingsSections({ user, inboxCount = 0, inboxUnseen = 0, upd
   return list;
 }
 
+// ── Signing out ────────────────────────────────────────
+// Android and desktop keep the account's synced notes on the device, so
+// signing out there first asks whether to keep those copies. (The website
+// keeps nothing and simply logs out.) Rendered on <body>: a panel with a
+// backdrop blur would otherwise trap a full-screen dialog inside itself.
+function SignOutDialog({ counts, onClose, reloadLists }) {
+  const { user, logout } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const copies = counts.notes + counts.plans;
+
+  async function doSignOut(removeData) {
+    setSigningOut(true);
+    try {
+      if (removeData) await removeAccountData(); // keeps the device's own notes
+      await resetSyncForLogout();
+      onClose();
+      await playSignOut(); // the bundle's farewell; resolves at once otherwise
+      logout();
+      if (reloadLists) reloadLists();
+    } finally { setSigningOut(false); }
+  }
+
+  return createPortal(
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="popup">
+        <div className="popup-head">
+          <h3><i className="fas fa-sign-out-alt" /> Log out</h3>
+          <button className="icon-btn" aria-label="Close" onClick={onClose}><i className="fas fa-times" /></button>
+        </div>
+        {copies > 0 ? (
+          <>
+            <p className="reconcile-intro">
+              Sync will be turned off and your own offline notes are <b>always kept</b>.
+              You can also clear the <b>{copies}</b> cop{copies > 1 ? 'ies' : 'y'} of <b>{user?.email || user?.displayName}</b>’s synced notes from this device — they stay safe in your account and come back when you sign in &amp; sync again. (Signing into a different account clears them for you automatically.)
+            </p>
+            <div className="signout-actions">
+              <button className="btn btn-primary btn-block" disabled={signingOut} onClick={() => doSignOut(false)}>
+                <i className="fas fa-box-archive" /> Log out &amp; keep them
+              </button>
+              <button className="btn btn-block signout-remove" disabled={signingOut} onClick={() => doSignOut(true)}>
+                <i className="fas fa-trash" /> Log out &amp; clear this device
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="reconcile-intro">Your notes stay on this device. Sync will be turned off.</p>
+            <button className="btn btn-primary btn-block" disabled={signingOut} onClick={() => doSignOut(false)}>Log out</button>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 // ── The rail list ──────────────────────────────────────
-export function SettingsNav({ sections, current, onPick, user, onLogout }) {
+export function SettingsNav({ sections, current, onPick, user, onLogout, reloadLists }) {
+  const [signOut, setSignOut] = useState(null); // { notes, plans } counts | null
   const out = [];
   let group = '';
   sections.forEach((s) => {
@@ -831,23 +832,41 @@ export function SettingsNav({ sections, current, onPick, user, onLogout }) {
     );
   });
   // Log out is an action, not a section, and it must never hide behind one.
-  if (user && !isNative && onLogout) {
+  // It is the ONLY way out, on every platform — the phone app included.
+  async function logOut() {
+    if (!hasLocalStore) {
+      if (confirm('Log out of Mah Notes?')) onLogout();
+      return;
+    }
+    // Android and desktop: find which on-device items came from this
+    // account first, then ask what to do with them.
+    try {
+      const acc = await getAccountOnlyItems();
+      setSignOut({ notes: acc.notes.length, plans: acc.plans.length });
+    } catch { setSignOut({ notes: 0, plans: 0 }); }
+  }
+  if (user && onLogout) {
     out.push(<div key="g-session" className="rail-group kicker">Session</div>);
     out.push(
-      <button key="logout" className="row set-row danger" onClick={() => { if (confirm('Log out of Mah Notes?')) onLogout(); }}>
+      <button key="logout" className="row set-row danger" onClick={logOut}>
         <div className="row-head">
           <i className="fas fa-sign-out-alt set-row-icon" aria-hidden="true" />
           <span className="row-title">Log out</span>
         </div>
-        <div className="row-snippet">{isWeb ? 'Sign out of this browser' : 'Sign out of this computer'}</div>
+        <div className="row-snippet">{isWeb ? 'Sign out of this browser' : isNative ? 'Sign out of this phone' : 'Sign out of this computer'}</div>
       </button>,
     );
   }
-  return <>{out}</>;
+  return (
+    <>
+      {out}
+      {signOut && <SignOutDialog counts={signOut} onClose={() => setSignOut(null)} reloadLists={reloadLists} />}
+    </>
+  );
 }
 
 // ── Account ────────────────────────────────────────────
-function AccountSection({ user, reloadLists, needsPassword, onLogout }) {
+function AccountSection({ user, reloadLists, needsPassword }) {
   const { updateProfile, setAvatar } = useAuth();
   const { bundle } = useBundle();
   const name = user?.displayName || (user?.email || 'You').split('@')[0];
@@ -979,15 +998,6 @@ function AccountSection({ user, reloadLists, needsPassword, onLogout }) {
 
       {/* Android and desktop: sign in here, and control sync. */}
       {hasLocalStore && <AccountSync reloadLists={reloadLists} />}
-
-      {user && !isNative && (
-        <div className="settings-card">
-          <button className="settings-row danger" onClick={() => { if (confirm('Log out of Mah Notes?')) onLogout(); }}>
-            <span><i className="fas fa-sign-out-alt" /> Log out</span>
-            <i className="fas fa-chevron-right" />
-          </button>
-        </div>
-      )}
 
       {pendingPicture && (
         <AvatarCropModal file={pendingPicture} onCancel={() => setPendingPicture(null)} onDone={onCropped} />
@@ -1173,7 +1183,7 @@ function AboutSection({ updateAvailable }) {
 
 // ── The pane ───────────────────────────────────────────
 export function SettingsPane({
-  section, sections, user, onBack, onPrivacy, onLogout, onReload, reloadLists,
+  section, sections, user, onBack, onPrivacy, onReload, reloadLists,
   updateAvailable, needsPassword, inboxCount, refreshInbox, onShareCard, onOpenSection,
 }) {
   const meta = sections.find((s) => s.id === section);
@@ -1208,7 +1218,7 @@ export function SettingsPane({
         <h1 className="pane-title">{meta.title}</h1>
         <div className="set-body">
           {meta.id === 'account' && (
-            <AccountSection user={user} reloadLists={reloadLists} needsPassword={needsPassword} onLogout={onLogout} />
+            <AccountSection user={user} reloadLists={reloadLists} needsPassword={needsPassword} />
           )}
           {meta.id === 'friends' && (
             <FriendsSection user={user} refreshInbox={refreshInbox} onReload={onReload} />
